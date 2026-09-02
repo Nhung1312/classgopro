@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="50%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="whiteTextGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <linearGradient id="yellowTextGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="url(#bgGrad)" />
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#60a5fa" stroke-width="12" opacity="0.6" />
+  
+  <!-- Open Book Top -->
+  <path d="M256 60 C256 60, 200 40, 150 50 L150 115 C200 105, 256 125, 256 125 C256 125, 312 105, 362 115 L362 50 C312 40, 256 60, 256 60 Z" fill="#ffffff" />
+  <path d="M256 60 L256 125" stroke="#2563eb" stroke-width="4" />
+
+  <!-- Speed Streaks -->
+  <path d="M410 170 L480 162 M415 198 L495 190 M400 225 L475 220" stroke="#facc15" stroke-width="10" stroke-linecap="round" />
+
+  <!-- ClassGo 3D Typography -->
+  <text x="45" y="275" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="116" font-weight="900" fill="#082f49" stroke="#082f49" stroke-width="14">Class</text>
+  <text x="290" y="275" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="116" font-weight="900" fill="#713f12" stroke="#713f12" stroke-width="14">Go</text>
+  <text x="45" y="270" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="116" font-weight="900" fill="url(#whiteTextGrad)">Class</text>
+  <text x="290" y="270" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="116" font-weight="900" fill="url(#yellowTextGrad)">Go</text>
+
+  <!-- Yellow Accent Swoosh -->
+  <path d="M90 300 Q256 265 440 250 Q270 285 90 300 Z" fill="#facc15" />
+
+  <!-- Bottom Badges -->
+  <!-- Backpack -->
+  <g transform="translate(196, 290)">
+    <rect x="15" y="30" width="90" height="120" rx="30" fill="#0284c7" />
+    <path d="M20 50 C20 35, 100 35, 100 50 L100 95 C100 110, 20 110, 20 95 Z" fill="#eab308" />
+    <rect x="35" y="100" width="50" height="35" rx="10" fill="#0369a1" />
+  </g>
+  <!-- Calendar Left -->
+  <g transform="translate(75, 330)">
+    <rect width="85" height="95" rx="14" fill="#ffffff" />
+    <rect width="85" height="30" rx="10" fill="#ef4444" />
+    <rect x="35" y="55" width="16" height="16" rx="4" fill="#ef4444" />
+  </g>
+  <!-- Notebook Right -->
+  <g transform="translate(350, 330)">
+    <rect width="80" height="95" rx="14" fill="#ffffff" />
+    <line x1="20" y1="30" x2="65" y2="30" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" />
+    <line x1="20" y1="50" x2="65" y2="50" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" />
+    <line x1="20" y1="70" x2="50" y2="70" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" />
+  </g>
+</svg>

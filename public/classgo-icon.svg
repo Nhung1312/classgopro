@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="50%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.2" />
+    </linearGradient>
+
+    <!-- Text 3D Gradients -->
+    <linearGradient id="whiteTextGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="70%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#cbd5e1" />
+    </linearGradient>
+
+    <linearGradient id="yellowTextGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#eab308" />
+    </linearGradient>
+
+    <linearGradient id="yellowBackpack" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#ca8a04" />
+    </linearGradient>
+
+    <linearGradient id="blueBackpack" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <linearGradient id="redCal" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f87171" />
+      <stop offset="100%" stop-color="#dc2626" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="drop3D" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#091428" flood-opacity="0.6" />
+    </filter>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- App Rounded Icon Canvas -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)" />
+  
+  <!-- Outer Glow Ring -->
+  <circle cx="256" cy="256" r="215" fill="none" stroke="url(#ringGrad)" stroke-width="8" />
+
+  <!-- TOP ICON: 3D Open Book -->
+  <g transform="translate(146, 50)" filter="url(#drop3D)">
+    <!-- Book Spine & Pages -->
+    <path d="M110 32 C110 32, 60 10, 8 20 C3 21, 0 25, 0 30 L0 100 C0 105, 4 109, 9 108 C55 98, 100 115, 110 115 C120 115, 165 98, 211 108 C216 109, 220 105, 220 100 L220 30 C220 25, 217 21, 212 20 C160 10, 110 32, 110 32 Z" fill="#e2e8f0" />
+    <path d="M110 32 C110 32, 60 14, 12 24 L12 94 C55 84, 100 102, 110 102 C120 102, 165 84, 208 94 L208 24 C160 14, 110 32, 110 32 Z" fill="#ffffff" />
+    <!-- Page text line accents -->
+    <path d="M30 45 Q65 40 92 48 M30 60 Q65 55 92 63 M30 75 Q65 70 92 78" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" fill="none" />
+    <path d="M128 48 Q155 40 190 45 M128 63 Q155 55 190 60 M128 78 Q155 70 190 75" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" fill="none" />
+    <!-- Center Spine Divider -->
+    <path d="M110 32 L110 115" stroke="#3b82f6" stroke-width="5" stroke-linecap="round" />
+  </g>
+
+  <!-- CENTER TYPOGRAPHY: 3D 'ClassGo' -->
+  <g filter="url(#drop3D)">
+    <!-- Speed streaks behind GO -->
+    <path d="M410 170 L480 162 M415 198 L495 190 M400 225 L475 220" stroke="#facc15" stroke-width="9" stroke-linecap="round" opacity="0.95" />
+    
+    <!-- Text Shadow Layer (Navy 3D extrusion) -->
+    <text x="50" y="275" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="114" font-weight="900" fill="#091e42">Class</text>
+    <text x="290" y="275" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="114" font-weight="900" fill="#713f12">Go</text>
+    
+    <!-- Text Base 3D Border Layer -->
+    <text x="50" y="270" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="114" font-weight="900" fill="#0c4a6e" stroke="#082f49" stroke-width="16" stroke-linejoin="round">Class</text>
+    <text x="290" y="270" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="114" font-weight="900" fill="#854d0e" stroke="#451a03" stroke-width="16" stroke-linejoin="round">Go</text>
+
+    <!-- Foreground Glossy Letters -->
+    <text x="50" y="266" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="114" font-weight="900" fill="url(#whiteTextGrad)">Class</text>
+    <text x="290" y="266" font-family="'Cabinet Grotesk', 'Montserrat', 'Arial Black', sans-serif" font-size="114" font-weight="900" fill="url(#yellowTextGrad)">Go</text>
+    
+    <!-- Dynamic Gold Swoosh under ClassGo -->
+    <path d="M100 295 Q260 260 440 250 Q280 282 100 295 Z" fill="#facc15" />
+  </g>
+
+  <!-- BOTTOM 3D ACCESSORIES ROW -->
+  <!-- 1. Mini Desk Calendar (Left) -->
+  <g transform="translate(62, 310)" filter="url(#drop3D)">
+    <rect width="115" height="135" rx="20" fill="#ffffff" />
+    <path d="M0 20 C0 9, 9 0, 20 0 L95 0 C106 0, 115 9, 115 20 L115 45 L0 45 Z" fill="url(#redCal)" />
+    <!-- Spiral rings -->
+    <rect x="22" y="-8" width="10" height="20" rx="5" fill="#cbd5e1" stroke="#475569" stroke-width="2" />
+    <rect x="52" y="-8" width="10" height="20" rx="5" fill="#cbd5e1" stroke="#475569" stroke-width="2" />
+    <rect x="82" y="-8" width="10" height="20" rx="5" fill="#cbd5e1" stroke="#475569" stroke-width="2" />
+    <!-- Calendar grid boxes -->
+    <rect x="18" y="60" width="18" height="16" rx="4" fill="#e2e8f0" />
+    <rect x="48" y="60" width="18" height="16" rx="4" fill="#e2e8f0" />
+    <rect x="78" y="60" width="18" height="16" rx="4" fill="#e2e8f0" />
+    <rect x="18" y="85" width="18" height="16" rx="4" fill="#e2e8f0" />
+    <!-- Active checked date -->
+    <rect x="48" y="85" width="22" height="20" rx="5" fill="#ef4444" />
+    <path d="M53 95 L57 99 L65 90" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <rect x="78" y="85" width="18" height="16" rx="4" fill="#e2e8f0" />
+  </g>
+
+  <!-- 2. School Backpack (Center) -->
+  <g transform="translate(186, 280)" filter="url(#drop3D)">
+    <!-- Backpack main body -->
+    <rect x="15" y="40" width="110" height="140" rx="35" fill="url(#blueBackpack)" />
+    <!-- Handle -->
+    <path d="M45 40 C45 20, 95 20, 95 40" fill="none" stroke="#0284c7" stroke-width="12" stroke-linecap="round" />
+    <!-- Flap with Yellow Accent -->
+    <path d="M22 65 C22 45, 118 45, 118 65 L118 120 C118 135, 22 135, 22 120 Z" fill="url(#yellowBackpack)" />
+    <!-- Front Pocket -->
+    <rect x="35" y="125" width="70" height="45" rx="14" fill="#0284c7" />
+    <!-- Buckle / Strap -->
+    <rect x="62" y="95" width="16" height="36" rx="4" fill="#0369a1" />
+    <rect x="58" y="115" width="24" height="16" rx="4" fill="#fbbf24" stroke="#d97706" stroke-width="3" />
+    <!-- Side pocket -->
+    <rect x="5" y="95" width="14" height="40" rx="6" fill="#f59e0b" />
+  </g>
+
+  <!-- 3. Spiral Notebook & Pencil (Right) -->
+  <g transform="translate(325, 310)" filter="url(#drop3D)">
+    <!-- Notebook body -->
+    <rect x="0" y="5" width="105" height="135" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+    <!-- Spiral holes & rings -->
+    <circle cx="12" cy="25" r="4" fill="#1e293b" />
+    <circle cx="12" cy="50" r="4" fill="#1e293b" />
+    <circle cx="12" cy="75" r="4" fill="#1e293b" />
+    <circle cx="12" cy="100" r="4" fill="#1e293b" />
+    <circle cx="12" cy="125" r="4" fill="#1e293b" />
+    <!-- Note ruled lines -->
+    <line x1="30" y1="40" x2="88" y2="40" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" />
+    <line x1="30" y1="65" x2="88" y2="65" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" />
+    <line x1="30" y1="90" x2="88" y2="90" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" />
+    <line x1="30" y1="115" x2="70" y2="115" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" />
+
+    <!-- 3D Sharpened Pencil overlay -->
+    <g transform="translate(35, 45) rotate(-38)">
+      <rect x="0" y="0" width="18" height="95" rx="3" fill="#facc15" stroke="#ca8a04" stroke-width="1.5" />
+      <!-- Silver Ferrule & Pink Eraser -->
+      <rect x="0" y="95" width="18" height="12" fill="#cbd5e1" />
+      <rect x="0" y="107" width="18" height="18" rx="4" fill="#f43f5e" />
+      <!-- Wooden Tip & Graphite -->
+      <polygon points="0,0 18,0 9,-22" fill="#fed7aa" />
+      <polygon points="6,-14 12,-14 9,-22" fill="#0f172a" />
+    </g>
+  </g>
+</svg>
