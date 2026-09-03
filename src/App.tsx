@@ -9,6 +9,7 @@ import {
   QuestionItem,
   TimetableSlot,
   TeachingPlanItem,
+  UserSubscription,
 } from './types';
 import {
   loadClasses,
@@ -31,7 +32,13 @@ import { INITIAL_CLASSES } from './utils/sampleData';
 import { soundEngine } from './utils/audio';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { fetchUserDataFromFirestore, saveUserDataToFirestore } from './utils/firestoreService';
+import {
+  fetchUserDataFromFirestore,
+  saveUserDataToFirestore,
+  subscribeToUserData,
+  getEffectiveSubscription,
+  ensureUserSubscription,
+} from './utils/firestoreService';
 
 import { Navbar } from './components/Navbar';
 import { SpinScreen } from './components/SpinScreen';
@@ -49,6 +56,9 @@ import { MathQuestionSpotlightModal } from './components/MathQuestionSpotlightMo
 import { TimetableScreen } from './components/TimetableScreen';
 import { GradebookScreen } from './components/GradebookScreen';
 import { AuthModal } from './components/AuthModal';
+import { UpgradeProModal } from './components/UpgradeProModal';
+import { PaymentHistoryModal } from './components/PaymentHistoryModal';
+import { SubscriptionExpiredModal } from './components/SubscriptionExpiredModal';
 
 export default function App() {
   // 1. Core State
@@ -74,19 +84,49 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
+  // Subscription & Payment State
+  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isPaymentHistoryModalOpen, setIsPaymentHistoryModalOpen] = useState(false);
+  const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
+
   // Timetable & Teaching Plan State
   const [timetable, setTimetable] = useState<TimetableSlot[]>(() => loadTimetable());
   const [teachingPlan, setTeachingPlan] = useState<TeachingPlanItem[]>(() => loadTeachingPlan());
 
-  // Listen to Firebase Auth state change
+  // Listen to Firebase Auth state change & real-time Firestore sync
   useEffect(() => {
+    let unsubFirestoreUser: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
+      if (unsubFirestoreUser) {
+        unsubFirestoreUser();
+        unsubFirestoreUser = null;
+      }
+
       if (user) {
         // Logged in: load user's data from Firestore
         setIsSyncingCloud(true);
         try {
           const cloudData = await fetchUserDataFromFirestore(user.uid);
+
+          // 1. Ensure user has an effective subscription (init 15-day trial if new)
+          const sub = await ensureUserSubscription(user.uid, cloudData);
+          setSubscription(sub);
+          if (sub.status === 'EXPIRED') {
+            setIsExpiredModalOpen(true);
+          }
+
+          // 2. Real-time listener for Firestore document updates (e.g. Pro activation)
+          unsubFirestoreUser = subscribeToUserData(user.uid, (data) => {
+            if (data?.subscription) {
+              const effective = getEffectiveSubscription(data.subscription);
+              setSubscription(effective);
+            }
+          });
+
           if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
             setClasses(cloudData.classes);
             saveClasses(cloudData.classes);
@@ -132,10 +172,15 @@ export default function App() {
         } finally {
           setIsSyncingCloud(false);
         }
+      } else {
+        setSubscription(null);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubFirestoreUser) unsubFirestoreUser();
+    };
   }, []);
 
   // Helper to sync changes to Firestore in the background if user is logged in
@@ -564,10 +609,13 @@ export default function App() {
           }
         }}
         currentUser={currentUser}
+        subscription={subscription || undefined}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onSignOut={handleSignOut}
         isSyncingCloud={isSyncingCloud}
         onSyncCloudNow={handleSyncCloudNow}
+        onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
+        onOpenPaymentHistoryModal={() => setIsPaymentHistoryModalOpen(true)}
       />
 
       {/* Main Viewport Content */}
@@ -665,6 +713,11 @@ export default function App() {
             onResetAllClassesCounts={handleResetAllClassesCounts}
             onRestoreDefaultData={handleRestoreDefaultData}
             onImportBackupSuccess={handleImportBackupSuccess}
+            currentUser={currentUser}
+            subscription={subscription || undefined}
+            onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
+            onOpenPaymentHistoryModal={() => setIsPaymentHistoryModalOpen(true)}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}
       </main>
@@ -734,6 +787,32 @@ export default function App() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* Upgrade to ClassGo Pro Modal */}
+      <UpgradeProModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        currentUser={currentUser}
+        onRequireLogin={() => {
+          setIsUpgradeModalOpen(false);
+          setIsAuthModalOpen(true);
+        }}
+      />
+
+      {/* Payment & Order History Modal (including Admin Approval) */}
+      <PaymentHistoryModal
+        isOpen={isPaymentHistoryModalOpen}
+        onClose={() => setIsPaymentHistoryModalOpen(false)}
+        currentUser={currentUser}
+      />
+
+      {/* Subscription Expired Modal */}
+      <SubscriptionExpiredModal
+        isOpen={isExpiredModalOpen}
+        onClose={() => setIsExpiredModalOpen(false)}
+        onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
+        userEmail={currentUser?.email || undefined}
       />
 
       {/* Footer */}

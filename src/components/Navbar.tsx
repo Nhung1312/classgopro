@@ -23,10 +23,15 @@ import {
   LogOut,
   User as UserIcon,
   RefreshCw,
+  Crown,
+  CreditCard,
+  AlertTriangle,
+  History as HistoryIcon,
 } from 'lucide-react';
-import { AppTab, ClassRoom, SelectionMode } from '../types';
+import { AppTab, ClassRoom, SelectionMode, UserSubscription } from '../types';
 import { soundEngine } from '../utils/audio';
 import { ClassGoLogo } from './ClassGoLogo';
+import { ADMIN_EMAIL } from '../services/paymentService';
 
 interface NavbarProps {
   currentTab: AppTab;
@@ -41,10 +46,13 @@ interface NavbarProps {
   onOpenPresentation: () => void;
   onAddNewClass: () => void;
   currentUser: FirebaseUser | null;
+  subscription?: UserSubscription;
   onOpenAuthModal: () => void;
   onSignOut: () => void;
   isSyncingCloud: boolean;
   onSyncCloudNow?: () => void;
+  onOpenUpgradeModal: () => void;
+  onOpenPaymentHistoryModal: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -60,14 +68,35 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenPresentation,
   onAddNewClass,
   currentUser,
+  subscription,
   onOpenAuthModal,
   onSignOut,
   isSyncingCloud,
   onSyncCloudNow,
+  onOpenUpgradeModal,
+  onOpenPaymentHistoryModal,
 }) => {
   const [classDropdownOpen, setClassDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const activeClass = classes.find((c) => c.id === activeClassId) || classes[0];
+
+  const nowMs = Date.now();
+  const isAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  let remainingDays = 0;
+  let isExpiringSoon = false;
+
+  if (subscription) {
+    if (subscription.status === 'ACTIVE' && subscription.proEndAt) {
+      const endMs = new Date(subscription.proEndAt).getTime();
+      remainingDays = Math.max(0, Math.ceil((endMs - nowMs) / (1000 * 60 * 60 * 24)));
+      isExpiringSoon = remainingDays <= 7 && remainingDays > 0;
+    } else if (subscription.status === 'TRIAL' && subscription.trialEndAt) {
+      const endMs = new Date(subscription.trialEndAt).getTime();
+      remainingDays = Math.max(0, Math.ceil((endMs - nowMs) / (1000 * 60 * 60 * 24)));
+      isExpiringSoon = remainingDays <= 3 && remainingDays > 0;
+    }
+  }
 
   const tabs: { id: AppTab; label: string; icon: React.ReactNode }[] = [
     { id: 'SPIN', label: 'Quay Tên', icon: <Sparkles className="w-4 h-4" /> },
@@ -209,6 +238,56 @@ export const Navbar: React.FC<NavbarProps> = ({
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
+          {/* Subscription Status Badge */}
+          {currentUser ? (
+            subscription?.status === 'ACTIVE' ? (
+              <button
+                id="pro-badge-btn"
+                onClick={onOpenUpgradeModal}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                  isExpiringSoon
+                    ? 'bg-amber-950/80 border-amber-400 text-amber-300 animate-pulse'
+                    : 'bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/10 border-amber-500/40 text-amber-300 hover:brightness-110 shadow-sm'
+                }`}
+                title={`CLASSGO PRO còn ${remainingDays} ngày (Hết hạn: ${subscription.proEndAt ? new Date(subscription.proEndAt).toLocaleDateString('vi-VN') : ''}). Bấm để gia hạn.`}
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">CLASSGO</span>
+                <span>PRO: {remainingDays}N</span>
+              </button>
+            ) : subscription?.status === 'TRIAL' ? (
+              <button
+                id="trial-badge-btn"
+                onClick={onOpenUpgradeModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-950/60 border border-sky-500/40 text-sky-300 text-xs font-bold hover:bg-sky-900/60 transition-all shadow-sm"
+                title={`Đang dùng thử 15 ngày. Còn ${remainingDays} ngày. Bấm để nâng cấp PRO!`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden sm:inline">Dùng thử:</span>
+                <span>{remainingDays} ngày</span>
+              </button>
+            ) : (
+              <button
+                id="expired-badge-btn"
+                onClick={onOpenUpgradeModal}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-500 border border-rose-400 text-white text-xs font-black transition-all shadow-md animate-pulse"
+                title="Gói dùng thử/Pro đã hết hạn. Bấm để nâng cấp ngay!"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-200" />
+                <span>Hết hạn - Nâng cấp Pro</span>
+              </button>
+            )
+          ) : (
+            <button
+              onClick={onOpenUpgradeModal}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-950/50 hover:bg-indigo-900/60 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition-all"
+              title="ClassGo Pro: 169.000 VNĐ / 12 tháng. Dùng thử 15 ngày miễn phí!"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>Gói Pro 169k/năm</span>
+            </button>
+          )}
+
           {/* User & Cloud Sync Section */}
           {currentUser ? (
             <div className="relative">
@@ -235,8 +314,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="fixed inset-0 z-40"
                     onClick={() => setUserDropdownOpen(false)}
                   />
-                  <div className="absolute right-0 mt-1 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 animate-fadeIn space-y-1">
-                    <div className="px-3 py-2 border-b border-slate-800">
+                  <div className="absolute right-0 mt-1 w-64 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-2.5 z-50 animate-fadeIn space-y-2">
+                    <div className="px-2.5 py-2 border-b border-slate-800">
                       <p className="text-xs font-bold text-white truncate">
                         {currentUser.displayName || 'Giáo viên'}
                       </p>
@@ -246,6 +325,77 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <span>Đã kích hoạt Firestore Cloud</span>
                       </div>
                     </div>
+
+                    {/* Subscription Info Card in Dropdown */}
+                    <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Gói hiện tại</span>
+                        {subscription?.status === 'ACTIVE' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                            <Crown className="w-3 h-3" /> CLASSGO PRO
+                          </span>
+                        ) : subscription?.status === 'TRIAL' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> DÙNG THỬ
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                            ĐÃ HẾT HẠN
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-slate-300">
+                        {subscription?.status === 'ACTIVE' ? (
+                          <>
+                            Hạn dùng: <strong>{subscription.proEndAt ? new Date(subscription.proEndAt).toLocaleDateString('vi-VN') : ''}</strong> ({remainingDays} ngày)
+                          </>
+                        ) : subscription?.status === 'TRIAL' ? (
+                          <>
+                            Hạn dùng thử: <strong>{subscription.trialEndAt ? new Date(subscription.trialEndAt).toLocaleDateString('vi-VN') : ''}</strong> ({remainingDays} ngày)
+                          </>
+                        ) : (
+                          <span className="text-rose-400 font-bold">Cần nâng cấp để tiếp tục sử dụng</span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenUpgradeModal();
+                        }}
+                        className="w-full mt-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black transition-all shadow"
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                        <span>{subscription?.status === 'ACTIVE' ? 'Gia hạn gói PRO' : 'Nâng cấp CLASSGO PRO'}</span>
+                      </button>
+                    </div>
+
+                    {/* Order History Button */}
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        onOpenPaymentHistoryModal();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <HistoryIcon className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Lịch sử đơn hàng & Thanh toán</span>
+                    </button>
+
+                    {/* Admin Approval Option */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenPaymentHistoryModal();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors font-bold"
+                      >
+                        <Crown className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Duyệt đơn chuyển khoản (Admin)</span>
+                      </button>
+                    )}
 
                     {onSyncCloudNow && (
                       <button
@@ -266,7 +416,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setUserDropdownOpen(false);
                         onSignOut();
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border-t border-slate-800 pt-2"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>Đăng xuất</span>

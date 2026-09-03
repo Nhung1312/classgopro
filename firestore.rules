@@ -1,13 +1,71 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each user has their own document under /users/{userId}
-    // and subcollections under /users/{userId}/{allSubcollections=**}
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    function isSignedIn() {
+      return request.auth != null;
     }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'nhung.ngo.u@gmail.com' ||
+        request.auth.token.email == 'admin@classgo.vn' ||
+        request.auth.token.email == 'nguyenthinhung@gmail.com'
+      );
+    }
+
+    // User profile and app data
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) || isAdmin();
+      // Allow user to update their classes, settings, history, etc.
+      // If updating subscription status to ACTIVE, must be Admin
+      allow update: if (isOwner(userId) || isAdmin()) && (
+        isAdmin() ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription']) ||
+        resource.data.subscription == null ||
+        request.resource.data.subscription.status != 'ACTIVE' ||
+        resource.data.subscription.status == 'ACTIVE'
+      );
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    // Payment Orders Collection
+    match /orders/{orderId} {
+      // User can view their own orders; Admin can view all orders
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // User can create new pending order for themselves
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'PENDING';
+
+      // Only Admin can mark an order as PAID / approved; user can only cancel their own pending order
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'CANCELLED' &&
+        resource.data.status == 'PENDING'
+      );
+
+      // Only Admin can delete an order
+      allow delete: if isAdmin();
+    }
+
+    // Anti-duplicate transaction log
+    match /processed_transactions/{txId} {
+      allow read, write: if isAdmin();
     }
   }
 }

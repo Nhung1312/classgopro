@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { User as FirebaseUser } from 'firebase/auth';
 import {
   Settings as SettingsIcon,
   RotateCcw,
@@ -17,11 +18,16 @@ import {
   LayoutGrid,
   Gift,
   Play,
+  Crown,
+  CreditCard,
+  ShieldCheck,
+  History as HistoryIcon,
 } from 'lucide-react';
-import { ClassRoom, SpinSettings, SpinVisualType } from '../types';
+import { ClassRoom, SpinSettings, SpinVisualType, UserSubscription } from '../types';
 import { exportBackupJSON, importBackupJSON } from '../utils/storage';
 import { soundEngine } from '../utils/audio';
 import { speechEngine, isVoiceVietnamese } from '../utils/speech';
+import { BANK_CONFIG } from '../services/paymentService';
 
 interface SettingsScreenProps {
   settings: SpinSettings;
@@ -32,6 +38,11 @@ interface SettingsScreenProps {
   onResetAllClassesCounts: () => void;
   onRestoreDefaultData: () => void;
   onImportBackupSuccess: () => void;
+  currentUser?: FirebaseUser | null;
+  subscription?: UserSubscription;
+  onOpenUpgradeModal?: () => void;
+  onOpenPaymentHistoryModal?: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 const TEMPLATE_PRESETS = [
@@ -50,6 +61,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onResetAllClassesCounts,
   onRestoreDefaultData,
   onImportBackupSuccess,
+  currentUser,
+  subscription,
+  onOpenUpgradeModal,
+  onOpenPaymentHistoryModal,
+  onOpenAuthModal,
 }) => {
   const [showConfirmResetCurrent, setShowConfirmResetCurrent] = useState(false);
   const [showConfirmResetAll, setShowConfirmResetAll] = useState(false);
@@ -169,6 +185,131 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </div>
       )}
 
+      {/* GÓI BẢN QUYỀN & TÀI KHOẢN (CLASSGO PRO) */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950/50 border border-amber-500/40 rounded-2xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-md">
+              <Crown className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-white">GÓI BẢN QUYỀN & TÀI KHOẢN</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950">
+                  CLASSGO PRO
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {currentUser ? `Đang đăng nhập: ${currentUser.email}` : 'Chưa đăng nhập'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onOpenPaymentHistoryModal && currentUser && (
+              <button
+                onClick={onOpenPaymentHistoryModal}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <HistoryIcon className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Lịch sử đơn hàng</span>
+              </button>
+            )}
+
+            {onOpenUpgradeModal && (
+              <button
+                onClick={onOpenUpgradeModal}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <Crown className="w-3.5 h-3.5" />
+                <span>{subscription?.status === 'ACTIVE' ? 'Gia hạn gói PRO' : 'Nâng cấp PRO (169k)'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Subscription Status Details */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          {/* Status Box */}
+          <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700/80">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Trạng thái gói</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              {subscription?.status === 'ACTIVE' ? (
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>ĐANG SỬ DỤNG PRO</span>
+                </span>
+              ) : subscription?.status === 'TRIAL' ? (
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                  <span>DÙNG THỬ 15 NGÀY</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>GÓI ĐÃ HẾT HẠN</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Duration Box */}
+          <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700/80">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Thời hạn sử dụng</span>
+            <div className="mt-1 text-xs text-slate-200">
+              {subscription?.status === 'ACTIVE' && subscription.proEndAt ? (
+                <>
+                  Hạn dùng: <strong className="text-amber-300">{new Date(subscription.proEndAt).toLocaleDateString('vi-VN')}</strong>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Còn lại: {Math.max(0, Math.ceil((new Date(subscription.proEndAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} ngày
+                  </div>
+                </>
+              ) : subscription?.status === 'TRIAL' && subscription.trialEndAt ? (
+                <>
+                  Hạn dùng thử: <strong className="text-sky-300">{new Date(subscription.trialEndAt).toLocaleDateString('vi-VN')}</strong>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    Còn lại: {Math.max(0, Math.ceil((new Date(subscription.trialEndAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} ngày
+                  </div>
+                </>
+              ) : (
+                <span className="text-rose-400 text-xs">Vui lòng kích hoạt gói Pro</span>
+              )}
+            </div>
+          </div>
+
+          {/* Pricing Box */}
+          <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700/80">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Chi phí & Chu kỳ</span>
+            <div className="mt-1">
+              <span className="text-sm font-black text-amber-300">{BANK_CONFIG.proPrice.toLocaleString('vi-VN')} VNĐ</span>
+              <span className="text-xs text-slate-400"> / 12 tháng</span>
+              <div className="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" />
+                <span>Không giới hạn tính năng & lớp học</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bank Transfer Info Quick Reference */}
+        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>
+              Tài khoản Agribank nhận thanh toán: <strong>{BANK_CONFIG.accountNumber}</strong> ({BANK_CONFIG.accountHolder}) - {BANK_CONFIG.bankName}
+            </span>
+          </div>
+          {onOpenUpgradeModal && (
+            <button
+              onClick={onOpenUpgradeModal}
+              className="text-xs font-bold text-amber-400 hover:text-amber-300 underline flex items-center gap-1"
+            >
+              <span>Quét mã VietQR chuyển khoản</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* 1. Text to Speech Settings (Giọng đọc Tiếng Việt) */}
       <div className="bg-slate-800/90 border border-indigo-500/40 rounded-2xl p-5 sm:p-6 shadow-lg space-y-4">
         <div className="flex items-center justify-between">
@@ -255,8 +396,36 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   </select>
                 </div>
               ) : (
-                <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
-                  <span>⚠️ Thiết bị chưa cài đặt gói giọng nói Tiếng Việt. Trình duyệt sẽ không đọc bằng ngôn ngữ nước ngoài để tránh phát âm sai.</span>
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
+                    <span>⚠️ Thiết bị chưa cài đặt gói giọng nói Tiếng Việt. Trình duyệt sẽ không đọc bằng ngôn ngữ nước ngoài để tránh phát âm sai.</span>
+                  </div>
+
+                  {/* Quick Guide Accordion */}
+                  <div className="p-3.5 rounded-xl bg-slate-950/70 border border-indigo-500/30 text-xs text-slate-300 space-y-2.5">
+                    <div className="font-bold text-indigo-300 flex items-center gap-1.5">
+                      <span>💡 2 Cách bật giọng đọc Tiếng Việt cực nhanh:</span>
+                    </div>
+
+                    <div className="space-y-2 text-[11px] leading-relaxed text-slate-300 pl-1">
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="font-bold text-emerald-400">Cách 1 (Nhanh nhất): Mở app bằng Microsoft Edge</span>
+                        <p className="text-slate-400 mt-0.5">
+                          Trình duyệt Microsoft Edge có sẵn 2 giọng đọc AI Tiếng Việt chuẩn quốc tế (Hoài My & Nam Minh). Bạn chỉ cần mở ClassGo trên Edge rồi bấm <strong>"🔄 Làm mới giọng"</strong> là dùng được ngay!
+                        </p>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="font-bold text-blue-400">Cách 2: Cài gói giọng nói Tiếng Việt cho Windows</span>
+                        <ol className="list-decimal list-inside space-y-1 text-slate-400 mt-1 pl-1">
+                          <li>Nhấn phím <strong>Windows + I</strong> để mở <strong>Settings</strong> máy tính.</li>
+                          <li>Chọn <strong>Time & Language</strong> → <strong>Language</strong> (Ngôn ngữ).</li>
+                          <li>Chọn <strong>Tiếng Việt</strong> → <strong>Options</strong> → Bấm <strong>Download</strong> ở mục <strong>Speech (Giọng nói)</strong>. (Hoặc bấm <em>Add a language</em> tìm Tiếng Việt và tích chọn Speech).</li>
+                          <li>Tải xong, quay lại đây bấm <strong>"🔄 Làm mới giọng"</strong>.</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

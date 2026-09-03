@@ -158,4 +158,43 @@ export interface ScoreCommentRule {
   color: string;
 }
 
+export type SubscriptionStatus = 'TRIAL' | 'ACTIVE' | 'EXPIRED';
+
+export interface UserSubscription {
+  status: SubscriptionStatus;
+  trialStartAt: string; // ISO date string
+  trialEndAt: string;   // ISO date string (trialStartAt + 15 days)
+  proStartAt?: string;  // ISO date string
+  proEndAt?: string;    // ISO date string (proStartAt + 365 days or extended)
+  updatedAt?: string;   // ISO date string
+  lastOrderId?: string;
+}
+
+export type OrderStatus = 'PENDING' | 'PAID' | 'FAILED' | 'CANCELLED';
+
+export interface PaymentOrder {
+  orderId: string;
+  userId: string;
+  userEmail: string;
+  amount: number; // 169000
+  currency: 'VND';
+  status: OrderStatus;
+  createdAt: string; // ISO date string
+  paidAt?: string;   // ISO date string
+  transactionId?: string;
+  paymentMethod: 'VIETQR_BANK_TRANSFER';
+  subscriptionDays: number; // 365
+  note?: string;
+}
+
+export interface BankAccountInfo {
+  bankName: string;
+  bankCode: string; // for VietQR (e.g. 'agribank' or '970405')
+  accountNumber: string;
+  accountHolder: string;
+  proPrice: number; // 169000
+  proDurationDays: number; // 365
+  trialDays: number; // 15
+}
+
 
