@@ -61,6 +61,8 @@ interface SpinScreenProps {
   subscription?: UserSubscription | null;
   onOpenUpgradeModal?: () => void;
   onOpenExpiredModal?: () => void;
+  onRecordDisciplineFromSpin?: (student: Student, violationTypeId: string, note?: string) => string | void;
+  onUndoDisciplineRecord?: (recordId: string) => void;
 }
 
 export const SpinScreen: React.FC<SpinScreenProps> = ({
@@ -85,6 +87,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   subscription,
   onOpenUpgradeModal,
   onOpenExpiredModal,
+  onRecordDisciplineFromSpin,
+  onUndoDisciplineRecord,
 }) => {
   const [visualType, setVisualType] = useState<SpinVisualType>(
     settings.defaultVisualType || 'WHEEL'
@@ -98,6 +102,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const [quickNote, setQuickNote] = useState<string>('');
   const [feedbackSaved, setFeedbackSaved] = useState(false);
   const [awardedStarsMap, setAwardedStarsMap] = useState<{ [id: string]: number }>({});
+  const [selectedDisciplineChoice, setSelectedDisciplineChoice] = useState<string | null>(null);
+  const [lastDisciplineRecordId, setLastDisciplineRecordId] = useState<string | null>(null);
+  const [disciplineFeedback, setDisciplineFeedback] = useState<string>('');
   const [speechState, setSpeechState] = useState<'idle' | 'speaking' | 'paused' | 'error'>('idle');
   const [speakingText, setSpeakingText] = useState<string>('');
 
@@ -176,6 +183,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     setFeedbackSaved(false);
     setQuickScore('');
     setQuickNote('');
+    setSelectedDisciplineChoice(null);
+    setLastDisciplineRecordId(null);
+    setDisciplineFeedback('');
 
     // Sound: Start Suspense BGM & whoosh
     soundEngine.playWhoosh();
@@ -416,6 +426,45 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       setHasCompleted(false);
       setSelectedResult(null);
       setDisplayName('???');
+    }
+  };
+
+  const handleDisciplineChoice = (choiceId: string) => {
+    if (!selectedResult || selectedResult.selectedStudents.length === 0) return;
+    const targetStudent = selectedResult.selectedStudents[0];
+
+    setSelectedDisciplineChoice(choiceId);
+
+    if (choiceId === 'tra_loi_dung') {
+      soundEngine.playVictoryFanfare();
+      setDisciplineFeedback(`✅ ${targetStudent.name}: Trả lời đúng (Không ghi lỗi nề nếp)`);
+      return;
+    }
+
+    if (onRecordDisciplineFromSpin) {
+      const recId = onRecordDisciplineFromSpin(targetStudent, choiceId, quickNote || 'Ghi nhận từ vòng Quay tên');
+      if (recId && typeof recId === 'string') {
+        setLastDisciplineRecordId(recId);
+      }
+      soundEngine.playTick(1.3);
+
+      const labelMap: Record<string, string> = {
+        tra_loi_sai: '❌ Trả lời sai',
+        khong_thuoc_bai: '📖 Không thuộc bài',
+        khong_lam_bai_tap: '📚 Không làm bài tập',
+        noi_chuyen: '🗣️ Nói chuyện',
+      };
+      setDisciplineFeedback(`📝 Đã ghi nhận nề nếp: +1 ${labelMap[choiceId] || choiceId} cho ${targetStudent.name}`);
+    }
+  };
+
+  const handleUndoDisciplineFromSpin = () => {
+    if (lastDisciplineRecordId && onUndoDisciplineRecord) {
+      onUndoDisciplineRecord(lastDisciplineRecordId);
+      soundEngine.playTick(0.8);
+      setLastDisciplineRecordId(null);
+      setSelectedDisciplineChoice(null);
+      setDisciplineFeedback('Đã hoàn tác ghi nhận nề nếp.');
     }
   };
 
@@ -912,6 +961,98 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                     +{count} ⭐
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Discipline Tracking: Quick Evaluation */}
+          <div className="pt-2 border-t border-slate-700/50 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-amber-300 font-bold mr-1 flex items-center gap-1">
+                  <span>📋 Nề nếp / Đánh giá:</span>
+                </span>
+
+                {/* Trả lời đúng (Không ghi lỗi) */}
+                <button
+                  onClick={() => handleDisciplineChoice('tra_loi_dung')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg border transition-all ${
+                    selectedDisciplineChoice === 'tra_loi_dung'
+                      ? 'bg-emerald-600 text-white border-emerald-400 shadow-sm ring-2 ring-emerald-400/40'
+                      : 'bg-slate-700/90 hover:bg-slate-700 text-emerald-300 border-slate-600'
+                  }`}
+                  title="Học sinh trả lời tốt - Không ghi lỗi nề nếp"
+                >
+                  ✅ Trả lời đúng
+                </button>
+
+                {/* 4 Default Violation Types */}
+                <button
+                  onClick={() => handleDisciplineChoice('tra_loi_sai')}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                    selectedDisciplineChoice === 'tra_loi_sai'
+                      ? 'bg-rose-600 text-white border-rose-400 shadow-sm ring-2 ring-rose-400/40'
+                      : 'bg-slate-700/90 hover:bg-slate-700 text-rose-300 border-slate-600'
+                  }`}
+                  title="Ghi nhận vào nề nếp: +1 Trả lời sai"
+                >
+                  ❌ Trả lời sai
+                </button>
+
+                <button
+                  onClick={() => handleDisciplineChoice('khong_thuoc_bai')}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                    selectedDisciplineChoice === 'khong_thuoc_bai'
+                      ? 'bg-amber-600 text-white border-amber-400 shadow-sm ring-2 ring-amber-400/40'
+                      : 'bg-slate-700/90 hover:bg-slate-700 text-amber-300 border-slate-600'
+                  }`}
+                  title="Ghi nhận vào nề nếp: +1 Không thuộc bài"
+                >
+                  📖 Không thuộc bài
+                </button>
+
+                <button
+                  onClick={() => handleDisciplineChoice('khong_lam_bai_tap')}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                    selectedDisciplineChoice === 'khong_lam_bai_tap'
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-sm ring-2 ring-purple-400/40'
+                      : 'bg-slate-700/90 hover:bg-slate-700 text-purple-300 border-slate-600'
+                  }`}
+                  title="Ghi nhận vào nề nếp: +1 Không làm bài tập"
+                >
+                  📚 Không làm bài tập
+                </button>
+
+                <button
+                  onClick={() => handleDisciplineChoice('noi_chuyen')}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                    selectedDisciplineChoice === 'noi_chuyen'
+                      ? 'bg-sky-600 text-white border-sky-400 shadow-sm ring-2 ring-sky-400/40'
+                      : 'bg-slate-700/90 hover:bg-slate-700 text-sky-300 border-slate-600'
+                  }`}
+                  title="Ghi nhận vào nề nếp: +1 Nói chuyện"
+                >
+                  🗣️ Nói chuyện
+                </button>
+              </div>
+
+              {/* Undo discipline button */}
+              {lastDisciplineRecordId && (
+                <button
+                  onClick={handleUndoDisciplineFromSpin}
+                  className="inline-flex items-center gap-1 text-[11px] text-amber-300 hover:text-amber-200 bg-amber-950/50 hover:bg-amber-900/60 border border-amber-500/40 px-2.5 py-1 rounded-lg transition-colors font-medium shadow-sm"
+                  title="Hoàn tác lần ghi nhận nề nếp vừa chọn"
+                >
+                  <Undo2 className="w-3 h-3" />
+                  <span>Hoàn tác nề nếp</span>
+                </button>
+              )}
+            </div>
+
+            {/* Discipline Feedback text message */}
+            {disciplineFeedback && (
+              <div className="text-xs text-amber-200 bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-amber-500/20 flex items-center justify-between">
+                <span>{disciplineFeedback}</span>
               </div>
             )}
           </div>

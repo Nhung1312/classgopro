@@ -79,7 +79,7 @@ export interface HistoryRecord {
   starsAwarded?: number;
 }
 
-export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'CLASSES' | 'IMPORT' | 'STATS' | 'HISTORY' | 'SETTINGS';
+export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'DISCIPLINE' | 'CLASSES' | 'IMPORT' | 'STATS' | 'HISTORY' | 'SETTINGS';
 
 export type SelectionMode = 'FAIR' | 'PURE';
 
@@ -207,6 +207,30 @@ export interface BankAccountInfo {
   proPrice: number; // 169000
   proDurationDays: number; // 365
   trialDays: number; // 15
+}
+
+export interface DisciplineViolationType {
+  id: string;
+  name: string;
+  icon: string;
+  isDefault?: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface DisciplineRecord {
+  id: string;
+  studentId: string;
+  classId: string;
+  violationTypeId: string;
+  violationName?: string;
+  violationIcon?: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  source: 'manual' | 'random_picker';
+  lesson?: string;
+  note?: string;
+  createdAt: string; // ISO string
 }
 
 

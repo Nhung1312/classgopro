@@ -1,6 +1,12 @@
 import { ClassRoom, HistoryRecord, SelectionMode, SpinSettings, TimetableSlot, TeachingPlanItem } from '../types';
 import { INITIAL_CLASSES } from './sampleData';
 import { INITIAL_TIMETABLE_SLOTS, INITIAL_TEACHING_PLAN } from './sampleTimetable';
+import {
+  loadDisciplineRecords,
+  saveDisciplineRecords,
+  loadViolationTypes,
+  saveViolationTypes,
+} from '../services/disciplineService';
 
 const STORAGE_KEYS = {
   CLASSES: 'classgo_classes_v1',
@@ -212,6 +218,8 @@ export function exportBackupJSON(): string {
     settings: loadSettings(),
     timetable: loadTimetable(),
     teachingPlan: loadTeachingPlan(),
+    disciplineRecords: loadDisciplineRecords(),
+    disciplineViolationTypes: loadViolationTypes(),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -232,6 +240,12 @@ export function importBackupJSON(jsonStr: string): boolean {
       }
       if (data.teachingPlan && Array.isArray(data.teachingPlan)) {
         saveTeachingPlan(data.teachingPlan);
+      }
+      if (data.disciplineRecords && Array.isArray(data.disciplineRecords)) {
+        saveDisciplineRecords(data.disciplineRecords);
+      }
+      if (data.disciplineViolationTypes && Array.isArray(data.disciplineViolationTypes)) {
+        saveViolationTypes(data.disciplineViolationTypes);
       }
       if (data.classes.length > 0) {
         saveActiveClassId(data.classes[0].id);

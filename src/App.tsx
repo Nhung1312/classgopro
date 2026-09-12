@@ -10,6 +10,8 @@ import {
   TimetableSlot,
   TeachingPlanItem,
   UserSubscription,
+  DisciplineRecord,
+  DisciplineViolationType,
 } from './types';
 import {
   loadClasses,
@@ -28,6 +30,14 @@ import {
   saveTeachingPlan,
   DEFAULT_SETTINGS,
 } from './utils/storage';
+import {
+  loadDisciplineRecords,
+  saveDisciplineRecords,
+  loadViolationTypes,
+  saveViolationTypes,
+  createDisciplineRecord,
+  deleteDisciplineRecord,
+} from './services/disciplineService';
 import { INITIAL_CLASSES } from './utils/sampleData';
 import { soundEngine } from './utils/audio';
 import { auth } from './lib/firebase';
@@ -55,6 +65,7 @@ import { GroupGeneratorModal } from './components/GroupGeneratorModal';
 import { MathQuestionSpotlightModal } from './components/MathQuestionSpotlightModal';
 import { TimetableScreen } from './components/TimetableScreen';
 import { GradebookScreen } from './components/GradebookScreen';
+import { DisciplineScreen } from './components/DisciplineScreen';
 import { AuthModal } from './components/AuthModal';
 import { UpgradeProModal } from './components/UpgradeProModal';
 import { PaymentHistoryModal } from './components/PaymentHistoryModal';
@@ -70,6 +81,10 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<AppTab>('SPIN');
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [lastHistoryRecord, setLastHistoryRecord] = useState<HistoryRecord | null>(null);
+
+  // Discipline State
+  const [disciplineRecords, setDisciplineRecords] = useState<DisciplineRecord[]>(() => loadDisciplineRecords());
+  const [violationTypes, setViolationTypes] = useState<DisciplineViolationType[]>(() => loadViolationTypes());
 
   // Classroom Tool States
   const [isTimerOpen, setIsTimerOpen] = useState(false);
@@ -155,6 +170,14 @@ export default function App() {
               setTeachingPlan(cloudData.teachingPlan);
               saveTeachingPlan(cloudData.teachingPlan);
             }
+            if (cloudData.disciplineRecords) {
+              setDisciplineRecords(cloudData.disciplineRecords);
+              saveDisciplineRecords(cloudData.disciplineRecords);
+            }
+            if (cloudData.disciplineViolationTypes) {
+              setViolationTypes(cloudData.disciplineViolationTypes);
+              saveViolationTypes(cloudData.disciplineViolationTypes);
+            }
           } else {
             // First time login with no cloud data: upload current local data to Firestore
             await saveUserDataToFirestore(user.uid, {
@@ -165,6 +188,8 @@ export default function App() {
               selectionMode: loadSelectionMode(),
               timetableSlots: loadTimetable(),
               teachingPlan: loadTeachingPlan(),
+              disciplineRecords: loadDisciplineRecords(),
+              disciplineViolationTypes: loadViolationTypes(),
             });
           }
         } catch (error) {
@@ -208,6 +233,8 @@ export default function App() {
         selectionMode,
         timetableSlots: timetable,
         teachingPlan,
+        disciplineRecords,
+        disciplineViolationTypes: violationTypes,
       });
       soundEngine.playVictoryFanfare();
     } catch (err) {
@@ -216,7 +243,7 @@ export default function App() {
     } finally {
       setIsSyncingCloud(false);
     }
-  }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan]);
+  }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan, disciplineRecords, violationTypes]);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -226,6 +253,36 @@ export default function App() {
       console.error('Sign out error:', err);
     }
   }, []);
+
+  const handleUpdateDisciplineRecords = useCallback((newRecords: DisciplineRecord[]) => {
+    setDisciplineRecords(newRecords);
+    saveDisciplineRecords(newRecords);
+    syncToCloudIfLoggedIn({ disciplineRecords: newRecords });
+  }, [syncToCloudIfLoggedIn]);
+
+  const handleUpdateViolationTypes = useCallback((newTypes: DisciplineViolationType[]) => {
+    setViolationTypes(newTypes);
+    saveViolationTypes(newTypes);
+    syncToCloudIfLoggedIn({ disciplineViolationTypes: newTypes });
+  }, [syncToCloudIfLoggedIn]);
+
+  const handleRecordDisciplineFromSpin = useCallback((student: Student, violationTypeId: string, note?: string) => {
+    const newRec = createDisciplineRecord({
+      studentId: student.id,
+      classId: activeClassId,
+      violationTypeId,
+      source: 'random_picker',
+      note: note || 'Ghi nhận sau khi quay trúng học sinh',
+    });
+    const updated = [newRec, ...disciplineRecords];
+    handleUpdateDisciplineRecords(updated);
+    return newRec.id;
+  }, [activeClassId, disciplineRecords, handleUpdateDisciplineRecords]);
+
+  const handleUndoDisciplineRecord = useCallback((recordId: string) => {
+    const updated = deleteDisciplineRecord(recordId);
+    handleUpdateDisciplineRecords(updated);
+  }, [handleUpdateDisciplineRecords]);
 
   const handleUpdateTimetable = useCallback((slots: TimetableSlot[]) => {
     setTimetable(slots);
@@ -743,6 +800,8 @@ export default function App() {
             subscription={subscription}
             onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
             onOpenExpiredModal={() => setIsExpiredModalOpen(true)}
+            onRecordDisciplineFromSpin={handleRecordDisciplineFromSpin}
+            onUndoDisciplineRecord={handleUndoDisciplineRecord}
           />
         )}
 
@@ -773,6 +832,18 @@ export default function App() {
             }}
             onUpdateAllClasses={handleUpdateClasses}
             onAwardStars={handleAwardStars}
+          />
+        )}
+
+        {currentTab === 'DISCIPLINE' && (
+          <DisciplineScreen
+            classes={classes}
+            activeClassId={activeClassId}
+            onSelectClass={handleSelectClass}
+            records={disciplineRecords}
+            onUpdateRecords={handleUpdateDisciplineRecords}
+            violationTypes={violationTypes}
+            onUpdateViolationTypes={handleUpdateViolationTypes}
           />
         )}
 

@@ -8,6 +8,8 @@ import {
   TimetableSlot,
   TeachingPlanItem,
   UserSubscription,
+  DisciplineRecord,
+  DisciplineViolationType,
 } from '../types';
 
 export interface UserCloudData {
@@ -18,6 +20,8 @@ export interface UserCloudData {
   settings?: SpinSettings;
   timetableSlots?: TimetableSlot[];
   teachingPlan?: TeachingPlanItem[];
+  disciplineRecords?: DisciplineRecord[];
+  disciplineViolationTypes?: DisciplineViolationType[];
   subscription?: UserSubscription;
   updatedAt?: string;
 }
