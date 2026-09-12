@@ -140,11 +140,23 @@ export interface ExcelPreviewRow {
   warning?: string;
 }
 
+export interface ParsedClassData {
+  id: string;
+  sheetName?: string;
+  className: string;
+  subject?: string;
+  rows: ExcelPreviewRow[];
+  warnings: string[];
+  selected?: boolean;
+}
+
 export interface ExcelParseResult {
   rows: ExcelPreviewRow[];
   totalParsed: number;
   warnings: string[];
   suggestedClassName?: string;
+  suggestedSubject?: string;
+  classes?: ParsedClassData[];
 }
 
 export interface ScoreCommentRule {
@@ -189,7 +201,7 @@ export interface PaymentOrder {
 
 export interface BankAccountInfo {
   bankName: string;
-  bankCode: string; // for VietQR (e.g. 'agribank' or '970405')
+  bankCode: string; // for VietQR (e.g. 'MB' or '970422')
   accountNumber: string;
   accountHolder: string;
   proPrice: number; // 169000

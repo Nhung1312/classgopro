@@ -19,10 +19,10 @@ import {
 export const ADMIN_EMAIL = 'nhung.ngo.u@gmail.com';
 
 export const BANK_CONFIG: BankAccountInfo = {
-  bankName: 'AGRIBANK',
-  bankCode: 'agribank',
-  accountNumber: '3522215050349',
-  accountHolder: 'NGUYEN THI NHUNG',
+  bankName: 'MB BANK (Ngân hàng TMCP Quân Đội)',
+  bankCode: 'MB',
+  accountNumber: '0001448905209',
+  accountHolder: 'LE DINH TUAN',
   proPrice: 169000,
   proDurationDays: 365,
   trialDays: 15,

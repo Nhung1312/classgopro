@@ -50,8 +50,19 @@ export function loadClasses(): ClassRoom[] {
       return INITIAL_CLASSES;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      if (parsed.length > 0) return parsed;
+      // If user deliberately emptied all classes, return one clean empty class instead of reviving sample data
+      const defaultBlank: ClassRoom[] = [
+        {
+          id: `class-${Date.now()}`,
+          name: 'Lớp mới',
+          students: [],
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      saveClasses(defaultBlank);
+      return defaultBlank;
     }
   } catch (err) {
     console.error('Failed to load classes from storage:', err);

@@ -25,6 +25,8 @@ interface ClassManagerProps {
   onDeleteClass: (id: string) => void;
   onUpdateClass: (updatedClass: ClassRoom) => void;
   onNavigateToImport: () => void;
+  onClearClassStudents?: (classId: string) => void;
+  onClearAllSampleData?: () => void;
 }
 
 export const ClassManager: React.FC<ClassManagerProps> = ({
@@ -35,11 +37,17 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
   onDeleteClass,
   onUpdateClass,
   onNavigateToImport,
+  onClearClassStudents,
+  onClearAllSampleData,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [newClassSubject, setNewClassSubject] = useState('');
+
+  const hasSampleData = classes.some(
+    (c) => c.id === 'class-7a1' || c.id === 'class-7a2' || c.id === 'class-8a1'
+  );
 
   // Add single student form state
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -263,6 +271,35 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
         </div>
       </div>
 
+      {/* Sample Data Notice & 1-Click Clear */}
+      {hasSampleData && (
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-md">
+          <div className="flex items-center gap-2.5 text-indigo-200">
+            <Sparkles className="w-5 h-5 text-amber-400 flex-shrink-0" />
+            <span>
+              Hệ thống đang hiển thị <strong>dữ liệu lớp mẫu</strong> (7A1, 7A2, 8A1). Thầy/Cô có thể tạo lớp mới, dán danh sách hoặc xóa sạch để bắt đầu từ đầu.
+            </span>
+          </div>
+          {onClearAllSampleData && (
+            <button
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Bạn có chắc chắn muốn xóa toàn bộ các lớp mẫu (7A1, 7A2, 8A1) để bắt đầu với một lớp mới hoàn toàn sạch sẽ không?'
+                  )
+                ) {
+                  onClearAllSampleData();
+                }
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900/90 border border-rose-700/60 text-rose-300 font-bold whitespace-nowrap flex items-center gap-1.5 transition-colors active:scale-95"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xóa sạch dữ liệu mẫu</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Class Switcher Badges Strip */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
         {classes.map((cls) => {
@@ -368,19 +405,49 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
                 <FilePlus className="w-3.5 h-3.5 text-amber-400" />
                 <span>Dán nhanh danh sách</span>
               </button>
-              {classes.length > 1 && (
+
+              {activeClass.students.length > 0 && (
                 <button
                   onClick={() => {
-                    if (window.confirm(`Bạn có chắc chắn muốn xóa lớp "${activeClass.name}" và toàn bộ dữ liệu của lớp này không?`)) {
-                      onDeleteClass(activeClass.id);
+                    if (
+                      window.confirm(
+                        `Bạn có chắc chắn muốn xóa toàn bộ ${activeClass.students.length} học sinh trong lớp "${activeClass.name}" không? Thao tác này sẽ làm trống lớp để bạn nhập danh sách mới.`
+                      )
+                    ) {
+                      if (onClearClassStudents) {
+                        onClearClassStudents(activeClass.id);
+                      } else {
+                        onUpdateClass({ ...activeClass, students: [] });
+                      }
                     }
                   }}
-                  className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors"
-                  title="Xóa lớp này"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 text-rose-300 text-xs font-semibold transition-colors"
+                  title="Xóa tất cả học sinh trong lớp này"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa hết HS lớp này</span>
                 </button>
               )}
+
+              <button
+                onClick={() => {
+                  if (classes.length > 1) {
+                    if (
+                      window.confirm(
+                        `Bạn có chắc chắn muốn xóa lớp "${activeClass.name}" và toàn bộ dữ liệu của lớp này không?`
+                      )
+                    ) {
+                      onDeleteClass(activeClass.id);
+                    }
+                  } else {
+                    onDeleteClass(activeClass.id);
+                  }
+                }}
+                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors"
+                title={classes.length > 1 ? "Xóa lớp này" : "Xóa & làm mới lớp này"}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
 

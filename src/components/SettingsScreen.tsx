@@ -22,6 +22,7 @@ import {
   CreditCard,
   ShieldCheck,
   History as HistoryIcon,
+  Trash2,
 } from 'lucide-react';
 import { ClassRoom, SpinSettings, SpinVisualType, UserSubscription } from '../types';
 import { exportBackupJSON, importBackupJSON } from '../utils/storage';
@@ -37,6 +38,7 @@ interface SettingsScreenProps {
   onResetClassCounts: (classId: string) => void;
   onResetAllClassesCounts: () => void;
   onRestoreDefaultData: () => void;
+  onClearAllSampleData?: () => void;
   onImportBackupSuccess: () => void;
   currentUser?: FirebaseUser | null;
   subscription?: UserSubscription;
@@ -60,6 +62,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onResetClassCounts,
   onResetAllClassesCounts,
   onRestoreDefaultData,
+  onClearAllSampleData,
   onImportBackupSuccess,
   currentUser,
   subscription,
@@ -70,6 +73,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [showConfirmResetCurrent, setShowConfirmResetCurrent] = useState(false);
   const [showConfirmResetAll, setShowConfirmResetAll] = useState(false);
   const [showConfirmDefault, setShowConfirmDefault] = useState(false);
+  const [showConfirmClearAll, setShowConfirmClearAll] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
@@ -296,7 +300,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <div className="flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span>
-              Tài khoản Agribank nhận thanh toán: <strong>{BANK_CONFIG.accountNumber}</strong> ({BANK_CONFIG.accountHolder}) - {BANK_CONFIG.bankName}
+              Tài khoản MB Bank nhận thanh toán: <strong>{BANK_CONFIG.accountNumber}</strong> ({BANK_CONFIG.accountHolder}) - {BANK_CONFIG.bankName}
             </span>
           </div>
           {onOpenUpgradeModal && (
@@ -916,12 +920,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <span>Nhập Phục Hồi Từ File (.json)</span>
           </button>
 
-          <button
-            onClick={() => setShowConfirmDefault(true)}
-            className="text-xs text-slate-400 hover:text-rose-400 ml-auto underline"
-          >
-            Khôi phục dữ liệu mẫu ban đầu
-          </button>
+          <div className="flex items-center gap-3 ml-auto flex-wrap">
+            <button
+              onClick={() => setShowConfirmDefault(true)}
+              className="text-xs text-slate-400 hover:text-slate-200 underline"
+            >
+              Khôi phục dữ liệu mẫu ban đầu
+            </button>
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <button
+              onClick={() => setShowConfirmClearAll(true)}
+              className="text-xs text-rose-400 hover:text-rose-300 font-bold underline flex items-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Xóa toàn bộ dữ liệu mẫu (Tạo lớp mới trống)</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1021,6 +1035,43 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold"
               >
                 Khôi phục mẫu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirm Clear All Sample Data */}
+      {showConfirmClearAll && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-rose-600/50 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center gap-3 text-rose-400">
+              <Trash2 className="w-6 h-6" />
+              <h3 className="text-lg font-black text-white">Xóa Toàn Bộ Dữ Liệu Mẫu?</h3>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-300">
+              Thao tác này sẽ xóa sạch tất cả các lớp mẫu (7A1, 7A2, 8A1) và tạo sẵn một lớp mới hoàn toàn trống để Thầy/Cô bắt đầu nhập danh sách học sinh của riêng mình.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowConfirmClearAll(false)}
+                className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  if (onClearAllSampleData) {
+                    onClearAllSampleData();
+                  } else {
+                    onRestoreDefaultData();
+                  }
+                  setShowConfirmClearAll(false);
+                  showToast('Đã xóa sạch dữ liệu mẫu và tạo lớp mới trống!');
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30"
+              >
+                Đồng ý xóa dữ liệu mẫu
               </button>
             </div>
           </div>

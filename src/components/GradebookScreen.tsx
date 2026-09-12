@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Settings,
   X,
+  Keyboard,
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { calculateStudentGrade } from '../utils/gradeCalculator';
@@ -76,6 +77,13 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
     );
   }
 
+  // Columns order for Excel-like keyboard navigation
+  const GRADE_COLUMNS = ['tx1', 'tx2', 'tx3', 'tx4', 'gk', 'ck', 'notes'] as const;
+  type GradeColumn = typeof GRADE_COLUMNS[number];
+
+  // Temporary draft strings for active score editing so decimals (e.g. 8. or 8,) are not truncated while typing
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({});
+
   const handleScoreChange = (
     studentId: string,
     field: 'tx1' | 'tx2' | 'tx3' | 'tx4' | 'gk' | 'ck',
@@ -103,6 +111,164 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
     });
 
     onUpdateClassStudents(currentClass.id, updatedStudents);
+  };
+
+  const handleScoreInputChange = (
+    studentId: string,
+    field: 'tx1' | 'tx2' | 'tx3' | 'tx4' | 'gk' | 'ck',
+    rawVal: string
+  ) => {
+    const draftKey = `${studentId}-${field}`;
+    // Allow digits, decimal points and commas up to 4 characters
+    const cleaned = rawVal.replace(/[^0-9.,]/g, '').slice(0, 4);
+    setScoreDrafts((prev) => ({ ...prev, [draftKey]: cleaned }));
+
+    if (cleaned.trim() === '') {
+      handleScoreChange(studentId, field, '');
+      return;
+    }
+
+    // Only commit immediately if it does not end with pending decimal point or comma
+    if (!cleaned.endsWith('.') && !cleaned.endsWith(',')) {
+      const parsed = parseFloat(cleaned.replace(',', '.'));
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 10) {
+        handleScoreChange(studentId, field, cleaned);
+      }
+    }
+  };
+
+  const handleScoreInputBlur = (
+    studentId: string,
+    field: 'tx1' | 'tx2' | 'tx3' | 'tx4' | 'gk' | 'ck'
+  ) => {
+    const draftKey = `${studentId}-${field}`;
+    const draftVal = scoreDrafts[draftKey];
+    if (draftVal !== undefined) {
+      setScoreDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      if (draftVal.trim() === '') {
+        handleScoreChange(studentId, field, '');
+      } else {
+        const parsed = parseFloat(draftVal.replace(',', '.'));
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 10) {
+          handleScoreChange(studentId, field, String(Math.round(parsed * 10) / 10));
+        }
+      }
+    }
+  };
+
+  const getScoreInputValue = (
+    studentId: string,
+    field: 'tx1' | 'tx2' | 'tx3' | 'tx4' | 'gk' | 'ck',
+    actualScore: number | null | undefined
+  ) => {
+    const draftKey = `${studentId}-${field}`;
+    if (scoreDrafts[draftKey] !== undefined) {
+      return scoreDrafts[draftKey];
+    }
+    return actualScore !== undefined && actualScore !== null ? String(actualScore) : '';
+  };
+
+  // Keyboard navigation like Excel: Enter / ArrowDown / ArrowUp / Tab / ArrowLeft / ArrowRight
+  const handleCellKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    field: GradeColumn,
+    totalRows: number
+  ) => {
+    const colIndex = GRADE_COLUMNS.indexOf(field);
+    if (colIndex === -1) return;
+
+    const navigateTo = (targetRow: number, targetCol: number) => {
+      const targetField = GRADE_COLUMNS[targetCol];
+      const targetEl = document.getElementById(
+        `grade-input-${targetRow}-${targetField}`
+      ) as HTMLInputElement | null;
+      if (targetEl) {
+        targetEl.focus();
+        targetEl.select();
+        targetEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      }
+    };
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Shift + Enter: Di chuyển lên dòng trên
+        if (rowIndex > 0) {
+          navigateTo(rowIndex - 1, colIndex);
+        }
+      } else {
+        // Enter: Di chuyển xuống dòng dưới
+        if (rowIndex < totalRows - 1) {
+          navigateTo(rowIndex + 1, colIndex);
+        }
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      // Mũi tên xuống: Di chuyển xuống dòng dưới cùng cột
+      if (rowIndex < totalRows - 1) {
+        navigateTo(rowIndex + 1, colIndex);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      // Mũi tên lên: Di chuyển lên dòng trên cùng cột
+      if (rowIndex > 0) {
+        navigateTo(rowIndex - 1, colIndex);
+      }
+    } else if (e.key === 'ArrowRight') {
+      const input = e.currentTarget;
+      const isAtEnd = input.selectionEnd === input.value.length;
+      const isAllSelected =
+        input.selectionStart === 0 && input.selectionEnd === input.value.length;
+
+      // Nếu đang ở cuối nội dung hoặc bôi đen cả ô thì chuyển sang cột tiếp theo
+      if (isAtEnd || isAllSelected) {
+        if (colIndex < GRADE_COLUMNS.length - 1) {
+          e.preventDefault();
+          navigateTo(rowIndex, colIndex + 1);
+        } else if (rowIndex < totalRows - 1) {
+          e.preventDefault();
+          navigateTo(rowIndex + 1, 0);
+        }
+      }
+    } else if (e.key === 'ArrowLeft') {
+      const input = e.currentTarget;
+      const isAtStart = input.selectionStart === 0 && input.selectionEnd === 0;
+      const isAllSelected =
+        input.selectionStart === 0 && input.selectionEnd === input.value.length;
+
+      // Nếu đang ở đầu nội dung hoặc bôi đen cả ô thì chuyển sang cột trước đó
+      if (isAtStart || isAllSelected) {
+        if (colIndex > 0) {
+          e.preventDefault();
+          navigateTo(rowIndex, colIndex - 1);
+        } else if (rowIndex > 0) {
+          e.preventDefault();
+          navigateTo(rowIndex - 1, GRADE_COLUMNS.length - 1);
+        }
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Shift + Tab: Lùi cột
+        if (colIndex > 0) {
+          navigateTo(rowIndex, colIndex - 1);
+        } else if (rowIndex > 0) {
+          navigateTo(rowIndex - 1, GRADE_COLUMNS.length - 1);
+        }
+      } else {
+        // Tab: Tiến cột, đến cuối thì xuống dòng đầu của học sinh tiếp theo
+        if (colIndex < GRADE_COLUMNS.length - 1) {
+          navigateTo(rowIndex, colIndex + 1);
+        } else if (rowIndex < totalRows - 1) {
+          navigateTo(rowIndex + 1, 0);
+        }
+      }
+    }
   };
 
   const handleNoteChange = (studentId: string, noteStr: string) => {
@@ -403,6 +569,20 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
           </div>
         </div>
 
+        {/* Keyboard Navigation Tip */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300">
+          <div className="flex flex-wrap items-center gap-2">
+            <Keyboard className="w-4 h-4 text-sky-400 flex-shrink-0" />
+            <span className="font-bold text-slate-200">Nhập điểm nhanh:</span>
+            <span className="text-slate-400">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[11px] border border-slate-700">Enter</kbd> hoặc <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[11px] border border-slate-700">↓</kbd> xuống dòng • <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[11px] border border-slate-700">↑</kbd> lên dòng • <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[11px] border border-slate-700">Tab</kbd> hoặc <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[11px] border border-slate-700">→</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-mono font-bold text-[11px] border border-slate-700">←</kbd> chuyển cột
+            </span>
+          </div>
+          <span className="text-[11px] text-emerald-400 font-medium">
+            ⚡ Tự động bôi đen ô khi chuyển đến để gõ đè ngay
+          </span>
+        </div>
+
         {/* Grade Matrix Table */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px] border-collapse text-left text-xs">
@@ -507,72 +687,96 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
                       {/* TX1 */}
                       <td className="py-2 px-1 text-center bg-sky-950/10 border-r border-slate-800/40">
                         <input
+                          id={`grade-input-${idx}-tx1`}
                           type="text"
                           maxLength={4}
-                          value={scores.tx1 !== undefined && scores.tx1 !== null ? scores.tx1 : ''}
-                          onChange={(e) => handleScoreChange(student.id, 'tx1', e.target.value)}
+                          value={getScoreInputValue(student.id, 'tx1', scores.tx1)}
+                          onChange={(e) => handleScoreInputChange(student.id, 'tx1', e.target.value)}
+                          onBlur={() => handleScoreInputBlur(student.id, 'tx1')}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'tx1', filteredStudents.length)}
                           placeholder="—"
-                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400"
+                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
                         />
                       </td>
 
                       {/* TX2 */}
                       <td className="py-2 px-1 text-center bg-sky-950/10 border-r border-slate-800/40">
                         <input
+                          id={`grade-input-${idx}-tx2`}
                           type="text"
                           maxLength={4}
-                          value={scores.tx2 !== undefined && scores.tx2 !== null ? scores.tx2 : ''}
-                          onChange={(e) => handleScoreChange(student.id, 'tx2', e.target.value)}
+                          value={getScoreInputValue(student.id, 'tx2', scores.tx2)}
+                          onChange={(e) => handleScoreInputChange(student.id, 'tx2', e.target.value)}
+                          onBlur={() => handleScoreInputBlur(student.id, 'tx2')}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'tx2', filteredStudents.length)}
                           placeholder="—"
-                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400"
+                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
                         />
                       </td>
 
                       {/* TX3 */}
                       <td className="py-2 px-1 text-center bg-sky-950/10 border-r border-slate-800/40">
                         <input
+                          id={`grade-input-${idx}-tx3`}
                           type="text"
                           maxLength={4}
-                          value={scores.tx3 !== undefined && scores.tx3 !== null ? scores.tx3 : ''}
-                          onChange={(e) => handleScoreChange(student.id, 'tx3', e.target.value)}
+                          value={getScoreInputValue(student.id, 'tx3', scores.tx3)}
+                          onChange={(e) => handleScoreInputChange(student.id, 'tx3', e.target.value)}
+                          onBlur={() => handleScoreInputBlur(student.id, 'tx3')}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'tx3', filteredStudents.length)}
                           placeholder="—"
-                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400"
+                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
                         />
                       </td>
 
                       {/* TX4 */}
                       <td className="py-2 px-1 text-center bg-sky-950/10 border-r border-slate-800/60">
                         <input
+                          id={`grade-input-${idx}-tx4`}
                           type="text"
                           maxLength={4}
-                          value={scores.tx4 !== undefined && scores.tx4 !== null ? scores.tx4 : ''}
-                          onChange={(e) => handleScoreChange(student.id, 'tx4', e.target.value)}
+                          value={getScoreInputValue(student.id, 'tx4', scores.tx4)}
+                          onChange={(e) => handleScoreInputChange(student.id, 'tx4', e.target.value)}
+                          onBlur={() => handleScoreInputBlur(student.id, 'tx4')}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'tx4', filteredStudents.length)}
                           placeholder="—"
-                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400"
+                          className="w-12 text-center font-bold bg-slate-950 border border-slate-700/80 rounded-lg py-1 text-xs text-white focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all"
                         />
                       </td>
 
                       {/* GK (Giữa kỳ) */}
                       <td className="py-2 px-1 text-center bg-indigo-950/20 border-r border-slate-800/60">
                         <input
+                          id={`grade-input-${idx}-gk`}
                           type="text"
                           maxLength={4}
-                          value={scores.gk !== undefined && scores.gk !== null ? scores.gk : ''}
-                          onChange={(e) => handleScoreChange(student.id, 'gk', e.target.value)}
+                          value={getScoreInputValue(student.id, 'gk', scores.gk)}
+                          onChange={(e) => handleScoreInputChange(student.id, 'gk', e.target.value)}
+                          onBlur={() => handleScoreInputBlur(student.id, 'gk')}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'gk', filteredStudents.length)}
                           placeholder="—"
-                          className="w-14 text-center font-black bg-slate-950 border border-indigo-500/50 rounded-lg py-1 text-xs text-indigo-300 focus:outline-none focus:border-indigo-400"
+                          className="w-14 text-center font-black bg-slate-950 border border-indigo-500/50 rounded-lg py-1 text-xs text-indigo-300 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all"
                         />
                       </td>
 
                       {/* CK (Cuối kỳ) */}
                       <td className="py-2 px-1 text-center bg-purple-950/20 border-r border-slate-800/60">
                         <input
+                          id={`grade-input-${idx}-ck`}
                           type="text"
                           maxLength={4}
-                          value={scores.ck !== undefined && scores.ck !== null ? scores.ck : ''}
-                          onChange={(e) => handleScoreChange(student.id, 'ck', e.target.value)}
+                          value={getScoreInputValue(student.id, 'ck', scores.ck)}
+                          onChange={(e) => handleScoreInputChange(student.id, 'ck', e.target.value)}
+                          onBlur={() => handleScoreInputBlur(student.id, 'ck')}
+                          onFocus={(e) => e.target.select()}
+                          onKeyDown={(e) => handleCellKeyDown(e, idx, 'ck', filteredStudents.length)}
                           placeholder="—"
-                          className="w-14 text-center font-black bg-slate-950 border border-purple-500/50 rounded-lg py-1 text-xs text-purple-300 focus:outline-none focus:border-purple-400"
+                          className="w-14 text-center font-black bg-slate-950 border border-purple-500/50 rounded-lg py-1 text-xs text-purple-300 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all"
                         />
                       </td>
 
@@ -622,11 +826,14 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
                       <td className="py-2 px-3 relative">
                         <div className="flex items-center gap-1.5">
                           <input
+                            id={`grade-input-${idx}-notes`}
                             type="text"
                             value={student.notes || ''}
                             onChange={(e) => handleNoteChange(student.id, e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => handleCellKeyDown(e, idx, 'notes', filteredStudents.length)}
                             placeholder="Gõ nhận xét hoặc bấm 💡 chọn mẫu..."
-                            className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 transition-colors"
+                            className="w-full bg-slate-950/80 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
                           />
 
                           {/* Quick Suggestion Button */}

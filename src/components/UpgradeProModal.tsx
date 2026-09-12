@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { User as FirebaseUser } from 'firebase/auth';
 import {
   X,
   Sparkles,
@@ -28,8 +29,10 @@ interface UpgradeProModalProps {
   onClose: () => void;
   userId?: string;
   userEmail?: string;
+  currentUser?: FirebaseUser | null;
   currentSubscription?: UserSubscription;
   onOpenAuthModal?: () => void;
+  onRequireLogin?: () => void;
   onPaymentSuccess?: () => void;
 }
 
@@ -38,10 +41,16 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
   onClose,
   userId,
   userEmail,
+  currentUser,
   currentSubscription,
   onOpenAuthModal,
+  onRequireLogin,
   onPaymentSuccess,
 }) => {
+  const activeUid = userId || currentUser?.uid;
+  const activeEmail = userEmail || currentUser?.email || undefined;
+  const triggerAuth = onOpenAuthModal || onRequireLogin;
+
   const [currentOrder, setCurrentOrder] = useState<PaymentOrder | null>(null);
   const [isCreatingOrder, setIsCreatingOrder] = useState<boolean>(false);
   const [hasClickedPaid, setHasClickedPaid] = useState<boolean>(false);
@@ -50,14 +59,14 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
 
   // When modal opens and user is logged in, automatically create or reuse pending order
   useEffect(() => {
-    if (!isOpen || !userId || !userEmail) return;
+    if (!isOpen || !activeUid || !activeEmail) return;
 
     let isMounted = true;
 
     async function initOrder() {
       setIsCreatingOrder(true);
       try {
-        const order = await createPaymentOrder(userId!, userEmail!);
+        const order = await createPaymentOrder(activeUid!, activeEmail!);
         if (isMounted) {
           setCurrentOrder(order);
           setHasClickedPaid(false);
@@ -74,7 +83,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, userId, userEmail]);
+  }, [isOpen, activeUid, activeEmail]);
 
   // Subscribe to real-time status of current order
   useEffect(() => {
@@ -103,10 +112,10 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
   };
 
   const handleCreateNewOrder = async () => {
-    if (!userId || !userEmail) return;
+    if (!activeUid || !activeEmail) return;
     setIsCreatingOrder(true);
     try {
-      const order = await createPaymentOrder(userId, userEmail);
+      const order = await createPaymentOrder(activeUid, activeEmail);
       setCurrentOrder(order);
       setHasClickedPaid(false);
       soundEngine.playTick(1.0);
@@ -170,7 +179,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
           </div>
 
           {/* Not logged in warning */}
-          {!userId && (
+          {!activeUid && (
             <div className="p-4 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-200 text-xs flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Info className="w-5 h-5 text-amber-400 flex-shrink-0" />
@@ -179,7 +188,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
               <button
                 onClick={() => {
                   onClose();
-                  if (onOpenAuthModal) onOpenAuthModal();
+                  if (triggerAuth) triggerAuth();
                 }}
                 className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold whitespace-nowrap text-xs shadow"
               >
@@ -196,7 +205,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
               </div>
               <h4 className="text-xl font-black text-emerald-300">Thanh Toán Đã Được Xác Nhận!</h4>
               <p className="text-sm text-slate-200">
-                Tài khoản <strong>{userEmail}</strong> đã được kích hoạt thành công <strong>CLASSGO PRO</strong>.
+                Tài khoản <strong>{activeEmail}</strong> đã được kích hoạt thành công <strong>CLASSGO PRO</strong>.
               </p>
               <div className="pt-2">
                 <button
@@ -230,7 +239,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
                 {/* QR Code Container */}
                 <div className="flex flex-col items-center justify-center p-4 rounded-xl bg-white text-slate-900 shadow-md">
                   <span className="text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                    <QrCode className="w-3.5 h-3.5" /> Quét mã VietQR Agribank
+                    <QrCode className="w-3.5 h-3.5" /> Quét mã VietQR MB Bank
                   </span>
                   
                   {isCreatingOrder || !qrUrl ? (
@@ -242,7 +251,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
                     <div className="relative">
                       <img
                         src={qrUrl}
-                        alt="VietQR Chuyển khoản Agribank"
+                        alt="VietQR Chuyển khoản MB Bank"
                         className="w-48 h-48 object-contain rounded-lg shadow-sm"
                         onLoad={() => setQrLoaded(true)}
                       />
@@ -259,7 +268,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
                   {/* Bank Name */}
                   <div className="p-2.5 rounded-lg bg-slate-800 border border-slate-700">
                     <div className="text-[10px] uppercase font-bold text-slate-400">Ngân hàng</div>
-                    <div className="text-sm font-extrabold text-white mt-0.5">{BANK_CONFIG.bankName} (Ngân hàng Nông Nghiệp)</div>
+                    <div className="text-sm font-extrabold text-white mt-0.5">{BANK_CONFIG.bankName}</div>
                   </div>
 
                   {/* Account Holder */}
@@ -330,7 +339,7 @@ export const UpgradeProModal: React.FC<UpgradeProModalProps> = ({
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">
                     Yêu cầu của bạn với mã đơn <strong>{currentOrder?.orderId}</strong> đã được ghi nhận. 
-                    Hệ thống/Quản trị viên đang kiểm tra giao dịch chuyển khoản tới tài khoản Agribank. 
+                    Hệ thống/Quản trị viên đang kiểm tra giao dịch chuyển khoản tới tài khoản MB Bank. 
                     Gói Pro sẽ <strong>tự động mở khóa ngay lập tức</strong> mà không cần tải lại trang.
                   </p>
                 </div>

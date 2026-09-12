@@ -82,7 +82,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
     if (!txId) {
       setAdminFeedback({
         type: 'error',
-        message: `Vui lòng nhập Mã giao dịch ngân hàng Agribank (SMS/App) cho đơn ${order.orderId}!`,
+        message: `Vui lòng nhập Mã giao dịch ngân hàng MB Bank (SMS/App) cho đơn ${order.orderId}!`,
       });
       return;
     }
@@ -217,7 +217,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
             /* Admin Pending Orders Panel */
             <div className="space-y-4">
               <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 flex items-center justify-between">
-                <span>Danh sách đơn hàng người dùng đang chờ xác nhận từ tài khoản Agribank:</span>
+                <span>Danh sách đơn hàng người dùng đang chờ xác nhận từ tài khoản MB Bank:</span>
                 <button
                   onClick={loadData}
                   className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold flex items-center gap-1"
@@ -262,7 +262,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
                       <div className="pt-2 border-t border-slate-700/60 flex flex-col sm:flex-row items-center gap-2">
                         <input
                           type="text"
-                          placeholder="Nhập mã giao dịch Agribank (VD: FT2609...)"
+                          placeholder="Nhập mã giao dịch MB Bank (VD: FT2609...)"
                           value={txIdInputs[order.orderId] || ''}
                           onChange={(e) =>
                             setTxIdInputs({

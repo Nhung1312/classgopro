@@ -23,7 +23,7 @@ import {
   Tv,
   Star,
 } from 'lucide-react';
-import { ClassRoom, SelectionMode, SpinSettings, SpinVisualType, Student, QuestionItem, ThemeMode } from '../types';
+import { ClassRoom, SelectionMode, SpinSettings, SpinVisualType, Student, QuestionItem, ThemeMode, UserSubscription } from '../types';
 import { chooseMultipleStudents, getEligibleStudents, MultiSelectionResult } from '../utils/fairAlgorithm';
 import { soundEngine } from '../utils/audio';
 import { speechEngine } from '../utils/speech';
@@ -47,6 +47,8 @@ interface PresentationOverlayProps {
   onOpenQuestions?: () => void;
   onAwardStars?: (studentId: string, count: number) => void;
   activeQuestion?: QuestionItem | null;
+  subscription?: UserSubscription | null;
+  onOpenUpgradeModal?: () => void;
 }
 
 export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
@@ -61,6 +63,8 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
   onOpenQuestions,
   onAwardStars,
   activeQuestion,
+  subscription,
+  onOpenUpgradeModal,
 }) => {
   const [visualType, setVisualType] = useState<SpinVisualType>(
     settings.defaultVisualType || 'WHEEL'
@@ -171,6 +175,12 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
   };
 
   const handleStartSpin = useCallback(() => {
+    if (subscription?.status === 'EXPIRED') {
+      soundEngine.playTick(0.6);
+      if (onOpenUpgradeModal) onOpenUpgradeModal();
+      return;
+    }
+
     if (isSpinning || eligibleStudents.length === 0) return;
 
     const effectiveCount = Math.min(pickCount, eligibleStudents.length);
@@ -291,6 +301,8 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
     triggerConfetti,
     onStudentSelected,
     onBatchStudentsSelected,
+    subscription,
+    onOpenUpgradeModal,
   ]);
 
   useEffect(() => {

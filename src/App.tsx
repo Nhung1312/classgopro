@@ -479,7 +479,14 @@ export default function App() {
   const handleDeleteClass = useCallback(
     (id: string) => {
       if (classes.length <= 1) {
-        alert('Cần giữ lại ít nhất 1 lớp học!');
+        const emptyClass: ClassRoom = {
+          id: `class-${Date.now()}`,
+          name: 'Lớp mới',
+          students: [],
+          createdAt: new Date().toISOString(),
+        };
+        handleUpdateClasses([emptyClass]);
+        handleSelectClass(emptyClass.id);
         return;
       }
       const updated = classes.filter((c) => c.id !== id);
@@ -490,6 +497,37 @@ export default function App() {
     },
     [classes, activeClassId, handleUpdateClasses, handleSelectClass]
   );
+
+  // Clear all students in a specific class
+  const handleClearClassStudents = useCallback(
+    (classId: string) => {
+      const updated = classes.map((cls) => {
+        if (cls.id === classId) {
+          return {
+            ...cls,
+            students: [],
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return cls;
+      });
+      handleUpdateClasses(updated);
+    },
+    [classes, handleUpdateClasses]
+  );
+
+  // Clear all sample data and initialize fresh empty class
+  const handleClearAllSampleData = useCallback(() => {
+    const emptyClass: ClassRoom = {
+      id: `class-${Date.now()}`,
+      name: 'Lớp mới',
+      students: [],
+      createdAt: new Date().toISOString(),
+    };
+    handleUpdateClasses([emptyClass]);
+    handleSelectClass(emptyClass.id);
+    handleUpdateHistory([]);
+  }, [handleUpdateClasses, handleSelectClass, handleUpdateHistory]);
 
   // Award stars / badges to student
   const handleAwardStars = useCallback(
@@ -514,14 +552,71 @@ export default function App() {
     [activeClass.id, classes, handleUpdateClasses]
   );
 
-  // Handle Excel Import Success
+  // Handle Excel Import Success (Single class or Multi-class batch)
   const handleImportSuccess = useCallback(
-    (targetId: string, importedStudents: Student[], mode: 'REPLACE' | 'APPEND', newClassName?: string) => {
-      if (newClassName) {
-        // Create new class with imported students
+    (
+      targetId: string,
+      importedStudents: Student[],
+      mode: 'REPLACE' | 'APPEND',
+      newClassName?: string,
+      newClassSubject?: string,
+      batchClasses?: Array<{
+        name: string;
+        subject?: string;
+        students: Student[];
+        targetClassId?: string;
+        mode?: 'REPLACE' | 'APPEND';
+      }>
+    ) => {
+      if (batchClasses && batchClasses.length > 0) {
+        // Multi-class batch import
+        let currentClassesList = [...classes];
+        let lastSelectedId = activeClassId;
+
+        for (let i = 0; i < batchClasses.length; i++) {
+          const item = batchClasses[i];
+          if (item.targetClassId) {
+            // Update existing class
+            currentClassesList = currentClassesList.map((cls) => {
+              if (cls.id === item.targetClassId) {
+                const finalStudents =
+                  item.mode === 'APPEND'
+                    ? [...cls.students, ...item.students]
+                    : item.students;
+                return {
+                  ...cls,
+                  subject: item.subject !== undefined ? item.subject : cls.subject,
+                  students: finalStudents,
+                  updatedAt: new Date().toISOString(),
+                };
+              }
+              return cls;
+            });
+            lastSelectedId = item.targetClassId;
+          } else {
+            // Create new class
+            const newClass: ClassRoom = {
+              id: `class-import-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}`,
+              name: item.name,
+              subject: item.subject,
+              students: item.students,
+              createdAt: new Date().toISOString(),
+            };
+            currentClassesList.push(newClass);
+            lastSelectedId = newClass.id;
+          }
+        }
+
+        handleUpdateClasses(currentClassesList);
+        if (lastSelectedId) {
+          handleSelectClass(lastSelectedId);
+        }
+      } else if (newClassName) {
+        // Create new single class with imported students
         const newClass: ClassRoom = {
           id: `class-import-${Date.now()}`,
           name: newClassName,
+          subject: newClassSubject,
           students: importedStudents,
           createdAt: new Date().toISOString(),
         };
@@ -529,13 +624,19 @@ export default function App() {
         handleUpdateClasses(updated);
         handleSelectClass(newClass.id);
       } else {
+        // Update single existing class
         const updated = classes.map((cls) => {
           if (cls.id === targetId) {
             const finalStudents =
               mode === 'REPLACE'
                 ? importedStudents
                 : [...cls.students, ...importedStudents];
-            return { ...cls, students: finalStudents };
+            return {
+              ...cls,
+              subject: newClassSubject !== undefined ? newClassSubject : cls.subject,
+              students: finalStudents,
+              updatedAt: new Date().toISOString(),
+            };
           }
           return cls;
         });
@@ -544,7 +645,7 @@ export default function App() {
       }
       setCurrentTab('SPIN');
     },
-    [classes, handleUpdateClasses, handleSelectClass]
+    [classes, activeClassId, handleUpdateClasses, handleSelectClass]
   );
 
   // Reset counts for single class
@@ -639,6 +740,9 @@ export default function App() {
             onOpenQuestionSpotlight={(q) => setSpotlightQuestion(q)}
             activeQuestion={activeQuestion}
             onClearActiveQuestion={() => setActiveQuestion(null)}
+            subscription={subscription}
+            onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
+            onOpenExpiredModal={() => setIsExpiredModalOpen(true)}
           />
         )}
 
@@ -681,6 +785,8 @@ export default function App() {
             onDeleteClass={handleDeleteClass}
             onUpdateClass={handleUpdateSingleClass}
             onNavigateToImport={() => setCurrentTab('IMPORT')}
+            onClearClassStudents={handleClearClassStudents}
+            onClearAllSampleData={handleClearAllSampleData}
           />
         )}
 
@@ -712,6 +818,7 @@ export default function App() {
             onResetClassCounts={handleResetClassCounts}
             onResetAllClassesCounts={handleResetAllClassesCounts}
             onRestoreDefaultData={handleRestoreDefaultData}
+            onClearAllSampleData={handleClearAllSampleData}
             onImportBackupSuccess={handleImportBackupSuccess}
             currentUser={currentUser}
             subscription={subscription || undefined}
@@ -780,6 +887,8 @@ export default function App() {
           onOpenQuestions={() => setIsQuestionBankOpen(true)}
           onAwardStars={handleAwardStars}
           activeQuestion={activeQuestion}
+          subscription={subscription}
+          onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
         />
       )}
 
