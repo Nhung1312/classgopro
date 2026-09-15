@@ -20,6 +20,7 @@ import {
   Settings,
   X,
   Keyboard,
+  BookOpen,
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { calculateStudentGrade } from '../utils/gradeCalculator';
@@ -33,6 +34,28 @@ import {
 } from '../utils/vnEduComments';
 import { AutoCommentRulesModal } from './AutoCommentRulesModal';
 import { soundEngine } from '../utils/audio';
+
+const GRADEBOOK_SUBJECT_OPTIONS = [
+  'Giáo dục địa phương',
+  'Toán',
+  'Ngữ văn',
+  'Tiếng Anh',
+  'Khoa học tự nhiên',
+  'Lịch sử & Địa lí',
+  'Vật lí',
+  'Hóa học',
+  'Sinh học',
+  'Lịch sử',
+  'Địa lí',
+  'Tin học',
+  'Công nghệ',
+  'GDCD',
+  'GDQP',
+  'Âm nhạc',
+  'Mỹ thuật',
+  'GDTC',
+  'Hoạt động trải nghiệm',
+];
 
 interface GradebookScreenProps {
   classes: ClassRoom[];
@@ -55,6 +78,17 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [quickSaveFeedback, setQuickSaveFeedback] = useState<string | null>(null);
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
+
+  // Subject selector state
+  const [isSubjectSelectorOpen, setIsSubjectSelectorOpen] = useState(false);
+  const [customSubjectInput, setCustomSubjectInput] = useState('');
+  const [exportSubject, setExportSubject] = useState(currentClass?.subject || 'Giáo dục địa phương');
+
+  useEffect(() => {
+    if (currentClass) {
+      setExportSubject(currentClass.subject || 'Giáo dục địa phương');
+    }
+  }, [currentClass?.id, currentClass?.subject]);
 
   // Auto-comment rules modal state
   const [isAutoCommentModalOpen, setIsAutoCommentModalOpen] = useState(false);
@@ -351,9 +385,26 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
     setTimeout(() => setQuickSaveFeedback(null), 4000);
   };
 
+  // Change subject for current class
+  const handleSelectSubject = (newSubject: string) => {
+    const trimmed = newSubject.trim();
+    if (!trimmed) return;
+    if (onUpdateAllClasses) {
+      const updated = classes.map((c) =>
+        c.id === currentClass.id ? { ...c, subject: trimmed, updatedAt: new Date().toISOString() } : c
+      );
+      onUpdateAllClasses(updated);
+    }
+    setExportSubject(trimmed);
+    setIsSubjectSelectorOpen(false);
+    soundEngine.playSuccess();
+    setQuickSaveFeedback(`Đã cập nhật môn học lớp ${currentClass.name} thành "${trimmed}"!`);
+    setTimeout(() => setQuickSaveFeedback(null), 3000);
+  };
+
   // Export vnEdu Template
   const handleExportVnEdu = () => {
-    exportVnEduGradebookToExcel(currentClass, schoolName, schoolYear, semester);
+    exportVnEduGradebookToExcel(currentClass, schoolName, schoolYear, semester, exportSubject);
     soundEngine.playSuccess();
     setIsExportConfigOpen(false);
     setQuickSaveFeedback('📗 Đã xuất file Excel chuẩn vnEdu thành công!');
@@ -403,12 +454,92 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
               <h1 className="text-xl sm:text-2xl font-black text-white">
                 Sổ Điểm Bộ Môn (Chuẩn vnEdu / Bộ GD&ĐT)
               </h1>
-              <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                Môn Toán Học
-              </span>
+
+              {/* Dynamic Subject Selector Badge */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsSubjectSelectorOpen(!isSubjectSelectorOpen)}
+                  className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold border border-emerald-500/40 flex items-center gap-1.5 transition-all shadow-sm group"
+                  title="Nhấn để đổi môn học cho lớp này"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Môn: {currentClass.subject || 'Giáo dục địa phương'}</span>
+                  <ChevronDown className={`w-3 h-3 text-emerald-400/80 transition-transform ${isSubjectSelectorOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Subject Selector Dropdown */}
+                {isSubjectSelectorOpen && (
+                  <div className="absolute left-0 top-full mt-2 z-50 w-72 sm:w-80 bg-slate-950 border border-emerald-500/40 rounded-2xl shadow-2xl p-3 space-y-2.5 animate-scale-in">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+                      <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Chọn môn học cho lớp {currentClass.name}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSubjectSelectorOpen(false)}
+                        className="text-slate-500 hover:text-slate-300 text-xs p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="text-[11px] text-slate-400">
+                      Chọn nhanh môn học theo chương trình GDPT 2018:
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {GRADEBOOK_SUBJECT_OPTIONS.map((subj) => (
+                        <button
+                          key={subj}
+                          type="button"
+                          onClick={() => handleSelectSubject(subj)}
+                          className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                            (currentClass.subject || 'Giáo dục địa phương') === subj
+                              ? 'bg-emerald-600 text-white font-bold border-emerald-400 shadow-sm'
+                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500'
+                          }`}
+                        >
+                          {subj === 'Giáo dục địa phương' ? '🏛️ Giáo dục địa phương' : subj}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Custom Subject Input */}
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Hoặc tự gõ tên môn khác..."
+                        value={customSubjectInput}
+                        onChange={(e) => setCustomSubjectInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && customSubjectInput.trim()) {
+                            handleSelectSubject(customSubjectInput.trim());
+                            setCustomSubjectInput('');
+                          }
+                        }}
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customSubjectInput.trim()) {
+                            handleSelectSubject(customSubjectInput.trim());
+                            setCustomSubjectInput('');
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                      >
+                        Lưu
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-              Đồng bộ 2 chiều với vnEdu, tự động nhận xét theo thang điểm & tính ĐTBmhk
+              Đồng bộ 2 chiều với vnEdu, tự động nhận xét theo thang điểm &amp; tính ĐTBmhk
             </p>
           </div>
         </div>
@@ -613,7 +744,7 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
                   Xếp loại
                 </th>
                 <th rowSpan={2} className="py-3 px-3">
-                  Nhận xét đánh giá môn Toán (vnEdu)
+                  Nhận xét đánh giá môn {currentClass.subject || 'Giáo dục địa phương'} (vnEdu)
                 </th>
               </tr>
               {/* Header row 2 */}
@@ -635,7 +766,7 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
                 filteredStudents.map((student, idx) => {
                   const summary = calculateStudentGrade(student);
                   const scores = student.scores || {};
-                  const suggestions = getCommentSuggestionsForStudent(summary.finalAvg);
+                  const suggestions = getCommentSuggestionsForStudent(summary.finalAvg, currentClass.subject || 'Giáo dục địa phương');
                   const isSuggestionOpen = activeSuggestionStudentId === student.id;
 
                   return (
@@ -1014,6 +1145,35 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
             </div>
 
             <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Môn Học (Bộ Môn vnEdu):</label>
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    value={exportSubject}
+                    onChange={(e) => setExportSubject(e.target.value)}
+                    placeholder="Ví dụ: Giáo dục địa phương, Toán..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-emerald-500"
+                  />
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {['Giáo dục địa phương', 'Toán', 'Ngữ văn', 'Tiếng Anh', 'Khoa học tự nhiên', 'Lịch sử & Địa lí', 'Tin học', 'Công nghệ', 'GDCD'].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setExportSubject(s)}
+                        className={`text-[11px] px-2 py-0.5 rounded-lg border transition-colors ${
+                          exportSubject === s
+                            ? 'bg-emerald-600 text-white border-emerald-500 font-bold'
+                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-slate-400 font-bold mb-1">Tên Trường Học:</label>
                 <input

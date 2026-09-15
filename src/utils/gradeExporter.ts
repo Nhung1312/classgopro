@@ -21,12 +21,19 @@ export function splitVietnameseName(fullName: string): { hoDem: string; ten: str
  * Exports EXACT vnEdu gradebook format (.xlsx / .xls compatible)
  * Formatted identically to the official vnEdu template (Multi-level headers, Họ đệm / Tên columns)
  */
-export function exportVnEduGradebookToExcel(classroom: ClassRoom, schoolName = 'TRƯỜNG TH & THCS LƯƠNG CHÍ', schoolYear = '2025-2026', semester = 'HỌC KỲ 1') {
+export function exportVnEduGradebookToExcel(
+  classroom: ClassRoom,
+  schoolName = 'TRƯỜNG TH & THCS LƯƠNG CHÍ',
+  schoolYear = '2025-2026',
+  semester = 'HỌC KỲ 1',
+  subjectName?: string
+) {
+  const actualSubject = (subjectName || classroom.subject || 'Giáo dục địa phương').trim();
   // 1. Construct 2D array matrix matching vnEdu layout
   const rows: (string | number)[][] = [
     ['ỦY BAN NHÂN DÂN PHƯỜNG / QUẬN', '', '', '', '', '', '', '', '', '', ''],
     [schoolName.toUpperCase(), '', '', '', '', '', '', '', '', '', ''],
-    [`BẢNG ĐIỂM CHI TIẾT - MÔN TOÁN HỌC - ${semester.toUpperCase()} - NĂM HỌC ${schoolYear}`, '', '', '', '', '', '', '', '', '', ''],
+    [`BẢNG ĐIỂM CHI TIẾT - MÔN ${actualSubject.toUpperCase()} - ${semester.toUpperCase()} - NĂM HỌC ${schoolYear}`, '', '', '', '', '', '', '', '', '', ''],
     [`Lớp ${classroom.name}`, '', '', '', '', '', '', '', '', '', ''],
     ['', '', '', '', '', '', '', '', '', '', ''], // empty spacer row
     // Row 6 (Index 5): Header 1

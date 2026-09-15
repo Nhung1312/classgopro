@@ -722,16 +722,35 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Môn học (Tùy chọn)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-300">
+                    Môn học (Tùy chọn)
+                  </label>
+                  <span className="text-[10px] text-slate-400">Chọn nhanh hoặc tự gõ</span>
+                </div>
                 <input
                   type="text"
-                  placeholder="Ví dụ: Toán, Văn, Lý, Hóa, Tiếng Anh..."
+                  placeholder="Ví dụ: Giáo dục địa phương, Toán, Ngữ văn..."
                   value={newClassSubject}
                   onChange={(e) => setNewClassSubject(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
+                <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                  {['Giáo dục địa phương', 'Toán', 'Ngữ văn', 'Tiếng Anh', 'Khoa học tự nhiên', 'Lịch sử & Địa lí', 'Tin học', 'Công nghệ', 'GDCD'].map((subj) => (
+                    <button
+                      key={subj}
+                      type="button"
+                      onClick={() => setNewClassSubject(subj)}
+                      className={`text-[11px] px-2 py-0.5 rounded-lg border transition-colors ${
+                        newClassSubject === subj
+                          ? 'bg-indigo-600 text-white border-indigo-500 font-bold'
+                          : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+                      }`}
+                    >
+                      {subj}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">

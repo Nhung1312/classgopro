@@ -21,7 +21,9 @@ import { Student, ClassRoom, ScoreCommentRule } from '../types';
 import { calculateStudentGrade } from '../utils/gradeCalculator';
 import {
   DEFAULT_SCORE_COMMENT_RULES,
+  DEFAULT_GDDP_SCORE_COMMENT_RULES,
   VNEDU_MATH_COMMENT_TEMPLATES,
+  VNEDU_GDDP_COMMENT_TEMPLATES,
   loadScoreCommentRules,
   saveScoreCommentRules,
   getCommentFromRules,
@@ -111,7 +113,15 @@ export const AutoCommentRulesModal: React.FC<AutoCommentRulesModalProps> = ({
     setRules(DEFAULT_SCORE_COMMENT_RULES);
     setNoScoreComment('Chưa đủ cột điểm kiểm tra đánh giá.');
     saveScoreCommentRules(DEFAULT_SCORE_COMMENT_RULES);
-    setToastMessage('Đã khôi phục bảng nhận xét chuẩn Bộ GD&ĐT');
+    setToastMessage('Đã tải mẫu nhận xét Toán / Văn hóa chung');
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleLoadGDDPDefaults = () => {
+    setRules(DEFAULT_GDDP_SCORE_COMMENT_RULES);
+    setNoScoreComment('Chưa đủ cột điểm kiểm tra đánh giá bài thu hoạch địa phương.');
+    saveScoreCommentRules(DEFAULT_GDDP_SCORE_COMMENT_RULES);
+    setToastMessage('Đã nạp mẫu nhận xét môn Giáo dục địa phương (GDĐP)!');
     setTimeout(() => setToastMessage(null), 2500);
   };
 
@@ -284,21 +294,32 @@ export const AutoCommentRulesModal: React.FC<AutoCommentRulesModalProps> = ({
               </p>
             </div>
 
-            <button
-              onClick={handleResetDefaults}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-colors border border-slate-700 flex-shrink-0 self-start sm:self-auto"
-              title="Khôi phục các câu nhận xét chuẩn Bộ GD&ĐT"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Mẫu chuẩn Bộ GD&amp;ĐT</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap flex-shrink-0 self-start sm:self-auto">
+              <button
+                onClick={handleLoadGDDPDefaults}
+                className="px-3 py-1.5 rounded-xl bg-amber-950/60 hover:bg-amber-900/80 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-colors border border-amber-500/40"
+                title="Tải câu nhận xét chuẩn cho môn Giáo dục địa phương (GDĐP)"
+              >
+                <span>🏛️</span>
+                <span>Mẫu GD Địa phương (GDĐP)</span>
+              </button>
+
+              <button
+                onClick={handleResetDefaults}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1.5 transition-colors border border-slate-700"
+                title="Khôi phục các câu nhận xét môn Toán / Văn hóa chung"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Mẫu Toán / Văn hóa</span>
+              </button>
+            </div>
           </div>
 
           {/* Rules Matrix Table */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-black text-sm text-white flex items-center gap-2">
-                <span>📋 Bảng Khoảng Điểm &amp; Câu Nhận Xét Môn Toán</span>
+                <span>📋 Bảng Khoảng Điểm &amp; Nhận Xét (Môn {currentClass.subject || 'Giáo dục địa phương'})</span>
               </h3>
               <span className="text-[11px] text-slate-400">
                 Tự động lưu lại cho tất cả các lớp

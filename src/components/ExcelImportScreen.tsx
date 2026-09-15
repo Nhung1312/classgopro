@@ -55,9 +55,12 @@ interface EditableParsedClass {
 }
 
 const COMMON_SUBJECTS = [
+  'Giáo dục địa phương',
   'Toán',
   'Ngữ văn',
   'Tiếng Anh',
+  'Khoa học tự nhiên',
+  'Lịch sử & Địa lí',
   'Vật lí',
   'Hóa học',
   'Sinh học',
@@ -67,8 +70,6 @@ const COMMON_SUBJECTS = [
   'Công nghệ',
   'GDCD',
   'GDQP',
-  'Khoa học tự nhiên',
-  'Lịch sử & Địa lí',
   'Âm nhạc',
   'Mỹ thuật',
   'GDTC',

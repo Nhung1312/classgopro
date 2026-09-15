@@ -42,6 +42,95 @@ export const VNEDU_MATH_COMMENT_TEMPLATES = {
   ],
 };
 
+export const VNEDU_GDDP_COMMENT_TEMPLATES = {
+  EXCELLENT: [
+    'Hoàn thành xuất sắc nhiệm vụ môn Giáo dục địa phương. Hiểu sâu sắc văn hóa, lịch sử quê hương.',
+    'Nắm rất vững kiến thức địa phương, tích cực tham gia các dự án tìm hiểu di tích và lễ hội truyền thống.',
+    'Có tinh thần tự hào và trách nhiệm cao trong việc bảo tồn, phát huy bản sắc văn hóa quê hương.',
+    'Kỹ năng thuyết trình, làm bài thu hoạch và dự án trải nghiệm thực tế về địa phương rất tốt.',
+  ],
+  GOOD: [
+    'Hoàn thành tốt nhiệm vụ môn Giáo dục địa phương. Nắm chắc kiến thức bài học.',
+    'Có ý thức tìm hiểu các di tích lịch sử, địa lý và danh lam thắng cảnh của địa phương.',
+    'Tích cực tham gia thảo luận nhóm và chuẩn bị bài thu hoạch chu đáo.',
+    'Yêu quý quê hương, chăm chỉ làm các bài tập tìm hiểu địa phương.',
+  ],
+  FAIR: [
+    'Hoàn thành yêu cầu môn học. Có ý thức tìm hiểu về văn hóa, địa lý quê hương.',
+    'Nắm được các nét cơ bản về địa phương, cần cẩn thận hơn khi làm bài thu hoạch.',
+    'Tiếp thu bài tương đối tốt, cần tích cực phát biểu xây dựng bài hơn.',
+    'Có tinh thần học tập, cần chủ động tham gia các hoạt động nhóm hơn.',
+  ],
+  PASS: [
+    'Đạt yêu cầu môn học. Cần dành thêm thời gian đọc tài liệu và hoàn thành bài tập địa phương.',
+    'Cần tập trung nghe giảng và nộp các bài thu hoạch địa phương đúng hạn.',
+    'Cần tích cực tìm hiểu thêm về lịch sử, địa lý địa phương nơi mình sinh sống.',
+    'Cần chủ động hỏi thầy cô và bạn bè khi thực hiện các nhiệm vụ học tập.',
+  ],
+  NEED_IMPROVEMENT: [
+    'Chưa đạt yêu cầu môn học. Cần hoàn thành các bài tập và bài thu hoạch về địa phương còn thiếu.',
+    'Cần chú ý nghe giảng và tích cực hơn trong các giờ học tìm hiểu địa phương.',
+    'Cần dành thêm thời gian ôn tập lại các kiến thức cơ bản về địa phương.',
+  ],
+  NO_SCORE: [
+    'Chưa đủ cột điểm kiểm tra đánh giá theo quy định.',
+    'Cần bổ sung các bài kiểm tra và bài thu hoạch còn thiếu.',
+  ],
+};
+
+export const DEFAULT_GDDP_SCORE_COMMENT_RULES: ScoreCommentRule[] = [
+  {
+    id: 'rule_gddp_excellent',
+    minScore: 9.0,
+    maxScore: 10.0,
+    label: 'Xuất sắc (9.0 - 10.0)',
+    evaluation: 'Xuất sắc',
+    comment: 'Hoàn thành xuất sắc nhiệm vụ môn Giáo dục địa phương. Hiểu sâu sắc văn hóa, lịch sử quê hương.',
+    alternatives: VNEDU_GDDP_COMMENT_TEMPLATES.EXCELLENT,
+    color: 'purple',
+  },
+  {
+    id: 'rule_gddp_good',
+    minScore: 8.0,
+    maxScore: 8.9,
+    label: 'Giỏi (8.0 - 8.9)',
+    evaluation: 'Giỏi',
+    comment: 'Hoàn thành tốt nhiệm vụ môn Giáo dục địa phương. Nắm chắc kiến thức bài học.',
+    alternatives: VNEDU_GDDP_COMMENT_TEMPLATES.GOOD,
+    color: 'emerald',
+  },
+  {
+    id: 'rule_gddp_fair',
+    minScore: 6.5,
+    maxScore: 7.9,
+    label: 'Khá (6.5 - 7.9)',
+    evaluation: 'Khá',
+    comment: 'Hoàn thành yêu cầu môn học. Có ý thức tìm hiểu về văn hóa, địa lý quê hương.',
+    alternatives: VNEDU_GDDP_COMMENT_TEMPLATES.FAIR,
+    color: 'indigo',
+  },
+  {
+    id: 'rule_gddp_pass',
+    minScore: 5.0,
+    maxScore: 6.4,
+    label: 'Đạt (5.0 - 6.4)',
+    evaluation: 'Đạt',
+    comment: 'Đạt yêu cầu môn học. Cần dành thêm thời gian đọc tài liệu và hoàn thành bài tập địa phương.',
+    alternatives: VNEDU_GDDP_COMMENT_TEMPLATES.PASS,
+    color: 'amber',
+  },
+  {
+    id: 'rule_gddp_need_improvement',
+    minScore: 0.0,
+    maxScore: 4.9,
+    label: 'Chưa đạt (< 5.0)',
+    evaluation: 'Chưa đạt',
+    comment: 'Chưa đạt yêu cầu. Cần hoàn thành các bài thu hoạch và ôn tập lại kiến thức về địa phương.',
+    alternatives: VNEDU_GDDP_COMMENT_TEMPLATES.NEED_IMPROVEMENT,
+    color: 'rose',
+  },
+];
+
 export const DEFAULT_SCORE_COMMENT_RULES: ScoreCommentRule[] = [
   {
     id: 'rule_excellent',
@@ -179,7 +268,17 @@ export const QUICK_TAG_COMMENTS: CommentCategory[] = [
     ],
   },
   {
-    label: '✍️ Kỹ năng môn Toán',
+    label: '🏛️ Môn Giáo dục địa phương (GDĐP)',
+    comments: [
+      'Hiểu biết phong phú về di tích lịch sử và văn hóa địa phương.',
+      'Tích cực tham gia dự án bảo tồn làng nghề, danh lam thắng cảnh quê hương.',
+      'Bài thu hoạch về truyền thống địa phương trình bày khoa học, sinh động.',
+      'Có ý thức tự hào và phát huy bản sắc văn hóa tốt đẹp của quê hương.',
+      'Chăm chỉ tìm hiểu đặc điểm kinh tế, xã hội và con người địa phương.',
+    ],
+  },
+  {
+    label: '✍️ Kỹ năng môn Toán & Tự nhiên',
     comments: [
       'Kỹ năng tính toán nhanh, trình bày bài khoa học.',
       'Vẽ hình học chính xác, nắm chắc các bước chứng minh.',
@@ -201,12 +300,23 @@ export const QUICK_TAG_COMMENTS: CommentCategory[] = [
 /**
  * Returns suggested comment based on student's grade
  */
-export function getAutoCommentByScore(score: number | null): string {
+export function getAutoCommentByScore(score: number | null, subject?: string): string {
   if (score === null) {
     return 'Chưa đủ cột điểm đánh giá.';
   }
+  const isGDDP = subject && (subject.toLowerCase().includes('địa phương') || subject.toLowerCase().includes('gddp'));
+  if (isGDDP) {
+    if (score >= 9.0) return VNEDU_GDDP_COMMENT_TEMPLATES.EXCELLENT[0];
+    if (score >= 8.0) return VNEDU_GDDP_COMMENT_TEMPLATES.GOOD[0];
+    if (score >= 6.5) return VNEDU_GDDP_COMMENT_TEMPLATES.FAIR[0];
+    if (score >= 5.0) return VNEDU_GDDP_COMMENT_TEMPLATES.PASS[0];
+    return VNEDU_GDDP_COMMENT_TEMPLATES.NEED_IMPROVEMENT[0];
+  }
+
   if (score >= 9.0) {
-    return 'Hoàn thành xuất sắc nhiệm vụ học tập môn Toán. Tư duy logic và giải toán rất tốt.';
+    return subject && !subject.toLowerCase().includes('toán')
+      ? `Hoàn thành xuất sắc nhiệm vụ học tập môn ${subject}. Nắm rất vững kiến thức.`
+      : 'Hoàn thành xuất sắc nhiệm vụ học tập môn Toán. Tư duy logic và giải toán rất tốt.';
   }
   if (score >= 8.0) {
     return 'Hoàn thành tốt nhiệm vụ học tập. Nắm chắc kiến thức, tiếp thu bài nhanh.';
@@ -223,7 +333,7 @@ export function getAutoCommentByScore(score: number | null): string {
 /**
  * Returns a list of smart suggestion strings for a specific student's score
  */
-export function getCommentSuggestionsForStudent(score: number | null): string[] {
+export function getCommentSuggestionsForStudent(score: number | null, subject?: string): string[] {
   if (score === null) {
     return [
       'Chưa đủ cột điểm đánh giá.',
@@ -231,9 +341,12 @@ export function getCommentSuggestionsForStudent(score: number | null): string[] 
       'Ý thức học tập tốt, cần hoàn thành đầy đủ bài kiểm tra.',
     ];
   }
-  if (score >= 9.0) return VNEDU_MATH_COMMENT_TEMPLATES.EXCELLENT;
-  if (score >= 8.0) return VNEDU_MATH_COMMENT_TEMPLATES.GOOD;
-  if (score >= 6.5) return VNEDU_MATH_COMMENT_TEMPLATES.FAIR;
-  if (score >= 5.0) return VNEDU_MATH_COMMENT_TEMPLATES.PASS;
-  return VNEDU_MATH_COMMENT_TEMPLATES.NEED_IMPROVEMENT;
+  const isGDDP = subject && (subject.toLowerCase().includes('địa phương') || subject.toLowerCase().includes('gddp'));
+  const templates = isGDDP ? VNEDU_GDDP_COMMENT_TEMPLATES : VNEDU_MATH_COMMENT_TEMPLATES;
+
+  if (score >= 9.0) return templates.EXCELLENT;
+  if (score >= 8.0) return templates.GOOD;
+  if (score >= 6.5) return templates.FAIR;
+  if (score >= 5.0) return templates.PASS;
+  return templates.NEED_IMPROVEMENT;
 }

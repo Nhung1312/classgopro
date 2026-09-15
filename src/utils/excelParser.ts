@@ -145,6 +145,7 @@ export function parsePastedNames(text: string): ExcelParseResult {
 
 // Vietnamese subjects dictionary for smart detection
 const VIETNAMESE_SUBJECTS: { label: string; keywords: string[] }[] = [
+  { label: 'Giáo dục địa phương', keywords: ['giaoducdiaphuong', 'gddp', 'diaphuong', 'ndgddp'] },
   { label: 'Toán', keywords: ['toan', 'toanhoc', 'daiso', 'hinhhoc'] },
   { label: 'Ngữ văn', keywords: ['nguvan', 'van', 'tiengviet'] },
   { label: 'Tiếng Anh', keywords: ['tienganh', 'tienganhhoc', 'english', 'ngoainngu', 'anhvan'] },
