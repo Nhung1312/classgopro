@@ -83,6 +83,12 @@ export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'DISCIPLINE' | 'CLASSE
 
 export type SelectionMode = 'FAIR' | 'PURE';
 
+export type NameDisplayStyle = 'FULL_NAME' | 'STT_NAME' | 'ONLY_STT' | 'FIRST_NAME_ONLY' | 'CODE_NAME';
+
+export type CallTargetFilter = 'ALL' | 'FEMALE_ONLY' | 'MALE_ONLY' | 'NO_SCORE_TX1';
+
+export type WheelSizeOption = 'STANDARD' | 'LARGE' | 'XLARGE';
+
 export type SpinVisualType = 'SLOT' | 'WHEEL' | 'CARDS' | 'CHEST';
 
 export type BgmStyle = 'SUSPENSE_GAME' | 'DRUMROLL' | 'CYBER' | 'OFF';
@@ -111,6 +117,8 @@ export interface SpinSettings {
   bgmStyle: BgmStyle;
   bgmVolume: number;
   themeMode?: ThemeMode;
+  nameDisplayStyle?: NameDisplayStyle;
+  wheelSizeOption?: WheelSizeOption;
 }
 
 export interface GeneratedGroup {

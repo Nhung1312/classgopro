@@ -29,6 +29,11 @@ import {
   loadTeachingPlan,
   saveTeachingPlan,
   DEFAULT_SETTINGS,
+  isSampleClasses,
+  createSafetyBackup,
+  restoreSafetyBackup,
+  hasSafetyBackup,
+  getLastLocalUpdate,
 } from './utils/storage';
 import {
   loadDisciplineRecords,
@@ -142,7 +147,36 @@ export default function App() {
             }
           });
 
-          if (cloudData && cloudData.classes && cloudData.classes.length > 0) {
+          // Step 1: Create an automated safety snapshot of current local data before any changes
+          createSafetyBackup();
+
+          const currentLocalClasses = loadClasses();
+          const localIsSample = isSampleClasses(currentLocalClasses);
+          const cloudClasses = cloudData?.classes;
+          const cloudHasClasses = Boolean(cloudClasses && cloudClasses.length > 0);
+          const cloudIsSample = !cloudHasClasses || isSampleClasses(cloudClasses);
+
+          // Case 1: Local contains REAL teacher data, while Cloud has only default sample data or is empty!
+          // PRESERVE local data and upload it to the user's Firestore cloud account immediately!
+          if (!localIsSample && cloudIsSample) {
+            console.log('Protecting user data: Local has real classes, uploading local data to Cloud');
+            await saveUserDataToFirestore(user.uid, {
+              classes: currentLocalClasses,
+              activeClassId: loadActiveClassId(currentLocalClasses),
+              history: loadHistory(),
+              settings: loadSettings(),
+              selectionMode: loadSelectionMode(),
+              timetableSlots: loadTimetable(),
+              teachingPlan: loadTeachingPlan(),
+              disciplineRecords: loadDisciplineRecords(),
+              disciplineViolationTypes: loadViolationTypes(),
+            });
+            setClasses(currentLocalClasses);
+          }
+          // Case 2: Local is only sample data, but Cloud has REAL teacher data (e.g. logging in on a new device)
+          // -> Download the real classes from Cloud!
+          else if (localIsSample && !cloudIsSample && cloudData && cloudData.classes) {
+            console.log('Downloading real classes from Cloud to this device');
             setClasses(cloudData.classes);
             saveClasses(cloudData.classes);
 
@@ -178,19 +212,83 @@ export default function App() {
               setViolationTypes(cloudData.disciplineViolationTypes);
               saveViolationTypes(cloudData.disciplineViolationTypes);
             }
-          } else {
-            // First time login with no cloud data: upload current local data to Firestore
-            await saveUserDataToFirestore(user.uid, {
-              classes: loadClasses(),
-              activeClassId: loadActiveClassId(loadClasses()),
-              history: loadHistory(),
-              settings: loadSettings(),
-              selectionMode: loadSelectionMode(),
-              timetableSlots: loadTimetable(),
-              teachingPlan: loadTeachingPlan(),
-              disciplineRecords: loadDisciplineRecords(),
-              disciplineViolationTypes: loadViolationTypes(),
-            });
+          }
+          // Case 3: Both have real user data (compare timestamps)
+          else if (!localIsSample && !cloudIsSample && cloudData && cloudData.classes) {
+            const lastLocal = getLastLocalUpdate();
+            const cloudUpdated = cloudData?.updatedAt;
+            const cloudIsNewer =
+              cloudUpdated && (!lastLocal || new Date(cloudUpdated).getTime() > new Date(lastLocal).getTime());
+
+            if (cloudIsNewer) {
+              console.log('Cloud data is newer, updating local data from Cloud');
+              setClasses(cloudData.classes);
+              saveClasses(cloudData.classes);
+              if (cloudData.activeClassId) {
+                setActiveClassId(cloudData.activeClassId);
+                saveActiveClassId(cloudData.activeClassId);
+              }
+              if (cloudData.history) {
+                setHistory(cloudData.history);
+                saveHistory(cloudData.history);
+              }
+              if (cloudData.settings) {
+                setSettings(cloudData.settings);
+                saveSettings(cloudData.settings);
+              }
+              if (cloudData.selectionMode) {
+                setSelectionMode(cloudData.selectionMode);
+                saveSelectionMode(cloudData.selectionMode);
+              }
+              if (cloudData.timetableSlots) {
+                setTimetable(cloudData.timetableSlots);
+                saveTimetable(cloudData.timetableSlots);
+              }
+              if (cloudData.teachingPlan) {
+                setTeachingPlan(cloudData.teachingPlan);
+                saveTeachingPlan(cloudData.teachingPlan);
+              }
+              if (cloudData.disciplineRecords) {
+                setDisciplineRecords(cloudData.disciplineRecords);
+                saveDisciplineRecords(cloudData.disciplineRecords);
+              }
+              if (cloudData.disciplineViolationTypes) {
+                setViolationTypes(cloudData.disciplineViolationTypes);
+                saveViolationTypes(cloudData.disciplineViolationTypes);
+              }
+            } else {
+              console.log('Local data is newer, syncing local data to Cloud');
+              await saveUserDataToFirestore(user.uid, {
+                classes: currentLocalClasses,
+                activeClassId: loadActiveClassId(currentLocalClasses),
+                history: loadHistory(),
+                settings: loadSettings(),
+                selectionMode: loadSelectionMode(),
+                timetableSlots: loadTimetable(),
+                teachingPlan: loadTeachingPlan(),
+                disciplineRecords: loadDisciplineRecords(),
+                disciplineViolationTypes: loadViolationTypes(),
+              });
+            }
+          }
+          // Case 4: Both are default sample data or fresh state
+          else {
+            if (cloudHasClasses && cloudData?.classes) {
+              setClasses(cloudData.classes);
+              saveClasses(cloudData.classes);
+            } else {
+              await saveUserDataToFirestore(user.uid, {
+                classes: currentLocalClasses,
+                activeClassId: loadActiveClassId(currentLocalClasses),
+                history: loadHistory(),
+                settings: loadSettings(),
+                selectionMode: loadSelectionMode(),
+                timetableSlots: loadTimetable(),
+                teachingPlan: loadTeachingPlan(),
+                disciplineRecords: loadDisciplineRecords(),
+                disciplineViolationTypes: loadViolationTypes(),
+              });
+            }
           }
         } catch (error) {
           console.error('Failed to sync data with Firestore on auth change:', error);
@@ -746,6 +844,36 @@ export default function App() {
     setSettings(loadSettings());
   }, []);
 
+  // Restore safety backup
+  const handleRestoreSafetyBackup = useCallback(() => {
+    const success = restoreSafetyBackup();
+    if (success) {
+      const freshClasses = loadClasses();
+      setClasses(freshClasses);
+      setActiveClassId(loadActiveClassId(freshClasses));
+      setHistory(loadHistory());
+      setSettings(loadSettings());
+      setTimetable(loadTimetable());
+      setTeachingPlan(loadTeachingPlan());
+      setDisciplineRecords(loadDisciplineRecords());
+      setViolationTypes(loadViolationTypes());
+      if (auth.currentUser) {
+        saveUserDataToFirestore(auth.currentUser.uid, {
+          classes: freshClasses,
+          activeClassId: loadActiveClassId(freshClasses),
+          history: loadHistory(),
+          settings: loadSettings(),
+          timetableSlots: loadTimetable(),
+          teachingPlan: loadTeachingPlan(),
+          disciplineRecords: loadDisciplineRecords(),
+          disciplineViolationTypes: loadViolationTypes(),
+        });
+      }
+      return true;
+    }
+    return false;
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
       {/* Top Navigation */}
@@ -896,6 +1024,8 @@ export default function App() {
             onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
             onOpenPaymentHistoryModal={() => setIsPaymentHistoryModalOpen(true)}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onRestoreSafetyBackup={handleRestoreSafetyBackup}
+            hasSafetyBackup={hasSafetyBackup()}
           />
         )}
       </main>

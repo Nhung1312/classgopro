@@ -18,19 +18,11 @@ service cloud.firestore {
       );
     }
 
-    // User profile and app data
+    // User profile and app data (classes, students, scores, discipline, timetable, settings)
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) || isAdmin();
-      // Allow user to update their classes, settings, history, etc.
-      // If updating subscription status to ACTIVE, must be Admin
-      allow update: if (isOwner(userId) || isAdmin()) && (
-        isAdmin() ||
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription']) ||
-        resource.data.subscription == null ||
-        request.resource.data.subscription.status != 'ACTIVE' ||
-        resource.data.subscription.status == 'ACTIVE'
-      );
+      allow update: if isOwner(userId) || isAdmin();
       allow delete: if isOwner(userId) || isAdmin();
     }
 

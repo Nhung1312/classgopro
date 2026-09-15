@@ -23,8 +23,17 @@ import {
   ShieldCheck,
   History as HistoryIcon,
   Trash2,
+  Sliders,
+  Hash,
 } from 'lucide-react';
-import { ClassRoom, SpinSettings, SpinVisualType, UserSubscription } from '../types';
+import {
+  ClassRoom,
+  SpinSettings,
+  SpinVisualType,
+  UserSubscription,
+  NameDisplayStyle,
+  WheelSizeOption,
+} from '../types';
 import { exportBackupJSON, importBackupJSON } from '../utils/storage';
 import { soundEngine } from '../utils/audio';
 import { speechEngine, isVoiceVietnamese } from '../utils/speech';
@@ -45,6 +54,8 @@ interface SettingsScreenProps {
   onOpenUpgradeModal?: () => void;
   onOpenPaymentHistoryModal?: () => void;
   onOpenAuthModal?: () => void;
+  onRestoreSafetyBackup?: () => boolean;
+  hasSafetyBackup?: boolean;
 }
 
 const TEMPLATE_PRESETS = [
@@ -69,6 +80,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onOpenUpgradeModal,
   onOpenPaymentHistoryModal,
   onOpenAuthModal,
+  onRestoreSafetyBackup,
+  hasSafetyBackup,
 }) => {
   const [showConfirmResetCurrent, setShowConfirmResetCurrent] = useState(false);
   const [showConfirmResetAll, setShowConfirmResetAll] = useState(false);
@@ -638,6 +651,128 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         </div>
 
+        {/* Wheel Size Selector */}
+        <div>
+          <label className="block text-slate-300 font-bold mb-2 text-xs flex items-center gap-1.5">
+            <Sliders className="w-4 h-4 text-sky-400" />
+            <span>Kích thước vòng quay (Wheel Size):</span>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              {
+                id: 'STANDARD' as WheelSizeOption,
+                label: 'Vừa (380px)',
+                desc: 'Phù hợp laptop, màn hình nhỏ',
+                badge: 'Gọn gàng',
+              },
+              {
+                id: 'LARGE' as WheelSizeOption,
+                label: 'Lớn (460px)',
+                desc: 'Đường kính rộng, chữ to rõ nét',
+                badge: 'Khuyên dùng',
+              },
+              {
+                id: 'XLARGE' as WheelSizeOption,
+                label: 'Cực đại (540px)',
+                desc: 'Khổng lồ, tối ưu Máy chiếu & Tivi',
+                badge: 'Rõ từ cuối lớp',
+              },
+            ].map((ws) => (
+              <button
+                key={ws.id}
+                type="button"
+                onClick={() => {
+                  onUpdateSettings({ ...settings, wheelSizeOption: ws.id });
+                  soundEngine.playTick(1.2);
+                }}
+                className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-1 transition-all ${
+                  (settings.wheelSizeOption || 'LARGE') === ws.id
+                    ? 'bg-sky-950/60 border-sky-400 text-white shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold">{ws.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                      (settings.wheelSizeOption || 'LARGE') === ws.id
+                        ? 'bg-sky-500/30 text-sky-200 border border-sky-400/40'
+                        : 'bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {ws.badge}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1">{ws.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Name & STT Display Style Selector */}
+        <div>
+          <label className="block text-slate-300 font-bold mb-2 text-xs flex items-center gap-1.5">
+            <Hash className="w-4 h-4 text-amber-400" />
+            <span>Kiểu hiển thị tên & STT học sinh khi quay:</span>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {[
+              {
+                id: 'FULL_NAME' as NameDisplayStyle,
+                title: 'Họ và tên đầy đủ',
+                example: 'Nguyễn Văn An',
+                desc: 'Hiển thị trọn vẹn họ tên theo danh sách lớp',
+              },
+              {
+                id: 'STT_NAME' as NameDisplayStyle,
+                title: 'STT + Tên học sinh',
+                example: '01. Nguyễn Văn An',
+                desc: 'Kèm số thứ tự sổ điểm, dễ đối chiếu',
+              },
+              {
+                id: 'ONLY_STT' as NameDisplayStyle,
+                title: 'Chỉ hiện STT (Bí mật tên)',
+                example: 'STT 01',
+                desc: 'Vòng quay chỉ hiện số, tăng kịch tính và tò mò',
+              },
+              {
+                id: 'FIRST_NAME_ONLY' as NameDisplayStyle,
+                title: 'Tên gọi rút gọn (Không đệm)',
+                example: 'An',
+                desc: 'Chữ to tối đa, học sinh dễ nhận biết nhanh',
+              },
+              {
+                id: 'CODE_NAME' as NameDisplayStyle,
+                title: 'Tên + Mã học sinh',
+                example: 'Nguyễn Văn An (HS01)',
+                desc: 'Kèm mã định danh hoặc số hiệu riêng',
+              },
+            ].map((style) => (
+              <button
+                key={style.id}
+                type="button"
+                onClick={() => {
+                  onUpdateSettings({ ...settings, nameDisplayStyle: style.id });
+                  soundEngine.playTick(1.2);
+                }}
+                className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-1 transition-all ${
+                  (settings.nameDisplayStyle || 'FULL_NAME') === style.id
+                    ? 'bg-amber-950/50 border-amber-400 text-white shadow-md'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">{style.title}</span>
+                  <span className="text-xs font-mono font-bold text-amber-300 bg-slate-950 px-2 py-0.5 rounded border border-amber-500/30">
+                    {style.example}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1">{style.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Theme Mode Selector (Optimization #3) */}
         <div>
           <label className="block text-slate-300 font-bold mb-2 text-xs">
@@ -919,6 +1054,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Upload className="w-4 h-4 text-sky-400" />
             <span>Nhập Phục Hồi Từ File (.json)</span>
           </button>
+
+          {onRestoreSafetyBackup && hasSafetyBackup && (
+            <button
+              onClick={() => {
+                const ok = onRestoreSafetyBackup();
+                if (ok) {
+                  showToast('Đã khôi phục thành công toàn bộ dữ liệu từ bản sao lưu an toàn tự động!');
+                  soundEngine.playVictoryFanfare();
+                } else {
+                  showToast('Không tìm thấy bản sao lưu an toàn tự động.');
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-bold transition-all shadow-sm"
+              title="Khôi phục lại phiên làm việc trước khi đồng bộ tài khoản"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Khôi phục bản lưu tự động gần nhất</span>
+            </button>
+          )}
 
           <div className="flex items-center gap-3 ml-auto flex-wrap">
             <button

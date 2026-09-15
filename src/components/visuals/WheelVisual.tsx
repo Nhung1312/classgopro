@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Student } from '../../types';
+import { Student, NameDisplayStyle } from '../../types';
+import { formatStudentDisplayName } from '../../utils/studentDisplay';
 
 interface WheelVisualProps {
   students: Student[];
@@ -9,6 +10,8 @@ interface WheelVisualProps {
   currentAngle: number;
   highlightName?: string;
   size?: number;
+  nameStyle?: NameDisplayStyle;
+  allClassStudents?: Student[];
 }
 
 // Crisp vibrant color palette for wheel slices
@@ -34,7 +37,9 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
   winner,
   currentAngle,
   highlightName,
-  size = 380,
+  size = 460,
+  nameStyle = 'FULL_NAME',
+  allClassStudents,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -49,9 +54,10 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     canvas.height = size * dpr;
     ctx.scale(dpr, dpr);
 
+    const scaleFactor = Math.max(0.75, size / 380);
     const centerX = size / 2;
     const centerY = size / 2;
-    const radius = size / 2 - 18; // Margin for border and pointer
+    const radius = size / 2 - Math.round(20 * scaleFactor); // Margin for border and pointer
 
     ctx.clearRect(0, 0, size, size);
 
@@ -61,12 +67,12 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
       ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
       ctx.fillStyle = '#1e293b';
       ctx.fill();
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 4 * scaleFactor;
       ctx.strokeStyle = '#475569';
       ctx.stroke();
 
       ctx.fillStyle = '#94a3b8';
-      ctx.font = 'bold 14px system-ui, sans-serif';
+      ctx.font = `bold ${Math.round(15 * scaleFactor)}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('Chưa có học sinh', centerX, centerY);
@@ -104,8 +110,8 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
       ctx.fill();
 
       // Slice border line
-      ctx.lineWidth = isWinnerSlice ? 3 : 1.5;
-      ctx.strokeStyle = isWinnerSlice ? '#ffffff' : 'rgba(15, 23, 42, 0.4)';
+      ctx.lineWidth = isWinnerSlice ? 3.5 * scaleFactor : 1.5 * scaleFactor;
+      ctx.strokeStyle = isWinnerSlice ? '#ffffff' : 'rgba(15, 23, 42, 0.45)';
       ctx.stroke();
 
       // Student name text along slice
@@ -114,26 +120,38 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
 
+      let fontSize: number;
+      if (nameStyle === 'ONLY_STT') {
+        fontSize = isWinnerSlice
+          ? Math.round(18 * scaleFactor)
+          : Math.round(15 * scaleFactor);
+      } else {
+        fontSize = isWinnerSlice
+          ? Math.max(12 * scaleFactor, Math.min(18 * scaleFactor, (260 * scaleFactor) / maxVisualSlices))
+          : Math.max(10 * scaleFactor, Math.min(15 * scaleFactor, (230 * scaleFactor) / maxVisualSlices));
+      }
+
       if (isWinnerSlice) {
         ctx.fillStyle = '#0f172a';
-        ctx.font = `bold ${Math.max(11, Math.min(15, 220 / maxVisualSlices))}px system-ui, sans-serif`;
+        ctx.font = `bold ${Math.round(fontSize)}px system-ui, sans-serif`;
       } else {
         ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.max(10, Math.min(13, 200 / maxVisualSlices))}px system-ui, sans-serif`;
+        ctx.font = `bold ${Math.round(fontSize)}px system-ui, sans-serif`;
       }
 
-      // Truncate name if long
-      let displayName = student.name;
-      if (displayName.length > 16) {
-        const parts = displayName.split(' ');
-        displayName = parts.length > 2 ? `${parts[0]} ${parts[parts.length - 1]}` : displayName.slice(0, 14) + '..';
-      }
+      // Truncate name based on style and available radius space
+      const displayName = formatStudentDisplayName(
+        student,
+        allClassStudents || students,
+        nameStyle as NameDisplayStyle,
+        true
+      );
 
-      ctx.fillText(displayName, radius - 16, 0);
+      ctx.fillText(displayName, radius - Math.round(16 * scaleFactor), 0);
 
       // Draw peg pin at edge
       ctx.beginPath();
-      ctx.arc(radius - 5, 0, 3, 0, 2 * Math.PI);
+      ctx.arc(radius - Math.round(5 * scaleFactor), 0, Math.round(3.5 * scaleFactor), 0, 2 * Math.PI);
       ctx.fillStyle = isWinnerSlice ? '#ffffff' : '#cbd5e1';
       ctx.fill();
 
@@ -145,7 +163,7 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     // Outer wheel ring (metallic frame)
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    ctx.lineWidth = 8;
+    ctx.lineWidth = Math.round(9 * scaleFactor);
     const grad = ctx.createLinearGradient(0, 0, size, size);
     grad.addColorStop(0, '#f59e0b');
     grad.addColorStop(0.5, '#6366f1');
@@ -154,13 +172,13 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     ctx.stroke();
 
     // Decorative outer studs
-    const studCount = 16;
+    const studCount = 18;
     for (let i = 0; i < studCount; i++) {
       const angle = (i * 2 * Math.PI) / studCount;
-      const sx = centerX + (radius + 4) * Math.cos(angle);
-      const sy = centerY + (radius + 4) * Math.sin(angle);
+      const sx = centerX + (radius + 5 * scaleFactor) * Math.cos(angle);
+      const sy = centerY + (radius + 5 * scaleFactor) * Math.sin(angle);
       ctx.beginPath();
-      ctx.arc(sx, sy, 2.5, 0, 2 * Math.PI);
+      ctx.arc(sx, sy, Math.max(2, 3 * scaleFactor), 0, 2 * Math.PI);
       ctx.fillStyle = '#fbbf24';
       ctx.fill();
     }
@@ -170,7 +188,7 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     ctx.arc(centerX, centerY, radius * 0.2, 0, 2 * Math.PI);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
-    ctx.lineWidth = 4;
+    ctx.lineWidth = Math.round(4 * scaleFactor);
     ctx.strokeStyle = hasCompleted ? '#fbbf24' : '#6366f1';
     ctx.stroke();
 
@@ -182,31 +200,34 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     ctx.fillText('⭐', centerX, centerY);
 
     // Top Pointer Needle (fixed at 12 o'clock pointing down)
+    const pointerW = Math.round(15 * scaleFactor);
+    const pointerH = Math.round(30 * scaleFactor);
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(centerX - 14, 4);
-    ctx.lineTo(centerX + 14, 4);
-    ctx.lineTo(centerX, 28);
+    ctx.moveTo(centerX - pointerW, 4);
+    ctx.lineTo(centerX + pointerW, 4);
+    ctx.lineTo(centerX, pointerH);
     ctx.closePath();
     ctx.fillStyle = '#f43f5e';
     ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(2, 2.5 * scaleFactor);
     ctx.strokeStyle = '#ffffff';
     ctx.stroke();
 
     // Pointer pivot bulb
     ctx.beginPath();
-    ctx.arc(centerX, 6, 4, 0, 2 * Math.PI);
+    ctx.arc(centerX, 6, Math.round(5 * scaleFactor), 0, 2 * Math.PI);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.restore();
-  }, [students, isSpinning, hasCompleted, winner, currentAngle, highlightName, size]);
+  }, [students, isSpinning, hasCompleted, winner, currentAngle, highlightName, size, nameStyle, allClassStudents]);
 
   return (
     <div className="relative flex flex-col items-center justify-center select-none py-2">
       {/* Outer ambient glow */}
       <div
-        className={`absolute w-72 h-72 rounded-full blur-3xl transition-opacity duration-500 pointer-events-none ${
+        style={{ width: Math.round(size * 0.75), height: Math.round(size * 0.75) }}
+        className={`absolute rounded-full blur-3xl transition-opacity duration-500 pointer-events-none ${
           isSpinning
             ? 'bg-indigo-500/30 opacity-100 scale-110'
             : hasCompleted
@@ -217,7 +238,7 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
 
       <canvas
         ref={canvasRef}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, maxWidth: '100%', maxHeight: '72vh' }}
         className={`max-w-full drop-shadow-2xl transition-transform ${
           isSpinning ? 'scale-101' : hasCompleted ? 'scale-105' : 'hover:scale-101'
         }`}

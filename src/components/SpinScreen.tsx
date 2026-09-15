@@ -27,9 +27,29 @@ import {
   Play,
   Crown,
   AlertTriangle,
+  Sliders,
+  Filter,
 } from 'lucide-react';
-import { ClassRoom, HistoryRecord, SelectionMode, SpinSettings, SpinVisualType, Student, QuestionItem, UserSubscription } from '../types';
+import {
+  ClassRoom,
+  HistoryRecord,
+  SelectionMode,
+  SpinSettings,
+  SpinVisualType,
+  Student,
+  QuestionItem,
+  UserSubscription,
+  NameDisplayStyle,
+  WheelSizeOption,
+  CallTargetFilter,
+} from '../types';
 import { chooseMultipleStudents, getEligibleStudents, MultiSelectionResult } from '../utils/fairAlgorithm';
+import {
+  formatStudentDisplayName,
+  getStudentSTT,
+  filterStudentsByTarget,
+  getSpeechAnnouncementText,
+} from '../utils/studentDisplay';
 import { soundEngine } from '../utils/audio';
 import { speechEngine } from '../utils/speech';
 import { MathRenderer } from './MathRenderer';
@@ -94,6 +114,14 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     settings.defaultVisualType || 'WHEEL'
   );
   const [pickCount, setPickCount] = useState<number>(settings.defaultPickCount || 1);
+  const [wheelSizeOption, setWheelSizeOption] = useState<WheelSizeOption>(
+    settings.wheelSizeOption || 'LARGE'
+  );
+  const [nameStyle, setNameStyle] = useState<NameDisplayStyle>(
+    settings.nameDisplayStyle || 'FULL_NAME'
+  );
+  const [targetFilter, setTargetFilter] = useState<CallTargetFilter>('ALL');
+
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayName, setDisplayName] = useState<string>('???');
   const [selectedResult, setSelectedResult] = useState<MultiSelectionResult | null>(null);
@@ -117,6 +145,19 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const students = activeClass?.students || [];
   const eligibleStudents = getEligibleStudents(students);
   const absentStudents = students.filter((s) => s.isAbsent);
+
+  // Target filter stats
+  const studentsWithoutTx1 = eligibleStudents.filter(
+    (s) => s.scores?.tx1 === null || s.scores?.tx1 === undefined
+  );
+  const femaleStudents = eligibleStudents.filter((s) => s.gender === 'nu');
+  const maleStudents = eligibleStudents.filter((s) => s.gender === 'nam');
+
+  const WHEEL_SIZES: Record<WheelSizeOption, { size: number; label: string; tip: string }> = {
+    STANDARD: { size: 380, label: 'Vừa (380px)', tip: 'Kích thước tiêu chuẩn' },
+    LARGE: { size: 460, label: 'Lớn (460px)', tip: 'Kích thước lớn - Rõ nét, khuyên dùng' },
+    XLARGE: { size: 540, label: 'Cực đại (540px)', tip: 'Kích thước cực đại - Tối ưu Máy chiếu / Tivi' },
+  };
 
   // Subscribe to speech engine updates
   useEffect(() => {
@@ -172,9 +213,13 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
     if (isSpinning || eligibleStudents.length === 0) return;
 
-    // 1. Run algorithm FIRST to guarantee determinism
-    const effectiveCount = Math.min(pickCount, eligibleStudents.length);
-    const result = chooseMultipleStudents(eligibleStudents, effectiveCount, selectionMode);
+    // 1. Filter candidates according to selected targetFilter
+    const targeted = filterStudentsByTarget(eligibleStudents, targetFilter);
+    const candidatePool = targeted.length > 0 ? targeted : eligibleStudents;
+
+    // 2. Run algorithm FIRST to guarantee determinism
+    const effectiveCount = Math.min(pickCount, candidatePool.length);
+    const result = chooseMultipleStudents(candidatePool, effectiveCount, selectionMode);
     if (!result || result.selectedStudents.length === 0) return;
 
     setIsSpinning(true);
@@ -195,12 +240,14 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       soundEngine.startBGM(settings.bgmStyle, settings.bgmVolume ?? 0.4);
     }
 
-    // 2. Setup animation
+    // 3. Setup animation
     const duration = settings.spinDuration || 3800; // ms
     const startTime = performance.now();
     startTimeRef.current = startTime;
 
-    const namesList = eligibleStudents.map((s) => s.name);
+    const namesList = candidatePool.map((s) =>
+      formatStudentDisplayName(s, students, nameStyle, false)
+    );
     // Shuffle auxiliary names for reel display
     const reelPool = [...namesList];
     for (let i = reelPool.length - 1; i > 0; i--) {
@@ -210,9 +257,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
     // Target student for visual wheel stop (primary winner)
     const primaryWinner = result.selectedStudents[0];
-    const totalVisualStudents = eligibleStudents.length;
+    const totalVisualStudents = candidatePool.length;
     const maxVisualSlices = Math.min(totalVisualStudents, 36);
-    const winnerIdx = eligibleStudents.findIndex((s) => s.id === primaryWinner.id);
+    const winnerIdx = candidatePool.findIndex((s) => s.id === primaryWinner.id);
     const sliceAngleDeg = 360 / maxVisualSlices;
     const targetSliceCenterDeg = (winnerIdx % maxVisualSlices) * sliceAngleDeg + sliceAngleDeg / 2;
     const targetAngle = 360 - targetSliceCenterDeg;
@@ -244,8 +291,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
         } else {
           setDisplayName(
             result.selectedStudents.length === 1
-              ? result.selectedStudents[0].name
-              : result.selectedStudents.map((s) => s.name).join(' & ')
+              ? formatStudentDisplayName(result.selectedStudents[0], students, nameStyle, false)
+              : result.selectedStudents
+                  .map((s) => formatStudentDisplayName(s, students, nameStyle, false))
+                  .join(' & ')
           );
           soundEngine.playTick(0.85);
         }
@@ -258,8 +307,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
         setIsSpinning(false);
         setDisplayName(
           result.selectedStudents.length === 1
-            ? result.selectedStudents[0].name
-            : result.selectedStudents.map((s) => s.name).join(' & ')
+            ? formatStudentDisplayName(result.selectedStudents[0], students, nameStyle, false)
+            : result.selectedStudents
+                .map((s) => formatStudentDisplayName(s, students, nameStyle, false))
+                .join(' & ')
         );
         setSelectedResult(result);
         setHasCompleted(true);
@@ -272,14 +323,23 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
         soundEngine.playVictoryFanfare();
         triggerConfetti();
 
-        // 3. Text-to-Speech announcement
+        // 4. Text-to-Speech announcement
         if (settings.ttsEnabled) {
           setTimeout(() => {
             if (result.selectedStudents.length === 1) {
-              const callCountNext = (result.selectedStudents[0].callCount || 0) + 1;
-              speechEngine.speakStudent(result.selectedStudents[0].name, callCountNext);
+              const winnerStudent = result.selectedStudents[0];
+              const callCountNext = (winnerStudent.callCount || 0) + 1;
+              const speechAnnouncement = getSpeechAnnouncementText(
+                winnerStudent,
+                students,
+                nameStyle,
+                settings.ttsTemplate
+              );
+              speechEngine.speakStudent(winnerStudent.name, callCountNext, speechAnnouncement);
             } else {
-              const names = result.selectedStudents.map((s) => s.name);
+              const names = result.selectedStudents.map((s) =>
+                formatStudentDisplayName(s, students, nameStyle, false)
+              );
               speechEngine.speakMultipleStudents(names);
             }
           }, 350);
@@ -300,12 +360,16 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   }, [
     isSpinning,
     eligibleStudents,
+    targetFilter,
+    students,
+    nameStyle,
     pickCount,
     selectionMode,
     settings.spinDuration,
     settings.bgmStyle,
     settings.bgmVolume,
     settings.ttsEnabled,
+    settings.ttsTemplate,
     wheelAngle,
     triggerConfetti,
     onStudentSelected,
@@ -359,16 +423,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       } else if (e.key === 'v' || e.key === 'V') {
         // Replay voice
         if (selectedResult && hasCompleted) {
-          if (selectedResult.selectedStudents.length === 1) {
-            speechEngine.speakStudent(
-              selectedResult.selectedStudents[0].name,
-              selectedResult.selectedStudents[0].callCount
-            );
-          } else {
-            speechEngine.speakMultipleStudents(
-              selectedResult.selectedStudents.map((s) => s.name)
-            );
-          }
+          handleReplayVoice();
         }
       }
     };
@@ -468,21 +523,31 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     }
   };
 
-  const handleReplayVoice = () => {
+  const handleReplayVoice = useCallback(() => {
     speechEngine.unlock();
     if (selectedResult && selectedResult.selectedStudents.length > 0) {
       if (selectedResult.selectedStudents.length === 1) {
+        const winnerStudent = selectedResult.selectedStudents[0];
+        const speechAnnouncement = getSpeechAnnouncementText(
+          winnerStudent,
+          students,
+          nameStyle,
+          settings.ttsTemplate
+        );
         speechEngine.speakStudent(
-          selectedResult.selectedStudents[0].name,
-          selectedResult.selectedStudents[0].callCount
+          winnerStudent.name,
+          winnerStudent.callCount,
+          speechAnnouncement
         );
       } else {
         speechEngine.speakMultipleStudents(
-          selectedResult.selectedStudents.map((s) => s.name)
+          selectedResult.selectedStudents.map((s) =>
+            formatStudentDisplayName(s, students, nameStyle, false)
+          )
         );
       }
     }
-  };
+  }, [selectedResult, students, nameStyle, settings.ttsTemplate]);
 
   const VISUAL_MODES: { id: SpinVisualType; label: string; icon: React.ReactNode }[] = [
     { id: 'WHEEL', label: 'Vòng Quay', icon: <Disc className="w-4 h-4" /> },
@@ -675,54 +740,139 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       )}
 
       {/* Visual Spin Styles Tab Selector & Multi-Pick Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-2">
-        {/* Visual Styles */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          <span className="text-xs font-bold text-slate-400 px-1 hidden sm:inline">Kiểu quay:</span>
-          {VISUAL_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              onClick={() => {
-                setVisualType(mode.id);
-                soundEngine.playTick(1.2);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
-                visualType === mode.id
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700/80'
-              }`}
-            >
-              {mode.icon}
-              <span>{mode.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Multi-Pick Count (Số lượng học sinh) */}
-        <div className="flex items-center gap-2 px-2 text-xs">
-          <span className="font-bold text-slate-300 flex items-center gap-1">
-            <Users className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Gọi:</span>
-          </span>
-          <div className="flex items-center gap-1 bg-slate-800/90 rounded-xl p-1 border border-slate-700">
-            {[1, 2, 3, 4, 5].map((countNum) => (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-2">
+          {/* Visual Styles */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            <span className="text-xs font-bold text-slate-400 px-1 hidden sm:inline">Kiểu quay:</span>
+            {VISUAL_MODES.map((mode) => (
               <button
-                key={countNum}
+                key={mode.id}
                 onClick={() => {
-                  setPickCount(countNum);
-                  soundEngine.playTick(1.3);
+                  setVisualType(mode.id);
+                  soundEngine.playTick(1.2);
                 }}
-                disabled={isSpinning}
-                className={`w-7 h-7 rounded-lg text-xs font-black transition-all ${
-                  pickCount === countNum
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
+                  visualType === mode.id
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                    : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700/80'
                 }`}
-                title={`Gọi ${countNum} học sinh`}
               >
-                {countNum}
+                {mode.icon}
+                <span>{mode.label}</span>
               </button>
             ))}
+          </div>
+
+          {/* Multi-Pick Count (Số lượng học sinh) */}
+          <div className="flex items-center gap-2 px-2 text-xs">
+            <span className="font-bold text-slate-300 flex items-center gap-1">
+              <Users className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Gọi:</span>
+            </span>
+            <div className="flex items-center gap-1 bg-slate-800/90 rounded-xl p-1 border border-slate-700">
+              {[1, 2, 3, 4, 5].map((countNum) => (
+                <button
+                  key={countNum}
+                  onClick={() => {
+                    setPickCount(countNum);
+                    soundEngine.playTick(1.3);
+                  }}
+                  disabled={isSpinning}
+                  className={`w-7 h-7 rounded-lg text-xs font-black transition-all ${
+                    pickCount === countNum
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                  title={`Gọi ${countNum} học sinh`}
+                >
+                  {countNum}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Toolbar: Wheel Size, Name Display Style & Target Filter */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-3 py-2 text-xs">
+          {/* Wheel Size Selector (Only visible for Wheel visual) */}
+          {visualType === 'WHEEL' && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-400 font-semibold flex items-center gap-1">
+                <Sliders className="w-3.5 h-3.5 text-sky-400" />
+                <span className="hidden sm:inline">Cỡ vòng:</span>
+              </span>
+              <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/70">
+                {(['STANDARD', 'LARGE', 'XLARGE'] as WheelSizeOption[]).map((sz) => (
+                  <button
+                    key={sz}
+                    onClick={() => {
+                      setWheelSizeOption(sz);
+                      soundEngine.playTick(1.2);
+                    }}
+                    disabled={isSpinning}
+                    className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                      wheelSizeOption === sz
+                        ? 'bg-sky-500 text-slate-950 shadow-sm font-extrabold'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+                    }`}
+                    title={WHEEL_SIZES[sz].tip}
+                  >
+                    {WHEEL_SIZES[sz].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Name Display Style Selector */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-semibold">Hiển thị:</span>
+            <select
+              value={nameStyle}
+              onChange={(e) => {
+                setNameStyle(e.target.value as NameDisplayStyle);
+                soundEngine.playTick(1.1);
+              }}
+              disabled={isSpinning}
+              className="bg-slate-800 border border-slate-700 text-slate-200 rounded-xl px-2.5 py-1 font-bold text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              title="Chọn cách hiển thị tên/STT khi quay và gọi tên"
+            >
+              <option value="FULL_NAME">Họ và tên đầy đủ</option>
+              <option value="STT_NAME">Số thứ tự + Tên (STT 01 - ...)</option>
+              <option value="ONLY_STT">Chỉ hiện STT (Bí mật tên)</option>
+              <option value="FIRST_NAME_ONLY">Tên gọi (Gọn gàng)</option>
+              <option value="CODE_NAME">Tên + Mã học sinh</option>
+            </select>
+          </div>
+
+          {/* Call Target Filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-400 font-semibold flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Đối tượng:</span>
+            </span>
+            <select
+              value={targetFilter}
+              onChange={(e) => {
+                setTargetFilter(e.target.value as CallTargetFilter);
+                soundEngine.playTick(1.1);
+              }}
+              disabled={isSpinning}
+              className="bg-slate-800 border border-slate-700 text-slate-200 rounded-xl px-2.5 py-1 font-bold text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              title="Lọc nhóm học sinh ưu tiên kiểm tra"
+            >
+              <option value="ALL">Toàn bộ lớp ({eligibleStudents.length})</option>
+              {studentsWithoutTx1.length > 0 && (
+                <option value="NO_SCORE_TX1">Chưa có điểm TX1 ({studentsWithoutTx1.length})</option>
+              )}
+              {femaleStudents.length > 0 && (
+                <option value="FEMALE_ONLY">Chỉ học sinh Nữ ({femaleStudents.length})</option>
+              )}
+              {maleStudents.length > 0 && (
+                <option value="MALE_ONLY">Chỉ học sinh Nam ({maleStudents.length})</option>
+              )}
+            </select>
           </div>
         </div>
       </div>
@@ -766,29 +916,43 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           {visualType === 'WHEEL' && (
             <div className="flex flex-col items-center">
               <WheelVisual
-                students={eligibleStudents}
+                students={filterStudentsByTarget(eligibleStudents, targetFilter)}
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
                 winner={selectedResult ? selectedResult.selectedStudents[0] : null}
                 currentAngle={wheelAngle}
-                size={340}
+                size={WHEEL_SIZES[wheelSizeOption].size}
+                nameStyle={nameStyle}
+                allClassStudents={students}
               />
               {/* Winner Display below wheel */}
               {hasCompleted && selectedResult && (
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2 animate-scale-in">
-                  {selectedResult.selectedStudents.map((winner, idx) => (
-                    <div
-                      key={winner.id}
-                      className="py-2 px-5 rounded-2xl bg-slate-900/95 border-2 border-amber-400 text-amber-300 font-black text-xl sm:text-3xl shadow-xl flex items-center gap-2"
-                    >
-                      <span>🎉 {winner.name}</span>
-                      {selectedResult.selectedStudents.length > 1 && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono">
-                          #{idx + 1}
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5 animate-scale-in">
+                  {selectedResult.selectedStudents.map((winner, idx) => {
+                    const stt = getStudentSTT(winner, students);
+                    const displayWinnerName = formatStudentDisplayName(winner, students, nameStyle, false);
+                    return (
+                      <div
+                        key={winner.id}
+                        className="py-2.5 px-5 sm:px-6 rounded-2xl bg-slate-900/95 border-2 border-amber-400 text-amber-300 font-black text-xl sm:text-2xl md:text-3xl shadow-xl flex items-center gap-2.5 flex-wrap justify-center"
+                      >
+                        <span>🎉 {displayWinnerName}</span>
+                        {nameStyle === 'ONLY_STT' && (
+                          <span className="text-sm font-semibold text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
+                            ({winner.name})
+                          </span>
+                        )}
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono">
+                          STT {stt}
                         </span>
-                      )}
-                    </div>
-                  ))}
+                        {selectedResult.selectedStudents.length > 1 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-500/40 font-mono">
+                            #{idx + 1}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -801,16 +965,21 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
                 winner={selectedResult ? selectedResult.selectedStudents[0] : null}
-                reelNames={eligibleStudents.map((s) => s.name)}
+                reelNames={filterStudentsByTarget(eligibleStudents, targetFilter).map((s) =>
+                  formatStudentDisplayName(s, students, nameStyle, false)
+                )}
               />
               {hasCompleted && selectedResult && selectedResult.selectedStudents.length > 1 && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2 animate-scale-in">
                   {selectedResult.selectedStudents.map((winner, idx) => (
                     <span
                       key={winner.id}
-                      className="py-1.5 px-4 rounded-xl bg-slate-900/90 border border-amber-400 text-amber-300 font-bold text-sm sm:text-base shadow-md"
+                      className="py-1.5 px-4 rounded-xl bg-slate-900/90 border border-amber-400 text-amber-300 font-bold text-sm sm:text-base shadow-md flex items-center gap-2"
                     >
-                      #{idx + 1} {winner.name}
+                      <span>#{idx + 1} {formatStudentDisplayName(winner, students, nameStyle, false)}</span>
+                      <span className="text-xs font-mono text-amber-400/80 bg-amber-950/50 px-1.5 py-0.5 rounded">
+                        STT {getStudentSTT(winner, students)}
+                      </span>
                     </span>
                   ))}
                 </div>
@@ -820,7 +989,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
           {visualType === 'CARDS' && (
             <CardsVisual
-              students={eligibleStudents}
+              students={filterStudentsByTarget(eligibleStudents, targetFilter)}
               displayName={displayName}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}

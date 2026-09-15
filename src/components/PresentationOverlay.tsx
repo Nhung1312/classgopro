@@ -25,6 +25,11 @@ import {
 } from 'lucide-react';
 import { ClassRoom, SelectionMode, SpinSettings, SpinVisualType, Student, QuestionItem, ThemeMode, UserSubscription } from '../types';
 import { chooseMultipleStudents, getEligibleStudents, MultiSelectionResult } from '../utils/fairAlgorithm';
+import {
+  formatStudentDisplayName,
+  getStudentSTT,
+  getSpeechAnnouncementText,
+} from '../utils/studentDisplay';
 import { soundEngine } from '../utils/audio';
 import { speechEngine } from '../utils/speech';
 import { MathRenderer } from './MathRenderer';
@@ -201,7 +206,10 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
     const duration = settings.spinDuration || 3800;
     const startTime = performance.now();
 
-    const namesList = eligibleStudents.map((s) => s.name);
+    const nameStyle = settings.nameDisplayStyle || 'FULL_NAME';
+    const namesList = eligibleStudents.map((s) =>
+      formatStudentDisplayName(s, students, nameStyle, false)
+    );
     const reelPool = [...namesList];
     for (let i = reelPool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -240,8 +248,10 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
         } else {
           setDisplayName(
             result.selectedStudents.length === 1
-              ? result.selectedStudents[0].name
-              : result.selectedStudents.map((s) => s.name).join(' & ')
+              ? formatStudentDisplayName(result.selectedStudents[0], students, nameStyle, false)
+              : result.selectedStudents
+                  .map((s) => formatStudentDisplayName(s, students, nameStyle, false))
+                  .join(' & ')
           );
           if (!soundMuted) soundEngine.playTick(0.85);
         }
@@ -253,8 +263,10 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
         setIsSpinning(false);
         setDisplayName(
           result.selectedStudents.length === 1
-            ? result.selectedStudents[0].name
-            : result.selectedStudents.map((s) => s.name).join(' & ')
+            ? formatStudentDisplayName(result.selectedStudents[0], students, nameStyle, false)
+            : result.selectedStudents
+                .map((s) => formatStudentDisplayName(s, students, nameStyle, false))
+                .join(' & ')
         );
         setSelectedResult(result);
         setHasCompleted(true);
@@ -267,10 +279,19 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
         if (settings.ttsEnabled && !soundMuted) {
           setTimeout(() => {
             if (result.selectedStudents.length === 1) {
-              const callCountNext = (result.selectedStudents[0].callCount || 0) + 1;
-              speechEngine.speakStudent(result.selectedStudents[0].name, callCountNext);
+              const winnerStudent = result.selectedStudents[0];
+              const callCountNext = (winnerStudent.callCount || 0) + 1;
+              const speechAnnouncement = getSpeechAnnouncementText(
+                winnerStudent,
+                students,
+                nameStyle,
+                settings.ttsTemplate
+              );
+              speechEngine.speakStudent(winnerStudent.name, callCountNext, speechAnnouncement);
             } else {
-              const names = result.selectedStudents.map((s) => s.name);
+              const names = result.selectedStudents.map((s) =>
+                formatStudentDisplayName(s, students, nameStyle, false)
+              );
               speechEngine.speakMultipleStudents(names);
             }
           }, 350);
@@ -565,27 +586,52 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : null}
               currentAngle={wheelAngle}
-              size={Math.min(window.innerHeight * 0.48, 440)}
+              size={
+                settings.wheelSizeOption === 'XLARGE'
+                  ? Math.min(window.innerHeight * 0.65, 540)
+                  : settings.wheelSizeOption === 'STANDARD'
+                  ? Math.min(window.innerHeight * 0.44, 380)
+                  : Math.min(window.innerHeight * 0.55, 460)
+              }
+              nameStyle={settings.nameDisplayStyle || 'FULL_NAME'}
+              allClassStudents={students}
             />
             {hasCompleted && selectedResult && (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3 animate-scale-in">
-                {selectedResult.selectedStudents.map((w) => (
-                  <div
-                    key={w.id}
-                    className="flex items-center gap-2 py-3 px-8 rounded-3xl bg-slate-900/95 border-2 border-amber-400 text-amber-300 font-black text-2xl sm:text-5xl shadow-2xl animate-pulse"
-                  >
-                    <span>🎉 {w.name}</span>
-                    {onAwardStars && (
-                      <button
-                        onClick={() => handleStarBonus(w.id, 1)}
-                        className="ml-2 px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl text-base sm:text-xl font-bold shadow-lg transition-transform hover:scale-110 active:scale-95"
-                        title="Tặng 1 sao khen thưởng"
-                      >
-                        ⭐ +1
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {selectedResult.selectedStudents.map((w) => {
+                  const stt = getStudentSTT(w, students);
+                  const formattedWinner = formatStudentDisplayName(
+                    w,
+                    students,
+                    settings.nameDisplayStyle || 'FULL_NAME',
+                    false
+                  );
+                  return (
+                    <div
+                      key={w.id}
+                      className="flex items-center gap-3 py-3 px-8 rounded-3xl bg-slate-900/95 border-2 border-amber-400 text-amber-300 font-black text-2xl sm:text-5xl shadow-2xl animate-pulse flex-wrap justify-center"
+                    >
+                      <span>🎉 {formattedWinner}</span>
+                      {settings.nameDisplayStyle === 'ONLY_STT' && (
+                        <span className="text-xl sm:text-2xl font-semibold text-slate-300 bg-slate-800 px-3 py-1 rounded-xl border border-slate-700">
+                          ({w.name})
+                        </span>
+                      )}
+                      <span className="text-sm sm:text-base font-mono px-3 py-1 rounded-full bg-amber-500/25 text-amber-200 border border-amber-500/50">
+                        STT {stt}
+                      </span>
+                      {onAwardStars && (
+                        <button
+                          onClick={() => handleStarBonus(w.id, 1)}
+                          className="ml-2 px-3.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl text-base sm:text-xl font-bold shadow-lg transition-transform hover:scale-110 active:scale-95"
+                          title="Tặng 1 sao khen thưởng"
+                        >
+                          ⭐ +1
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -598,7 +644,9 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : null}
-              reelNames={eligibleStudents.map((s) => s.name)}
+              reelNames={eligibleStudents.map((s) =>
+                formatStudentDisplayName(s, students, settings.nameDisplayStyle || 'FULL_NAME', false)
+              )}
             />
             {hasCompleted && selectedResult && selectedResult.selectedStudents.length > 1 && (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2 animate-scale-in">
@@ -607,7 +655,18 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
                     key={w.id}
                     className="py-2 px-5 rounded-2xl bg-slate-900/90 border border-amber-400 text-amber-300 font-black text-xl sm:text-3xl shadow-xl flex items-center gap-2"
                   >
-                    <span>#{idx + 1} {w.name}</span>
+                    <span>
+                      #{idx + 1}{' '}
+                      {formatStudentDisplayName(
+                        w,
+                        students,
+                        settings.nameDisplayStyle || 'FULL_NAME',
+                        false
+                      )}
+                    </span>
+                    <span className="text-xs font-mono text-amber-300/80 bg-amber-950/60 px-2 py-0.5 rounded-full">
+                      STT {getStudentSTT(w, students)}
+                    </span>
                     {onAwardStars && (
                       <button
                         onClick={() => handleStarBonus(w.id, 1)}

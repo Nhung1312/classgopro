@@ -16,6 +16,8 @@ const STORAGE_KEYS = {
   SELECTION_MODE: 'classgo_mode_v1',
   TIMETABLE: 'classgo_timetable_v1',
   TEACHING_PLAN: 'classgo_teaching_plan_v1',
+  SAFETY_BACKUP: 'classgo_safety_backup_v1',
+  LAST_LOCAL_UPDATE: 'classgo_last_local_update_v1',
   // Legacy keys for seamless migration
   LEGACY_CLASSES: 'lucky_picker_classes_v1',
   LEGACY_ACTIVE_CLASS_ID: 'lucky_picker_active_class_v1',
@@ -46,6 +48,8 @@ export const DEFAULT_SETTINGS: SpinSettings = {
   bgmStyle: 'SUSPENSE_GAME',
   bgmVolume: 0.6,
   themeMode: 'dark',
+  nameDisplayStyle: 'FULL_NAME',
+  wheelSizeOption: 'LARGE',
 };
 
 export function loadClasses(): ClassRoom[] {
@@ -79,6 +83,7 @@ export function loadClasses(): ClassRoom[] {
 export function saveClasses(classes: ClassRoom[]) {
   try {
     localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
+    localStorage.setItem(STORAGE_KEYS.LAST_LOCAL_UPDATE, new Date().toISOString());
   } catch (err) {
     console.error('Failed to save classes to storage:', err);
   }
@@ -257,3 +262,101 @@ export function importBackupJSON(jsonStr: string): boolean {
   }
   return false;
 }
+
+/**
+ * Checks if a class list only represents the unmodified default sample data (7A1, 7A2).
+ * If the user added custom classes, renamed classes, added/modified students, or entered grades,
+ * this returns false (it is REAL user data that must never be lost!).
+ */
+export function isSampleClasses(classes?: ClassRoom[] | null): boolean {
+  if (!classes || classes.length === 0) return true;
+
+  // If any class has an ID or name not matching the initial sample
+  const hasCustomClass = classes.some(
+    (c) => c.id !== 'class-7a1' && c.id !== 'class-7a2' && c.name !== '7A1' && c.name !== '7A2'
+  );
+  if (hasCustomClass) return false;
+
+  // Check if any student has scores, custom notes, or stars
+  const hasUserScoreOrNote = classes.some((c) =>
+    c.students?.some(
+      (s) =>
+        (s.scores && Object.keys(s.scores).length > 0) ||
+        (s.notes && s.notes.trim().length > 0) ||
+        (s.stars && s.stars > 0) ||
+        (s.studentCode && !s.studentCode.startsWith('HS7A'))
+    )
+  );
+  if (hasUserScoreOrNote) return false;
+
+  // Check total student count (sample data has 30 + 30 = 60 students)
+  const totalStudents = classes.reduce((sum, c) => sum + (c.students?.length || 0), 0);
+  if (totalStudents !== 60) return false;
+
+  return true;
+}
+
+/**
+ * Saves a silent local snapshot of all current teacher data before any cloud operation.
+ * Guarantees zero data loss if anything unexpected occurs.
+ */
+export function createSafetyBackup(): void {
+  try {
+    const backup = {
+      timestamp: new Date().toISOString(),
+      classes: loadClasses(),
+      activeClassId: localStorage.getItem(STORAGE_KEYS.ACTIVE_CLASS_ID),
+      history: loadHistory(),
+      settings: loadSettings(),
+      timetable: loadTimetable(),
+      teachingPlan: loadTeachingPlan(),
+      disciplineRecords: loadDisciplineRecords(),
+      disciplineViolationTypes: loadViolationTypes(),
+    };
+    localStorage.setItem(STORAGE_KEYS.SAFETY_BACKUP, JSON.stringify(backup));
+  } catch (err) {
+    console.error('Failed to create safety backup:', err);
+  }
+}
+
+export function hasSafetyBackup(): boolean {
+  try {
+    return Boolean(localStorage.getItem(STORAGE_KEYS.SAFETY_BACKUP));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Restores user data from the safety backup if available.
+ */
+export function restoreSafetyBackup(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SAFETY_BACKUP);
+    if (!raw) return false;
+    const backup = JSON.parse(raw);
+    if (backup.classes && Array.isArray(backup.classes)) {
+      saveClasses(backup.classes);
+      if (backup.activeClassId) saveActiveClassId(backup.activeClassId);
+      if (backup.history) saveHistory(backup.history);
+      if (backup.settings) saveSettings(backup.settings);
+      if (backup.timetable) saveTimetable(backup.timetable);
+      if (backup.teachingPlan) saveTeachingPlan(backup.teachingPlan);
+      if (backup.disciplineRecords) saveDisciplineRecords(backup.disciplineRecords);
+      if (backup.disciplineViolationTypes) saveViolationTypes(backup.disciplineViolationTypes);
+      return true;
+    }
+  } catch (err) {
+    console.error('Failed to restore safety backup:', err);
+  }
+  return false;
+}
+
+export function getLastLocalUpdate(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.LAST_LOCAL_UPDATE);
+  } catch {
+    return null;
+  }
+}
+
