@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { soundEngine } from '../utils/audio';
+import { isSampleClasses } from '../utils/storage';
 
 interface ClassManagerProps {
   classes: ClassRoom[];
@@ -45,9 +46,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
   const [newClassName, setNewClassName] = useState('');
   const [newClassSubject, setNewClassSubject] = useState('');
 
-  const hasSampleData = classes.some(
-    (c) => c.id === 'class-7a1' || c.id === 'class-7a2' || c.id === 'class-8a1'
-  );
+  const hasSampleData = isSampleClasses(classes);
 
   // Add single student form state
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);

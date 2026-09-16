@@ -34,6 +34,7 @@ import {
   restoreSafetyBackup,
   hasSafetyBackup,
   getLastLocalUpdate,
+  getAvailableRecoveryClasses,
 } from './utils/storage';
 import {
   loadDisciplineRecords,
@@ -114,6 +115,21 @@ export default function App() {
   const [timetable, setTimetable] = useState<TimetableSlot[]>(() => loadTimetable());
   const [teachingPlan, setTeachingPlan] = useState<TeachingPlanItem[]>(() => loadTeachingPlan());
 
+  // Safety Data Recovery State
+  const [showDataRecoveryBanner, setShowDataRecoveryBanner] = useState(false);
+  const [recoverableClassCount, setRecoverableClassCount] = useState(0);
+
+  // Check if safety backup or recovery vault contains real teacher data when current state is sample
+  useEffect(() => {
+    const recoveryClasses = getAvailableRecoveryClasses();
+    if (recoveryClasses && recoveryClasses.length > 0 && isSampleClasses(classes)) {
+      setShowDataRecoveryBanner(true);
+      setRecoverableClassCount(recoveryClasses.length);
+    } else {
+      setShowDataRecoveryBanner(false);
+    }
+  }, [classes]);
+
   // Listen to Firebase Auth state change & real-time Firestore sync
   useEffect(() => {
     let unsubFirestoreUser: (() => void) | null = null;
@@ -151,15 +167,24 @@ export default function App() {
           createSafetyBackup();
 
           const currentLocalClasses = loadClasses();
-          const localIsSample = isSampleClasses(currentLocalClasses);
+          const localHasRealData = !isSampleClasses(currentLocalClasses);
           const cloudClasses = cloudData?.classes;
           const cloudHasClasses = Boolean(cloudClasses && cloudClasses.length > 0);
-          const cloudIsSample = !cloudHasClasses || isSampleClasses(cloudClasses);
+          const cloudHasRealData = Boolean(cloudHasClasses && !isSampleClasses(cloudClasses));
+
+          console.log('[Auth Sync Matrix]', {
+            userId: user.uid,
+            localHasRealData,
+            cloudHasRealData,
+            cloudHasClasses,
+            localCount: currentLocalClasses.length,
+            cloudCount: cloudClasses?.length || 0,
+          });
 
           // Case 1: Local contains REAL teacher data, while Cloud has only default sample data or is empty!
-          // PRESERVE local data and upload it to the user's Firestore cloud account immediately!
-          if (!localIsSample && cloudIsSample) {
-            console.log('Protecting user data: Local has real classes, uploading local data to Cloud');
+          // -> PRESERVE local data and upload it to the user's Firestore cloud account immediately!
+          if (localHasRealData && !cloudHasRealData) {
+            console.log('[Auth Sync] Case 1: Local has real classes, preserving local and uploading to Cloud');
             await saveUserDataToFirestore(user.uid, {
               classes: currentLocalClasses,
               activeClassId: loadActiveClassId(currentLocalClasses),
@@ -173,10 +198,11 @@ export default function App() {
             });
             setClasses(currentLocalClasses);
           }
-          // Case 2: Local is only sample data, but Cloud has REAL teacher data (e.g. logging in on a new device)
+          // Case 2: Local is only sample data (e.g. user logged in on a new device or cleared cache),
+          // but Cloud has REAL teacher data!
           // -> Download the real classes from Cloud!
-          else if (localIsSample && !cloudIsSample && cloudData && cloudData.classes) {
-            console.log('Downloading real classes from Cloud to this device');
+          else if (!localHasRealData && cloudHasRealData && cloudData && cloudData.classes) {
+            console.log('[Auth Sync] Case 2: Downloading real classes from Cloud to this device');
             setClasses(cloudData.classes);
             saveClasses(cloudData.classes);
 
@@ -213,15 +239,17 @@ export default function App() {
               saveViolationTypes(cloudData.disciplineViolationTypes);
             }
           }
-          // Case 3: Both have real user data (compare timestamps)
-          else if (!localIsSample && !cloudIsSample && cloudData && cloudData.classes) {
-            const lastLocal = getLastLocalUpdate();
-            const cloudUpdated = cloudData?.updatedAt;
-            const cloudIsNewer =
-              cloudUpdated && (!lastLocal || new Date(cloudUpdated).getTime() > new Date(lastLocal).getTime());
+          // Case 3: BOTH Local and Cloud have real teacher data (compare timestamps & protect data)
+          else if (localHasRealData && cloudHasRealData && cloudData && cloudData.classes) {
+            const lastLocalStr = getLastLocalUpdate();
+            const lastLocal = lastLocalStr ? new Date(lastLocalStr).getTime() : 0;
+            const cloudUpdatedStr = cloudData?.dataUpdatedAt || cloudData?.updatedAt;
+            const cloudUpdated = cloudUpdatedStr ? new Date(cloudUpdatedStr).getTime() : 0;
+
+            const cloudIsNewer = cloudUpdated > 0 && cloudUpdated > lastLocal;
 
             if (cloudIsNewer) {
-              console.log('Cloud data is newer, updating local data from Cloud');
+              console.log('[Auth Sync] Case 3: Cloud data is newer, updating local data from Cloud');
               setClasses(cloudData.classes);
               saveClasses(cloudData.classes);
               if (cloudData.activeClassId) {
@@ -257,7 +285,7 @@ export default function App() {
                 saveViolationTypes(cloudData.disciplineViolationTypes);
               }
             } else {
-              console.log('Local data is newer, syncing local data to Cloud');
+              console.log('[Auth Sync] Case 3: Local data is newer or equal, syncing local data to Cloud');
               await saveUserDataToFirestore(user.uid, {
                 classes: currentLocalClasses,
                 activeClassId: loadActiveClassId(currentLocalClasses),
@@ -269,6 +297,7 @@ export default function App() {
                 disciplineRecords: loadDisciplineRecords(),
                 disciplineViolationTypes: loadViolationTypes(),
               });
+              setClasses(currentLocalClasses);
             }
           }
           // Case 4: Both are default sample data or fresh state
@@ -276,18 +305,6 @@ export default function App() {
             if (cloudHasClasses && cloudData?.classes) {
               setClasses(cloudData.classes);
               saveClasses(cloudData.classes);
-            } else {
-              await saveUserDataToFirestore(user.uid, {
-                classes: currentLocalClasses,
-                activeClassId: loadActiveClassId(currentLocalClasses),
-                history: loadHistory(),
-                settings: loadSettings(),
-                selectionMode: loadSelectionMode(),
-                timetableSlots: loadTimetable(),
-                teachingPlan: loadTeachingPlan(),
-                disciplineRecords: loadDisciplineRecords(),
-                disciplineViolationTypes: loadViolationTypes(),
-              });
             }
           }
         } catch (error) {
@@ -335,6 +352,7 @@ export default function App() {
         disciplineViolationTypes: violationTypes,
       });
       soundEngine.playVictoryFanfare();
+      alert('Đồng bộ Cloud thành công! Toàn bộ dữ liệu của Thầy/Cô đã được lưu trữ an toàn trên tài khoản.');
     } catch (err) {
       console.error('Manual sync failed:', err);
       alert('Đồng bộ Cloud không thành công. Vui lòng kiểm tra kết nối mạng.');
@@ -342,6 +360,22 @@ export default function App() {
       setIsSyncingCloud(false);
     }
   }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan, disciplineRecords, violationTypes]);
+
+  // One-click recovery handler from persistent safety vault
+  const handleTriggerRecovery = useCallback(() => {
+    const recoveryClasses = getAvailableRecoveryClasses();
+    if (recoveryClasses && recoveryClasses.length > 0) {
+      setClasses(recoveryClasses);
+      saveClasses(recoveryClasses);
+      const newActiveId = recoveryClasses[0]?.id || 'class-7a1';
+      setActiveClassId(newActiveId);
+      saveActiveClassId(newActiveId);
+      syncToCloudIfLoggedIn({ classes: recoveryClasses, activeClassId: newActiveId });
+      soundEngine.playVictoryFanfare();
+      setShowDataRecoveryBanner(false);
+      alert(`Đã khôi phục thành công ${recoveryClasses.length} lớp học và danh sách học sinh của Thầy/Cô!`);
+    }
+  }, [syncToCloudIfLoggedIn]);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -903,6 +937,32 @@ export default function App() {
         onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
         onOpenPaymentHistoryModal={() => setIsPaymentHistoryModalOpen(true)}
       />
+
+      {/* Safety Recovery Alert Banner */}
+      {showDataRecoveryBanner && (
+        <div className="bg-gradient-to-r from-amber-950/80 via-amber-900/60 to-slate-900 border-b border-amber-500/40 px-4 py-2.5 text-amber-200 text-xs sm:text-sm flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg animate-in fade-in">
+          <div className="flex items-center gap-2 text-center sm:text-left">
+            <span className="text-base">🛡️</span>
+            <span>
+              <strong>Bản lưu an toàn khả dụng:</strong> Hệ thống tìm thấy <strong>{recoverableClassCount} lớp học</strong> và dữ liệu học sinh trước đó của Thầy/Cô.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleTriggerRecovery}
+              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs transition-all shadow active:scale-95 flex items-center gap-1.5"
+            >
+              <span>Khôi phục ngay</span>
+            </button>
+            <button
+              onClick={() => setShowDataRecoveryBanner(false)}
+              className="px-2.5 py-1.5 text-slate-400 hover:text-white text-xs transition-colors rounded-lg hover:bg-slate-800"
+            >
+              Để sau
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Viewport Content */}
       <main className="flex-1 pb-12">

@@ -17,6 +17,7 @@ const STORAGE_KEYS = {
   TIMETABLE: 'classgo_timetable_v1',
   TEACHING_PLAN: 'classgo_teaching_plan_v1',
   SAFETY_BACKUP: 'classgo_safety_backup_v1',
+  RECOVERY_CLASSES: 'classgo_recovery_real_classes_v1',
   LAST_LOCAL_UPDATE: 'classgo_last_local_update_v1',
   // Legacy keys for seamless migration
   LEGACY_CLASSES: 'lucky_picker_classes_v1',
@@ -52,16 +53,65 @@ export const DEFAULT_SETTINGS: SpinSettings = {
   wheelSizeOption: 'LARGE',
 };
 
+/**
+ * Retrieves previously saved real teacher classes from safety backup or recovery storage,
+ * if current classes were ever inadvertently reset to sample data.
+ */
+export function getAvailableRecoveryClasses(): ClassRoom[] | null {
+  try {
+    // 1. Check dedicated recovery vault
+    const recRaw = localStorage.getItem(STORAGE_KEYS.RECOVERY_CLASSES);
+    if (recRaw) {
+      const parsed = JSON.parse(recRaw);
+      const classes = Array.isArray(parsed) ? parsed : parsed?.classes;
+      if (classes && Array.isArray(classes) && classes.length > 0 && !isSampleClasses(classes)) {
+        return classes;
+      }
+    }
+
+    // 2. Check safety backup
+    const safeRaw = localStorage.getItem(STORAGE_KEYS.SAFETY_BACKUP);
+    if (safeRaw) {
+      const parsed = JSON.parse(safeRaw);
+      const classes = parsed?.classes;
+      if (classes && Array.isArray(classes) && classes.length > 0 && !isSampleClasses(classes)) {
+        return classes;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to read recovery classes:', err);
+  }
+  return null;
+}
+
 export function loadClasses(): ClassRoom[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CLASSES) || localStorage.getItem(STORAGE_KEYS.LEGACY_CLASSES);
     if (!raw) {
+      // Check if user previously had real classes in recovery storage
+      const recovery = getAvailableRecoveryClasses();
+      if (recovery && recovery.length > 0) {
+        console.log('[Storage] Automatically restored real teacher classes from recovery vault');
+        saveClasses(recovery);
+        return recovery;
+      }
       saveClasses(INITIAL_CLASSES);
       return INITIAL_CLASSES;
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      if (parsed.length > 0) return parsed;
+      if (parsed.length > 0) {
+        // If current is sample data, but recovery has real user data, auto-recover!
+        if (isSampleClasses(parsed)) {
+          const recovery = getAvailableRecoveryClasses();
+          if (recovery && recovery.length > 0) {
+            console.log('[Storage] Auto-recovering real user classes over default sample data');
+            saveClasses(recovery);
+            return recovery;
+          }
+        }
+        return parsed;
+      }
       // If user deliberately emptied all classes, return one clean empty class instead of reviving sample data
       const defaultBlank: ClassRoom[] = [
         {
@@ -84,6 +134,17 @@ export function saveClasses(classes: ClassRoom[]) {
   try {
     localStorage.setItem(STORAGE_KEYS.CLASSES, JSON.stringify(classes));
     localStorage.setItem(STORAGE_KEYS.LAST_LOCAL_UPDATE, new Date().toISOString());
+
+    // Permanently preserve non-sample teacher data in recovery storage
+    if (classes && classes.length > 0 && !isSampleClasses(classes)) {
+      localStorage.setItem(
+        STORAGE_KEYS.RECOVERY_CLASSES,
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          classes,
+        })
+      );
+    }
   } catch (err) {
     console.error('Failed to save classes to storage:', err);
   }
@@ -269,29 +330,62 @@ export function importBackupJSON(jsonStr: string): boolean {
  * this returns false (it is REAL user data that must never be lost!).
  */
 export function isSampleClasses(classes?: ClassRoom[] | null): boolean {
-  if (!classes || classes.length === 0) return true;
+  if (!classes || !Array.isArray(classes) || classes.length === 0) return true;
 
-  // If any class has an ID or name not matching the initial sample
-  const hasCustomClass = classes.some(
-    (c) => c.id !== 'class-7a1' && c.id !== 'class-7a2' && c.name !== '7A1' && c.name !== '7A2'
-  );
-  if (hasCustomClass) return false;
+  // Default sample data strictly has exactly 2 classes
+  if (classes.length !== 2) return false;
 
-  // Check if any student has scores, custom notes, or stars
-  const hasUserScoreOrNote = classes.some((c) =>
-    c.students?.some(
-      (s) =>
-        (s.scores && Object.keys(s.scores).length > 0) ||
-        (s.notes && s.notes.trim().length > 0) ||
-        (s.stars && s.stars > 0) ||
-        (s.studentCode && !s.studentCode.startsWith('HS7A'))
-    )
-  );
-  if (hasUserScoreOrNote) return false;
+  const classNames = classes.map((c) => c.name.trim().toUpperCase());
+  if (!classNames.includes('7A1') || !classNames.includes('7A2')) {
+    return false;
+  }
 
-  // Check total student count (sample data has 30 + 30 = 60 students)
-  const totalStudents = classes.reduce((sum, c) => sum + (c.students?.length || 0), 0);
-  if (totalStudents !== 60) return false;
+  // Check subjects: sample subjects are only Toán học & Ngữ văn
+  for (const c of classes) {
+    if (c.subject && c.subject !== 'Toán học' && c.subject !== 'Ngữ văn') {
+      return false;
+    }
+    // Sample classes have exactly 30 students each
+    if (!c.students || c.students.length !== 30) {
+      return false;
+    }
+    // Check if any student has scores, custom notes, stars, or attendance markings
+    for (const s of c.students) {
+      if (s.scores && Object.keys(s.scores).length > 0) return false;
+      if (s.notes && s.notes.trim().length > 0) return false;
+      if (s.stars && s.stars > 0) return false;
+      if (s.isAbsent) return false;
+      if ((s as any).attendanceStatus && (s as any).attendanceStatus !== 'PRESENT') return false;
+      if (s.studentCode && !s.studentCode.startsWith('HS7A')) return false;
+    }
+  }
+
+  // Check known sample student names
+  const sampleNames = new Set([
+    'Nguyễn Văn An', 'Trần Thị Bình', 'Lê Văn Chi', 'Phạm Tiến Dũng', 'Hoàng Minh Đức',
+    'Vũ Thị Hà Giang', 'Đỗ Thị Thu Hương', 'Bùi Gia Huy', 'Dương Khánh Huyền', 'Ngô Quốc Hưng',
+    'Phan Thảo Linh', 'Lâm Tuấn Kiệt', 'Trịnh Bảo Long', 'Mai Phương Mai', 'Đặng Nhật Minh',
+    'Lê Ngọc Mỹ Anh', 'Nguyễn Thành Nam', 'Hoàng Bảo Ngọc', 'Vũ Yến Nhi', 'Phạm Hồng Phúc',
+    'Trần Phú Quý', 'Nguyễn Như Quỳnh', 'Đoàn Minh Sơn', 'Lý Quốc Thắng', 'Vương Thanh Thảo',
+    'Tạ Minh Triết', 'Hồ Cẩm Tú', 'Đinh Quốc Tuấn', 'Lưu Tường Vy', 'Cao Hải Yến',
+    'Võ Minh Ánh', 'Đặng Tuấn Anh', 'Bùi Kim Chi', 'Lương Quốc Đạt', 'Thái Mỹ Dung',
+    'Phan Minh Hải', 'Tạ Thúy Hằng', 'Trịnh Hoàng Long', 'Trần Trúc Mai', 'Nguyễn Trọng Nghĩa',
+    'Đỗ Quỳnh Nga',
+  ]);
+
+  let matchSampleCount = 0;
+  for (const c of classes) {
+    for (const s of c.students) {
+      if (sampleNames.has(s.name.trim())) {
+        matchSampleCount++;
+      }
+    }
+  }
+
+  // If less than 45 out of 60 students match the sample names, it is real teacher data!
+  if (matchSampleCount < 45) {
+    return false;
+  }
 
   return true;
 }
@@ -299,12 +393,30 @@ export function isSampleClasses(classes?: ClassRoom[] | null): boolean {
 /**
  * Saves a silent local snapshot of all current teacher data before any cloud operation.
  * Guarantees zero data loss if anything unexpected occurs.
+ * NEVER overwrites an existing real backup with default sample data.
  */
 export function createSafetyBackup(): void {
   try {
+    const currentClasses = loadClasses();
+
+    // Guard: Do NOT overwrite an existing backup that contains REAL teacher data
+    // if currentClasses is only default sample data
+    const existingRaw = localStorage.getItem(STORAGE_KEYS.SAFETY_BACKUP);
+    if (existingRaw) {
+      try {
+        const existing = JSON.parse(existingRaw);
+        if (existing?.classes && !isSampleClasses(existing.classes) && isSampleClasses(currentClasses)) {
+          console.log('[Storage] Preserved existing safety backup with real teacher data');
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     const backup = {
       timestamp: new Date().toISOString(),
-      classes: loadClasses(),
+      classes: currentClasses,
       activeClassId: localStorage.getItem(STORAGE_KEYS.ACTIVE_CLASS_ID),
       history: loadHistory(),
       settings: loadSettings(),

@@ -23,6 +23,7 @@ export interface UserCloudData {
   disciplineRecords?: DisciplineRecord[];
   disciplineViolationTypes?: DisciplineViolationType[];
   subscription?: UserSubscription;
+  dataUpdatedAt?: string;
   updatedAt?: string;
 }
 
@@ -121,6 +122,15 @@ export function subscribeToUserData(
 }
 
 /**
+ * Recursively sanitizes any payload for Firestore by stripping all undefined keys
+ * to strictly avoid: "Unsupported field value: undefined".
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) return null as any;
+  return JSON.parse(JSON.stringify(data));
+}
+
+/**
  * Initialize or ensure trial subscription exists on Firestore for user
  */
 export async function ensureUserSubscription(
@@ -143,12 +153,12 @@ export async function ensureUserSubscription(
   };
 
   const userDocRef = doc(db, 'users', userId);
+  // Note: Only write subscription, do NOT touch root dataUpdatedAt so we never masquerade as class edits!
   await setDoc(
     userDocRef,
-    {
+    sanitizeForFirestore({
       subscription: initialSubscription,
-      updatedAt: now.toISOString(),
-    },
+    }),
     { merge: true }
   );
 
@@ -157,6 +167,7 @@ export async function ensureUserSubscription(
 
 /**
  * Save user data to Firestore (merging changes).
+ * Automatically sanitizes payloads to strip undefined values and records dataUpdatedAt.
  */
 export async function saveUserDataToFirestore(
   userId: string,
@@ -164,14 +175,14 @@ export async function saveUserDataToFirestore(
 ): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', userId);
-    await setDoc(
-      userDocRef,
-      {
-        ...data,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    const nowIso = new Date().toISOString();
+    const payload = sanitizeForFirestore({
+      ...data,
+      dataUpdatedAt: nowIso,
+      updatedAt: nowIso,
+    });
+    await setDoc(userDocRef, payload, { merge: true });
+    console.log('[Firestore] Successfully saved cloud data for user:', userId);
   } catch (error) {
     console.error('Error saving user data to Firestore:', error);
     throw error;
