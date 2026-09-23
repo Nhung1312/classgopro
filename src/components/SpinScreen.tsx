@@ -51,6 +51,7 @@ import {
   getSpeechAnnouncementText,
 } from '../utils/studentDisplay';
 import { soundEngine } from '../utils/audio';
+import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
 import { speechEngine } from '../utils/speech';
 import { MathRenderer } from './MathRenderer';
 
@@ -201,7 +202,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
   // Main Spin Execution
   const handleStartSpin = useCallback(() => {
-    if (subscription?.status === 'EXPIRED') {
+    if (ENABLE_TRIAL_LIMIT && subscription?.status === 'EXPIRED') {
       soundEngine.playTick(0.6);
       if (onOpenExpiredModal) {
         onOpenExpiredModal();
@@ -560,12 +561,12 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4">
       
       {/* Expired Subscription Alert Banner */}
-      {subscription?.status === 'EXPIRED' && (
+      {ENABLE_TRIAL_LIMIT && subscription?.status === 'EXPIRED' && (
         <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-950/90 via-slate-900 to-amber-950/80 border border-rose-500/50 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center gap-2.5 text-xs text-rose-200">
             <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
             <span>
-              <strong>Gói dùng thử 15 ngày đã hết hạn.</strong> Vui lòng nâng cấp CLASSGO PRO (169.000 VNĐ / 12 tháng) để tiếp tục quay gọi tên và bảo toàn dữ liệu.
+              <strong>Gói dùng thử {TRIAL_DURATION_DAYS} ngày đã hết hạn.</strong> Vui lòng nâng cấp CLASSGO PRO (169.000 VNĐ / 12 tháng) để tiếp tục quay gọi tên và bảo toàn dữ liệu.
             </span>
           </div>
           {onOpenUpgradeModal && (

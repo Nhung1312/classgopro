@@ -55,6 +55,7 @@ import {
   getEffectiveSubscription,
   ensureUserSubscription,
 } from './utils/firestoreService';
+import { ENABLE_TRIAL_LIMIT } from './config/subscriptionConfig';
 
 import { Navbar } from './components/Navbar';
 import { SpinScreen } from './components/SpinScreen';
@@ -148,10 +149,10 @@ export default function App() {
         try {
           const cloudData = await fetchUserDataFromFirestore(user.uid);
 
-          // 1. Ensure user has an effective subscription (init 15-day trial if new)
+          // 1. Ensure user has an effective subscription (init 30-day trial if new)
           const sub = await ensureUserSubscription(user.uid, cloudData);
           setSubscription(sub);
-          if (sub.status === 'EXPIRED') {
+          if (ENABLE_TRIAL_LIMIT && sub.status === 'EXPIRED') {
             setIsExpiredModalOpen(true);
           }
 
@@ -160,6 +161,9 @@ export default function App() {
             if (data?.subscription) {
               const effective = getEffectiveSubscription(data.subscription);
               setSubscription(effective);
+              if (ENABLE_TRIAL_LIMIT && effective.status === 'EXPIRED') {
+                setIsExpiredModalOpen(true);
+              }
             }
           });
 
@@ -1179,7 +1183,7 @@ export default function App() {
 
       {/* Subscription Expired Modal */}
       <SubscriptionExpiredModal
-        isOpen={isExpiredModalOpen}
+        isOpen={ENABLE_TRIAL_LIMIT && isExpiredModalOpen}
         onClose={() => setIsExpiredModalOpen(false)}
         onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
         userEmail={currentUser?.email || undefined}

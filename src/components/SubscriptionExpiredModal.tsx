@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, Crown, Sparkles, X, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { BANK_CONFIG } from '../services/paymentService';
+import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
 
 interface SubscriptionExpiredModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ export const SubscriptionExpiredModal: React.FC<SubscriptionExpiredModalProps> =
   onOpenUpgradeModal,
   userEmail,
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen || !ENABLE_TRIAL_LIMIT) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
@@ -39,7 +40,7 @@ export const SubscriptionExpiredModal: React.FC<SubscriptionExpiredModalProps> =
             Thời Gian Dùng Thử Đã Kết Thúc
           </h3>
           <p className="text-xs sm:text-sm text-slate-300">
-            Tài khoản <span className="font-bold text-amber-300">{userEmail || 'của bạn'}</span> đã hoàn thành 15 ngày trải nghiệm miễn phí CLASSGO.
+            Tài khoản <span className="font-bold text-amber-300">{userEmail || 'của bạn'}</span> đã hoàn thành {TRIAL_DURATION_DAYS} ngày trải nghiệm miễn phí CLASSGO.
           </p>
         </div>
 

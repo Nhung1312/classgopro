@@ -32,6 +32,7 @@ import {
 } from '../utils/studentDisplay';
 import { soundEngine } from '../utils/audio';
 import { speechEngine } from '../utils/speech';
+import { ENABLE_TRIAL_LIMIT } from '../config/subscriptionConfig';
 import { MathRenderer } from './MathRenderer';
 import { ClassGoLogo } from './ClassGoLogo';
 
@@ -180,7 +181,7 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
   };
 
   const handleStartSpin = useCallback(() => {
-    if (subscription?.status === 'EXPIRED') {
+    if (ENABLE_TRIAL_LIMIT && subscription?.status === 'EXPIRED') {
       soundEngine.playTick(0.6);
       if (onOpenUpgradeModal) onOpenUpgradeModal();
       return;

@@ -38,6 +38,7 @@ import { exportBackupJSON, importBackupJSON } from '../utils/storage';
 import { soundEngine } from '../utils/audio';
 import { speechEngine, isVoiceVietnamese } from '../utils/speech';
 import { BANK_CONFIG } from '../services/paymentService';
+import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
 
 interface SettingsScreenProps {
   settings: SpinSettings;
@@ -256,10 +257,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
                   <span>ĐANG SỬ DỤNG PRO</span>
                 </span>
-              ) : subscription?.status === 'TRIAL' ? (
+              ) : subscription?.status === 'TRIAL' || !ENABLE_TRIAL_LIMIT ? (
                 <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                  <span>DÙNG THỬ 15 NGÀY</span>
+                  <span>{ENABLE_TRIAL_LIMIT ? `DÙNG THỬ ${TRIAL_DURATION_DAYS} NGÀY` : 'MIỄN PHÍ TOÀN BỘ'}</span>
                 </span>
               ) : (
                 <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
@@ -281,13 +282,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     Còn lại: {Math.max(0, Math.ceil((new Date(subscription.proEndAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} ngày
                   </div>
                 </>
-              ) : subscription?.status === 'TRIAL' && subscription.trialEndAt ? (
-                <>
-                  Hạn dùng thử: <strong className="text-sky-300">{new Date(subscription.trialEndAt).toLocaleDateString('vi-VN')}</strong>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    Còn lại: {Math.max(0, Math.ceil((new Date(subscription.trialEndAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} ngày
-                  </div>
-                </>
+              ) : subscription?.status === 'TRIAL' || !ENABLE_TRIAL_LIMIT ? (
+                ENABLE_TRIAL_LIMIT && subscription?.trialEndAt ? (
+                  <>
+                    Hạn dùng thử: <strong className="text-sky-300">{new Date(subscription.trialEndAt).toLocaleDateString('vi-VN')}</strong>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Còn lại: {Math.max(0, Math.ceil((new Date(subscription.trialEndAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} ngày
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-emerald-300 font-bold">Không giới hạn</span>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Đang mở miễn phí toàn bộ tính năng
+                    </div>
+                  </>
+                )
               ) : (
                 <span className="text-rose-400 text-xs">Vui lòng kích hoạt gói Pro</span>
               )}

@@ -11,6 +11,7 @@ import {
   DisciplineRecord,
   DisciplineViolationType,
 } from '../types';
+import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
 
 export interface UserCloudData {
   classes?: ClassRoom[];
@@ -29,10 +30,12 @@ export interface UserCloudData {
 
 /**
  * Compute the effective subscription status based on current real-time clock:
- * If Trial has passed trialEndAt -> EXPIRED
- * If Pro has passed proEndAt -> EXPIRED
- * If Active and before proEndAt -> ACTIVE
- * If Trial and before trialEndAt -> TRIAL
+ * - If ENABLE_TRIAL_LIMIT = false: All users have free unlimited access, expired status is bypassed.
+ * - If ENABLE_TRIAL_LIMIT = true:
+ *     If Trial has passed trialEndAt -> EXPIRED
+ *     If Pro has passed proEndAt -> EXPIRED
+ *     If Active and before proEndAt -> ACTIVE
+ *     If Trial and before trialEndAt -> TRIAL
  */
 export function getEffectiveSubscription(sub?: UserSubscription): UserSubscription {
   const nowMs = Date.now();
@@ -40,7 +43,7 @@ export function getEffectiveSubscription(sub?: UserSubscription): UserSubscripti
   if (!sub) {
     // Default fallback if no subscription object exists yet
     const now = new Date();
-    const trialEnd = new Date(nowMs + 15 * 24 * 60 * 60 * 1000);
+    const trialEnd = new Date(nowMs + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
     return {
       status: 'TRIAL',
       trialStartAt: now.toISOString(),
@@ -48,6 +51,26 @@ export function getEffectiveSubscription(sub?: UserSubscription): UserSubscripti
     };
   }
 
+  // =========================================================================
+  // 🛡️ KHI TẠM TẮT GIỚI HẠN TRIAL (ENABLE_TRIAL_LIMIT = false):
+  // Người dùng đăng nhập được dùng ClassGo MIỄN PHÍ HOÀN TOÀN, không giới hạn thời gian.
+  // Nếu tài khoản cũ trong Firestore từng bị lưu là EXPIRED hoặc trialEndAt đã qua,
+  // hệ thống KHÔNG khóa mà mở toàn quyền truy cập bình thường.
+  // =========================================================================
+  if (!ENABLE_TRIAL_LIMIT) {
+    if (sub.status === 'EXPIRED') {
+      return {
+        ...sub,
+        status: 'TRIAL',
+      };
+    }
+    return sub;
+  }
+
+  // =========================================================================
+  // ⏳ KHI BẬT LẠI GIỚI HẠN TRIAL (ENABLE_TRIAL_LIMIT = true):
+  // Giữ nguyên vẹn 100% cơ chế kiểm tra ngày bắt đầu, ngày hết hạn và expired:
+  // =========================================================================
   // Check Pro status
   if (sub.status === 'ACTIVE') {
     if (sub.proEndAt) {
@@ -142,9 +165,9 @@ export async function ensureUserSubscription(
     return getEffectiveSubscription(currentCloudData.subscription);
   }
 
-  // Create initial 15-day trial on Firestore
+  // Create initial trial on Firestore (TRIAL_DURATION_DAYS)
   const now = new Date();
-  const trialEnd = new Date(nowMs + 15 * 24 * 60 * 60 * 1000);
+  const trialEnd = new Date(nowMs + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
   const initialSubscription: UserSubscription = {
     status: 'TRIAL',
     trialStartAt: now.toISOString(),

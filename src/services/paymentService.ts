@@ -15,6 +15,9 @@ import {
   PaymentOrder,
   UserSubscription,
 } from '../types';
+import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
+
+export { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS };
 
 export const ADMIN_EMAIL = 'nhung.ngo.u@gmail.com';
 
@@ -25,7 +28,7 @@ export const BANK_CONFIG: BankAccountInfo = {
   accountHolder: 'LE DINH TUAN',
   proPrice: 169000,
   proDurationDays: 365,
-  trialDays: 15,
+  trialDays: TRIAL_DURATION_DAYS,
 };
 
 /**

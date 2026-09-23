@@ -33,6 +33,7 @@ import { AppTab, ClassRoom, SelectionMode, UserSubscription } from '../types';
 import { soundEngine } from '../utils/audio';
 import { ClassGoLogo } from './ClassGoLogo';
 import { ADMIN_EMAIL } from '../services/paymentService';
+import { ENABLE_TRIAL_LIMIT } from '../config/subscriptionConfig';
 
 interface NavbarProps {
   currentTab: AppTab;
@@ -257,16 +258,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="hidden sm:inline">CLASSGO</span>
                 <span>PRO: {remainingDays}N</span>
               </button>
-            ) : subscription?.status === 'TRIAL' ? (
+            ) : subscription?.status === 'TRIAL' || !ENABLE_TRIAL_LIMIT ? (
               <button
                 id="trial-badge-btn"
                 onClick={onOpenUpgradeModal}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-950/60 border border-sky-500/40 text-sky-300 text-xs font-bold hover:bg-sky-900/60 transition-all shadow-sm"
-                title={`Đang dùng thử 15 ngày. Còn ${remainingDays} ngày. Bấm để nâng cấp PRO!`}
+                title={
+                  ENABLE_TRIAL_LIMIT
+                    ? `Đang dùng thử 30 ngày. Còn ${remainingDays} ngày. Bấm để nâng cấp PRO!`
+                    : 'Gói miễn phí không giới hạn thời gian. Bấm để xem thông tin gói PRO.'
+                }
               >
                 <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                <span className="hidden sm:inline">Dùng thử:</span>
-                <span>{remainingDays} ngày</span>
+                <span className="hidden sm:inline">{ENABLE_TRIAL_LIMIT ? 'Dùng thử:' : 'Bản quyền:'}</span>
+                <span>{ENABLE_TRIAL_LIMIT ? `${remainingDays} ngày` : 'Miễn phí'}</span>
               </button>
             ) : (
               <button
@@ -336,9 +341,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
                             <Crown className="w-3 h-3" /> CLASSGO PRO
                           </span>
-                        ) : subscription?.status === 'TRIAL' ? (
+                        ) : subscription?.status === 'TRIAL' || !ENABLE_TRIAL_LIMIT ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" /> DÙNG THỬ
+                            <Sparkles className="w-3 h-3" /> {ENABLE_TRIAL_LIMIT ? 'DÙNG THỬ 30 NGÀY' : 'MIỄN PHÍ HOÀN TOÀN'}
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
@@ -352,10 +357,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <>
                             Hạn dùng: <strong>{subscription.proEndAt ? new Date(subscription.proEndAt).toLocaleDateString('vi-VN') : ''}</strong> ({remainingDays} ngày)
                           </>
-                        ) : subscription?.status === 'TRIAL' ? (
-                          <>
-                            Hạn dùng thử: <strong>{subscription.trialEndAt ? new Date(subscription.trialEndAt).toLocaleDateString('vi-VN') : ''}</strong> ({remainingDays} ngày)
-                          </>
+                        ) : subscription?.status === 'TRIAL' || !ENABLE_TRIAL_LIMIT ? (
+                          ENABLE_TRIAL_LIMIT ? (
+                            <>
+                              Hạn dùng thử: <strong>{subscription?.trialEndAt ? new Date(subscription.trialEndAt).toLocaleDateString('vi-VN') : ''}</strong> ({remainingDays} ngày)
+                            </>
+                          ) : (
+                            <span className="text-emerald-400 font-medium">Không giới hạn thời gian sử dụng</span>
+                          )
                         ) : (
                           <span className="text-rose-400 font-bold">Cần nâng cấp để tiếp tục sử dụng</span>
                         )}
