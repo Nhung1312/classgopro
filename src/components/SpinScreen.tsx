@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Sparkles,
@@ -122,6 +122,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     settings.nameDisplayStyle || 'FULL_NAME'
   );
   const [targetFilter, setTargetFilter] = useState<CallTargetFilter>('ALL');
+  const [sttFrom, setSttFrom] = useState<number>(1);
+  const [sttTo, setSttTo] = useState<number>(() => Math.max(1, Math.min(15, activeClass?.students?.length || 15)));
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayName, setDisplayName] = useState<string>('???');
@@ -146,6 +148,20 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const students = activeClass?.students || [];
   const eligibleStudents = getEligibleStudents(students);
   const absentStudents = students.filter((s) => s.isAbsent);
+
+  // Auto-sync sttTo if active class changes
+  useEffect(() => {
+    if (activeClass?.students && activeClass.students.length > 0) {
+      if (sttTo > activeClass.students.length) {
+        setSttTo(activeClass.students.length);
+      }
+    }
+  }, [activeClass?.id, activeClass?.students?.length]);
+
+  // Target candidates according to current targetFilter
+  const targetCandidates = useMemo(() => {
+    return filterStudentsByTarget(eligibleStudents, targetFilter, students, sttFrom, sttTo);
+  }, [eligibleStudents, targetFilter, students, sttFrom, sttTo]);
 
   // Target filter stats
   const studentsWithoutTx1 = eligibleStudents.filter(
@@ -215,8 +231,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     if (isSpinning || eligibleStudents.length === 0) return;
 
     // 1. Filter candidates according to selected targetFilter
-    const targeted = filterStudentsByTarget(eligibleStudents, targetFilter);
-    const candidatePool = targeted.length > 0 ? targeted : eligibleStudents;
+    const candidatePool = targetCandidates.length > 0 ? targetCandidates : eligibleStudents;
 
     // 2. Run algorithm FIRST to guarantee determinism
     const effectiveCount = Math.min(pickCount, candidatePool.length);
@@ -864,6 +879,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               title="Lọc nhóm học sinh ưu tiên kiểm tra"
             >
               <option value="ALL">Toàn bộ lớp ({eligibleStudents.length})</option>
+              <option value="STT_RANGE">
+                🔢 Theo khoảng STT ({targetFilter === 'STT_RANGE' ? `${targetCandidates.length} bạn` : 'Từ STT... đến...'})
+              </option>
               {studentsWithoutTx1.length > 0 && (
                 <option value="NO_SCORE_TX1">Chưa có điểm TX1 ({studentsWithoutTx1.length})</option>
               )}
@@ -876,6 +894,88 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
             </select>
           </div>
         </div>
+
+        {/* STT Range Sub-Bar (Appears when STT_RANGE filter is selected) */}
+        {targetFilter === 'STT_RANGE' && (
+          <div className="flex flex-wrap items-center justify-between gap-2.5 bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-amber-950/40 border border-amber-500/40 rounded-2xl px-3 py-2 text-xs shadow-md animate-fade-in">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-amber-300 font-extrabold flex items-center gap-1.5 text-xs">
+                <span>🔢 Giới hạn STT:</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-300 font-medium">Từ STT</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={students.length || 1}
+                  value={sttFrom}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    const clamped = isNaN(val) ? 1 : Math.max(1, Math.min(val, students.length || 1));
+                    setSttFrom(clamped);
+                    if (clamped > sttTo) {
+                      setSttTo(clamped);
+                    }
+                  }}
+                  disabled={isSpinning}
+                  className="w-14 bg-slate-950 border border-amber-500/60 rounded-xl px-2 py-1 text-center font-mono font-black text-amber-200 text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none shadow-inner"
+                />
+                <span className="text-slate-300 font-medium">đến STT</span>
+                <input
+                  type="number"
+                  min={sttFrom}
+                  max={students.length || 1}
+                  value={sttTo}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    const clamped = isNaN(val) ? (students.length || 1) : Math.max(1, Math.min(val, students.length || 1));
+                    setSttTo(clamped);
+                    if (clamped < sttFrom) {
+                      setSttFrom(clamped);
+                    }
+                  }}
+                  disabled={isSpinning}
+                  className="w-14 bg-slate-950 border border-amber-500/60 rounded-xl px-2 py-1 text-center font-mono font-black text-amber-200 text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none shadow-inner"
+                />
+                <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 font-mono text-[11px]">
+                  {targetCandidates.length} bạn đủ điều kiện
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Presets for Teams / Groups in Vietnam (Tổ 1, Tổ 2, Tổ 3, Tổ 4) */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-slate-400 font-medium mr-0.5 hidden sm:inline">Chọn nhanh:</span>
+              {[
+                { label: 'Tổ 1 (1-10)', from: 1, to: 10 },
+                { label: 'Tổ 2 (11-20)', from: 11, to: 20 },
+                { label: 'Tổ 3 (21-30)', from: 21, to: 30 },
+                { label: 'Tổ 4 (31+)', from: 31, to: Math.max(31, students.length) },
+              ].map((preset) => {
+                const isSelected = sttFrom === preset.from && sttTo === Math.min(preset.to, students.length || preset.to);
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setSttFrom(preset.from);
+                      setSttTo(Math.min(preset.to, students.length || preset.to));
+                      soundEngine.playTick(1.2);
+                    }}
+                    disabled={isSpinning || students.length < preset.from}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                      isSelected
+                        ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                        : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
+                    } disabled:opacity-30 disabled:pointer-events-none`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Spinning Arena */}
@@ -917,7 +1017,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           {visualType === 'WHEEL' && (
             <div className="flex flex-col items-center">
               <WheelVisual
-                students={filterStudentsByTarget(eligibleStudents, targetFilter)}
+                students={targetCandidates.length > 0 ? targetCandidates : eligibleStudents}
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
                 winner={selectedResult ? selectedResult.selectedStudents[0] : null}
@@ -966,7 +1066,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
                 winner={selectedResult ? selectedResult.selectedStudents[0] : null}
-                reelNames={filterStudentsByTarget(eligibleStudents, targetFilter).map((s) =>
+                reelNames={(targetCandidates.length > 0 ? targetCandidates : eligibleStudents).map((s) =>
                   formatStudentDisplayName(s, students, nameStyle, false)
                 )}
               />
@@ -990,7 +1090,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
           {visualType === 'CARDS' && (
             <CardsVisual
-              students={filterStudentsByTarget(eligibleStudents, targetFilter)}
+              students={targetCandidates.length > 0 ? targetCandidates : eligibleStudents}
               displayName={displayName}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}

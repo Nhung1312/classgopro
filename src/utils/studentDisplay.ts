@@ -64,10 +64,14 @@ export function formatStudentDisplayName(
  * - 'FEMALE_ONLY': Only female students
  * - 'MALE_ONLY': Only male students
  * - 'NO_SCORE_TX1': Students who do not yet have a TX1 (oral/regular) score
+ * - 'STT_RANGE': Students within STT range (sttFrom to sttTo)
  */
 export function filterStudentsByTarget(
   students: Student[],
-  filter: CallTargetFilter = 'ALL'
+  filter: CallTargetFilter = 'ALL',
+  allClassStudents: Student[] = [],
+  sttFrom?: number,
+  sttTo?: number
 ): Student[] {
   if (!students) return [];
 
@@ -80,6 +84,15 @@ export function filterStudentsByTarget(
       return students.filter(
         (s) => s.scores?.tx1 === null || s.scores?.tx1 === undefined
       );
+    case 'STT_RANGE': {
+      const roster = allClassStudents && allClassStudents.length > 0 ? allClassStudents : students;
+      const minVal = typeof sttFrom === 'number' && !isNaN(sttFrom) ? Math.max(1, sttFrom) : 1;
+      const maxVal = typeof sttTo === 'number' && !isNaN(sttTo) ? Math.max(minVal, sttTo) : roster.length;
+      return students.filter((s) => {
+        const stt = getStudentSTT(s, roster);
+        return stt >= minVal && stt <= maxVal;
+      });
+    }
     case 'ALL':
     default:
       return students;

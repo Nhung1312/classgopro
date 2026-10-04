@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Calendar,
   Clock,
@@ -14,9 +14,24 @@ import {
   Square,
   ChevronRight,
   Filter,
+  Download,
+  UploadCloud,
+  FileSpreadsheet,
+  AlertTriangle,
+  RotateCcw,
+  X,
+  FileCheck,
 } from 'lucide-react';
 import { ClassRoom, TimetableSlot, TeachingPlanItem } from '../types';
 import { soundEngine } from '../utils/audio';
+import {
+  downloadVnEduTimetableTemplate,
+  downloadVnEduTeachingPlanTemplate,
+  exportTimetableToExcel,
+  exportTeachingPlanToExcel,
+  parseTimetableFromExcel,
+  parseTeachingPlanFromExcel,
+} from '../utils/timetableExcelService';
 
 interface TimetableScreenProps {
   classes: ClassRoom[];
@@ -60,6 +75,42 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<'TIMETABLE' | 'TEACHING_LOG'>('TIMETABLE');
   const [editingSlot, setEditingSlot] = useState<Partial<TimetableSlot> | null>(null);
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
+
+  // Hidden File input refs
+  const timetableFileInputRef = useRef<HTMLInputElement>(null);
+  const planFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Toast feedback
+  const [toastFeedback, setToastFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  // Timetable import preview state
+  const [isTimetablePreviewOpen, setIsTimetablePreviewOpen] = useState(false);
+  const [parsedTimetableData, setParsedTimetableData] = useState<{
+    slots: TimetableSlot[];
+    detectedFormat: 'MATRIX' | 'LIST';
+    warnings: string[];
+  } | null>(null);
+  const [timetableImportMode, setTimetableImportMode] = useState<'REPLACE' | 'APPEND'>('REPLACE');
+
+  // Teaching Plan import preview state
+  const [isPlanPreviewOpen, setIsPlanPreviewOpen] = useState(false);
+  const [parsedPlanData, setParsedPlanData] = useState<{
+    items: TeachingPlanItem[];
+    warnings: string[];
+  } | null>(null);
+  const [planImportMode, setPlanImportMode] = useState<'REPLACE' | 'APPEND'>('APPEND');
+
+  // Confirmation modals
+  const [isClearTimetableConfirmOpen, setIsClearTimetableConfirmOpen] = useState(false);
+  const [isClearPlanConfirmOpen, setIsClearPlanConfirmOpen] = useState(false);
+
+  // Auto-dismiss toast feedback
+  useEffect(() => {
+    if (toastFeedback) {
+      const timer = setTimeout(() => setToastFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastFeedback]);
 
   // Teaching Log state
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('ALL');
@@ -167,6 +218,198 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
     onUpdateTeachingPlan(teachingPlan.filter((p) => p.id !== id));
   };
 
+  // =========================================================================
+  // EXCEL HANDLERS FOR TIMETABLE
+  // =========================================================================
+  const handleDownloadTimetableTemplate = () => {
+    try {
+      downloadVnEduTimetableTemplate(classes);
+      setToastFeedback({
+        message: '📥 Đã tải file mẫu Thời khóa biểu vnEdu (.xlsx) thành công!',
+        type: 'success',
+      });
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: 'Không thể tải file mẫu: ' + (err.message || ''),
+        type: 'error',
+      });
+      soundEngine.playError();
+    }
+  };
+
+  const handleTimetableFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await parseTimetableFromExcel(file, classes);
+      setParsedTimetableData(result);
+      setIsTimetablePreviewOpen(true);
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: err.message || 'Lỗi khi đọc file Thời khóa biểu.',
+        type: 'error',
+      });
+      soundEngine.playError();
+    } finally {
+      if (timetableFileInputRef.current) {
+        timetableFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleConfirmTimetableImport = () => {
+    if (!parsedTimetableData || parsedTimetableData.slots.length === 0) return;
+
+    if (timetableImportMode === 'REPLACE') {
+      onUpdateTimetable(parsedTimetableData.slots);
+    } else {
+      // APPEND: Merge prioritizing newly imported slots
+      const slotMap = new Map<string, TimetableSlot>();
+      timetable.forEach((s) => slotMap.set(`${s.dayOfWeek}-${s.period}`, s));
+      parsedTimetableData.slots.forEach((s) => slotMap.set(`${s.dayOfWeek}-${s.period}`, s));
+      onUpdateTimetable(Array.from(slotMap.values()));
+    }
+
+    setIsTimetablePreviewOpen(false);
+    setToastFeedback({
+      message: `✅ Đã nhập thành công ${parsedTimetableData.slots.length} tiết vào Thời khóa biểu!`,
+      type: 'success',
+    });
+    setParsedTimetableData(null);
+    soundEngine.playSuccess();
+  };
+
+  const handleExportTimetable = () => {
+    if (timetable.length === 0) {
+      setToastFeedback({
+        message: 'Chưa có tiết học nào trong Thời khóa biểu để xuất file.',
+        type: 'info',
+      });
+      return;
+    }
+    try {
+      exportTimetableToExcel(timetable);
+      setToastFeedback({
+        message: '📗 Đã xuất file Thời khóa biểu chuẩn vnEdu thành công!',
+        type: 'success',
+      });
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: 'Lỗi khi xuất file: ' + (err.message || ''),
+        type: 'error',
+      });
+      soundEngine.playError();
+    }
+  };
+
+  const handleClearTimetable = () => {
+    onUpdateTimetable([]);
+    setIsClearTimetableConfirmOpen(false);
+    setToastFeedback({
+      message: '🗑️ Đã xóa sạch toàn bộ Thời khóa biểu.',
+      type: 'info',
+    });
+    soundEngine.playTick(0.8);
+  };
+
+  // =========================================================================
+  // EXCEL HANDLERS FOR TEACHING PLAN (SỔ BÁO GIẢNG)
+  // =========================================================================
+  const handleDownloadPlanTemplate = () => {
+    try {
+      downloadVnEduTeachingPlanTemplate(classes);
+      setToastFeedback({
+        message: '📥 Đã tải file mẫu Sổ báo giảng vnEdu (.xlsx) thành công!',
+        type: 'success',
+      });
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: 'Không thể tải file mẫu: ' + (err.message || ''),
+        type: 'error',
+      });
+      soundEngine.playError();
+    }
+  };
+
+  const handlePlanFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await parseTeachingPlanFromExcel(file, classes);
+      setParsedPlanData(result);
+      setIsPlanPreviewOpen(true);
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: err.message || 'Lỗi khi đọc file Sổ báo giảng.',
+        type: 'error',
+      });
+      soundEngine.playError();
+    } finally {
+      if (planFileInputRef.current) {
+        planFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleConfirmPlanImport = () => {
+    if (!parsedPlanData || parsedPlanData.items.length === 0) return;
+
+    if (planImportMode === 'REPLACE') {
+      onUpdateTeachingPlan(parsedPlanData.items);
+    } else {
+      onUpdateTeachingPlan([...teachingPlan, ...parsedPlanData.items]);
+    }
+
+    setIsPlanPreviewOpen(false);
+    setToastFeedback({
+      message: `✅ Đã nhập thành công ${parsedPlanData.items.length} tiết vào Sổ báo giảng!`,
+      type: 'success',
+    });
+    setParsedPlanData(null);
+    soundEngine.playSuccess();
+  };
+
+  const handleExportTeachingPlan = () => {
+    if (teachingPlan.length === 0) {
+      setToastFeedback({
+        message: 'Chưa có tiết báo giảng nào để xuất file.',
+        type: 'info',
+      });
+      return;
+    }
+    try {
+      exportTeachingPlanToExcel(teachingPlan);
+      setToastFeedback({
+        message: '📗 Đã xuất file Sổ báo giảng chuẩn vnEdu thành công!',
+        type: 'success',
+      });
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: 'Lỗi khi xuất file: ' + (err.message || ''),
+        type: 'error',
+      });
+      soundEngine.playError();
+    }
+  };
+
+  const handleClearTeachingPlan = () => {
+    onUpdateTeachingPlan([]);
+    setIsClearPlanConfirmOpen(false);
+    setToastFeedback({
+      message: '🗑️ Đã xóa toàn bộ Sổ báo giảng.',
+      type: 'info',
+    });
+    soundEngine.playTick(0.8);
+  };
+
   const filteredPlans = teachingPlan.filter(
     (p) => selectedClassFilter === 'ALL' || p.classId === selectedClassFilter
   );
@@ -224,6 +467,79 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
       {/* SUB-TAB 1: TIMETABLE */}
       {activeSubTab === 'TIMETABLE' && (
         <div className="space-y-4">
+          {/* Hidden File Input for Timetable */}
+          <input
+            type="file"
+            ref={timetableFileInputRef}
+            accept=".xlsx, .xls"
+            className="hidden"
+            onChange={handleTimetableFileChange}
+          />
+
+          {/* Action Toolbar for Timetable */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-sky-400" />
+                <span>Thời Khóa Biểu:</span>
+              </span>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
+                {timetable.length} tiết / tuần
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+                Tương thích vnEdu & SMAS
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Tải mẫu Excel */}
+              <button
+                type="button"
+                onClick={handleDownloadTimetableTemplate}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                title="Tải file Excel mẫu Thời khóa biểu chuẩn vnEdu (kèm dữ liệu mẫu thực tế)"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>Tải Mẫu vnEdu (.xlsx)</span>
+              </button>
+
+              {/* Nhập từ Excel */}
+              <button
+                type="button"
+                onClick={() => timetableFileInputRef.current?.click()}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-indigo-600/30"
+                title="Nhập file Thời khóa biểu xuất từ vnEdu hoặc điền theo mẫu"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Nhập TKB Từ Excel</span>
+              </button>
+
+              {/* Xuất Excel */}
+              <button
+                type="button"
+                onClick={handleExportTimetable}
+                disabled={timetable.length === 0}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-emerald-600/20"
+                title="Xuất Thời khóa biểu tuần ra file Excel chuẩn vnEdu"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Xuất TKB Chuẩn vnEdu</span>
+              </button>
+
+              {/* Xóa TKB */}
+              {timetable.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsClearTimetableConfirmOpen(true)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  title="Xóa tất cả các tiết trong Thời khóa biểu"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Today's Alert */}
           <div className="bg-gradient-to-r from-sky-950/60 via-indigo-950/60 to-slate-900 border border-sky-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
             <div className="flex items-center gap-2.5">
@@ -373,6 +689,79 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
       {/* SUB-TAB 2: TEACHING LOG (SỔ BÁO GIẢNG TỰ ĐỘNG) */}
       {activeSubTab === 'TEACHING_LOG' && (
         <div className="space-y-6">
+          {/* Hidden File Input for Teaching Plan */}
+          <input
+            type="file"
+            ref={planFileInputRef}
+            accept=".xlsx, .xls"
+            className="hidden"
+            onChange={handlePlanFileChange}
+          />
+
+          {/* Action Toolbar for Teaching Plan */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-emerald-400" />
+                <span>Sổ Báo Giảng:</span>
+              </span>
+              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                {teachingPlan.length} tiết ({teachingPlan.filter((p) => p.isCompleted).length} đã hoàn thành)
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">
+                Chuẩn Bộ GD&ĐT / vnEdu
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Tải mẫu Excel Sổ báo giảng */}
+              <button
+                type="button"
+                onClick={handleDownloadPlanTemplate}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                title="Tải file Excel mẫu Sổ báo giảng chuẩn vnEdu (kèm các tuần mẫu thực tế)"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>Tải Mẫu vnEdu (.xlsx)</span>
+              </button>
+
+              {/* Nhập từ Excel */}
+              <button
+                type="button"
+                onClick={() => planFileInputRef.current?.click()}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-indigo-600/30"
+                title="Nhập file Sổ báo giảng xuất từ vnEdu hoặc file Excel mẫu"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>Nhập Báo Giảng Từ Excel</span>
+              </button>
+
+              {/* Xuất Excel */}
+              <button
+                type="button"
+                onClick={handleExportTeachingPlan}
+                disabled={teachingPlan.length === 0}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-emerald-600/20"
+                title="Xuất toàn bộ Sổ báo giảng ra file Excel chuẩn vnEdu"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Xuất Báo Giảng Chuẩn vnEdu</span>
+              </button>
+
+              {/* Xóa Sổ báo giảng */}
+              {teachingPlan.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsClearPlanConfirmOpen(true)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  title="Xóa tất cả các tiết trong Sổ báo giảng"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Add Teaching Log Form */}
           <form
             onSubmit={handleAddTeachingPlan}
@@ -680,6 +1069,405 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: PREVIEW NHẬP THỜI KHÓA BIỂU TỪ EXCEL (vnEdu)                     */}
+      {/* ========================================================================= */}
+      {isTimetablePreviewOpen && parsedTimetableData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden p-6 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg border border-indigo-500/30">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    Xem Trước Thời Khóa Biểu vnEdu
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                    <span>
+                      Định dạng:{' '}
+                      <strong className="text-amber-300">
+                        {parsedTimetableData.detectedFormat === 'MATRIX'
+                          ? 'Ma trận lưới tuần vnEdu'
+                          : 'Bảng danh sách phân công vnEdu'}
+                      </strong>
+                    </span>
+                    <span>•</span>
+                    <span>
+                      Nhận diện: <strong className="text-emerald-400">{parsedTimetableData.slots.length} tiết dạy</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsTimetablePreviewOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mode selection */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+              <span className="text-xs font-bold text-slate-300 block">
+                Phương thức áp dụng vào Thời khóa biểu:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label
+                  className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                    timetableImportMode === 'REPLACE'
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="timetableImportMode"
+                    value="REPLACE"
+                    checked={timetableImportMode === 'REPLACE'}
+                    onChange={() => setTimetableImportMode('REPLACE')}
+                    className="accent-indigo-500"
+                  />
+                  <div>
+                    <div>Ghi đè hoàn toàn (Khuyên dùng)</div>
+                    <div className="text-[10px] text-slate-400 font-normal">
+                      Thay thế lịch cũ bằng toàn bộ lịch mới từ file Excel
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                    timetableImportMode === 'APPEND'
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="timetableImportMode"
+                    value="APPEND"
+                    checked={timetableImportMode === 'APPEND'}
+                    onChange={() => setTimetableImportMode('APPEND')}
+                    className="accent-indigo-500"
+                  />
+                  <div>
+                    <div>Bổ sung / Ghép thêm</div>
+                    <div className="text-[10px] text-slate-400 font-normal">
+                      Giữ các tiết cũ, chỉ cập nhật hoặc chèn thêm tiết mới
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Preview table */}
+            <div className="flex-1 overflow-y-auto border border-slate-800 rounded-2xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-950 sticky top-0 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
+                  <tr>
+                    <th className="p-2.5">STT</th>
+                    <th className="p-2.5">Thứ</th>
+                    <th className="p-2.5">Tiết</th>
+                    <th className="p-2.5">Lớp</th>
+                    <th className="p-2.5">Môn</th>
+                    <th className="p-2.5">Phòng</th>
+                    <th className="p-2.5">Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {parsedTimetableData.slots.map((slot, idx) => (
+                    <tr key={slot.id} className="hover:bg-slate-800/40">
+                      <td className="p-2.5 text-slate-500">{idx + 1}</td>
+                      <td className="p-2.5 font-bold text-sky-300">Thứ {slot.dayOfWeek}</td>
+                      <td className="p-2.5 font-semibold text-slate-200">Tiết {slot.period}</td>
+                      <td className="p-2.5 font-black text-amber-300">Lớp {slot.className}</td>
+                      <td className="p-2.5 text-slate-300">{slot.subject}</td>
+                      <td className="p-2.5 text-slate-400">{slot.room || '-'}</td>
+                      <td className="p-2.5 text-slate-500 text-[11px] italic">{slot.note || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-xs text-slate-400">
+                Tổng cộng: <strong className="text-white">{parsedTimetableData.slots.length}</strong> tiết hợp lệ
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTimetablePreviewOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmTimetableImport}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5"
+                >
+                  <FileCheck className="w-4 h-4" />
+                  <span>Xác Nhận Áp Dụng TKB</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: PREVIEW NHẬP SỔ BÁO GIẢNG TỪ EXCEL (vnEdu)                       */}
+      {/* ========================================================================= */}
+      {isPlanPreviewOpen && parsedPlanData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden p-6 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg border border-emerald-500/30">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">
+                    Xem Trước Sổ Báo Giảng vnEdu
+                  </h3>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    Đã đọc được:{' '}
+                    <strong className="text-emerald-400">{parsedPlanData.items.length} tiết bài dạy</strong> từ file Excel
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPlanPreviewOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mode selection */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+              <span className="text-xs font-bold text-slate-300 block">
+                Phương thức nạp vào Sổ báo giảng:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <label
+                  className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                    planImportMode === 'APPEND'
+                      ? 'bg-emerald-600/20 border-emerald-500 text-white font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="planImportMode"
+                    value="APPEND"
+                    checked={planImportMode === 'APPEND'}
+                    onChange={() => setPlanImportMode('APPEND')}
+                    className="accent-emerald-500"
+                  />
+                  <div>
+                    <div>Bổ sung thêm vào sổ hiện có (Khuyên dùng)</div>
+                    <div className="text-[10px] text-slate-400 font-normal">
+                      Thêm các tuần/tiết mới vào danh sách bài dạy hiện có
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                    planImportMode === 'REPLACE'
+                      ? 'bg-emerald-600/20 border-emerald-500 text-white font-bold'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="planImportMode"
+                    value="REPLACE"
+                    checked={planImportMode === 'REPLACE'}
+                    onChange={() => setPlanImportMode('REPLACE')}
+                    className="accent-emerald-500"
+                  />
+                  <div>
+                    <div>Ghi đè / Thay thế toàn bộ sổ</div>
+                    <div className="text-[10px] text-slate-400 font-normal">
+                      Xóa toàn bộ các tiết hiện có và thay bằng dữ liệu trong file
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Preview table */}
+            <div className="flex-1 overflow-y-auto border border-slate-800 rounded-2xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-slate-950 sticky top-0 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
+                  <tr>
+                    <th className="p-2.5">Tuần</th>
+                    <th className="p-2.5">Lớp</th>
+                    <th className="p-2.5">Tiết PPCT</th>
+                    <th className="p-2.5">Tên bài dạy / Nội dung</th>
+                    <th className="p-2.5">Ghi chú / ĐDDH</th>
+                    <th className="p-2.5">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {parsedPlanData.items.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-800/40">
+                      <td className="p-2.5 font-bold text-sky-400">Tuần {item.week}</td>
+                      <td className="p-2.5 font-black text-amber-300">Lớp {item.className}</td>
+                      <td className="p-2.5 font-semibold text-slate-300">Tiết {item.periodNumber}</td>
+                      <td className="p-2.5 text-white font-medium">{item.lessonTitle}</td>
+                      <td className="p-2.5 text-slate-400 text-[11px] italic">{item.notes || '-'}</td>
+                      <td className="p-2.5">
+                        {item.isCompleted ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                            Đã dạy
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-[10px]">Chưa dạy</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-xs text-slate-400">
+                Tìm thấy: <strong className="text-white">{parsedPlanData.items.length}</strong> bài dạy
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPlanPreviewOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmPlanImport}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5"
+                >
+                  <FileCheck className="w-4 h-4" />
+                  <span>Xác Nhận Nhập Báo Giảng</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: XÁC NHẬN XÓA TOÀN BỘ TKB                                          */}
+      {/* ========================================================================= */}
+      {isClearTimetableConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-rose-500/40 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/30">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-base font-black text-white">Xóa Sạch Thời Khóa Biểu?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Toàn bộ {timetable.length} tiết học trong Thời khóa biểu tuần sẽ bị xóa. Thao tác này không thể hoàn tác nếu chưa xuất file sao lưu.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearTimetableConfirmOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleClearTimetable}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: XÁC NHẬN XÓA TOÀN BỘ SỔ BÁO GIẢNG                                */}
+      {/* ========================================================================= */}
+      {isClearPlanConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-rose-500/40 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/30">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-base font-black text-white">Xóa Sạch Sổ Báo Giảng?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Toàn bộ {teachingPlan.length} tiết báo giảng đã lên lịch sẽ bị xóa. Thầy cô nên bấm "Xuất Báo Giảng Chuẩn vnEdu" trước để lưu trữ.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearPlanConfirmOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleClearTeachingPlan}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* FLOATING TOAST NOTIFICATION                                               */}
+      {/* ========================================================================= */}
+      {toastFeedback && (
+        <div className="fixed bottom-6 right-6 z-50 animate-bounce-in max-w-md">
+          <div
+            className={`px-4 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 backdrop-blur-md ${
+              toastFeedback.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+                : toastFeedback.type === 'error'
+                ? 'bg-rose-950/90 border-rose-500/50 text-rose-200'
+                : 'bg-sky-950/90 border-sky-500/50 text-sky-200'
+            }`}
+          >
+            {toastFeedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+            {toastFeedback.type === 'error' && <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />}
+            {toastFeedback.type === 'info' && <Sparkles className="w-5 h-5 text-sky-400 shrink-0" />}
+            <span className="text-xs font-bold">{toastFeedback.message}</span>
+            <button
+              type="button"
+              onClick={() => setToastFeedback(null)}
+              className="ml-auto text-slate-400 hover:text-white"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}

@@ -85,7 +85,7 @@ export type SelectionMode = 'FAIR' | 'PURE';
 
 export type NameDisplayStyle = 'FULL_NAME' | 'STT_NAME' | 'ONLY_STT' | 'FIRST_NAME_ONLY' | 'CODE_NAME';
 
-export type CallTargetFilter = 'ALL' | 'FEMALE_ONLY' | 'MALE_ONLY' | 'NO_SCORE_TX1';
+export type CallTargetFilter = 'ALL' | 'FEMALE_ONLY' | 'MALE_ONLY' | 'NO_SCORE_TX1' | 'STT_RANGE';
 
 export type WheelSizeOption = 'STANDARD' | 'LARGE' | 'XLARGE';
 
