@@ -59,6 +59,10 @@ import { WheelVisual } from './visuals/WheelVisual';
 import { SlotVisual } from './visuals/SlotVisual';
 import { CardsVisual } from './visuals/CardsVisual';
 import { ChestVisual } from './visuals/ChestVisual';
+import { BalloonVisual } from './visuals/BalloonVisual';
+import { HorseRaceVisual } from './visuals/HorseRaceVisual';
+import { DuckRaceVisual } from './visuals/DuckRaceVisual';
+import { RocketVisual } from './visuals/RocketVisual';
 
 interface SpinScreenProps {
   activeClass: ClassRoom;
@@ -570,6 +574,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     { id: 'SLOT', label: 'Dải Cuộn', icon: <Layers className="w-4 h-4" /> },
     { id: 'CARDS', label: 'Lật Thẻ Bài', icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'CHEST', label: 'Hộp May Mắn', icon: <Gift className="w-4 h-4" /> },
+  { id: 'BALLOON', label: 'Bong Bóng', icon: <span className="text-base">🎈</span> },
+  { id: 'HORSE_RACE', label: 'Đua Ngựa', icon: <span className="text-base">🏇</span> },
+  { id: 'DUCK_RACE', label: 'Đua Vịt', icon: <span className="text-base">🦆</span> },
+  { id: 'ROCKET', label: 'Tên Lửa', icon: <span className="text-base">🚀</span> },
   ];
 
   return (
@@ -1116,6 +1124,18 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : null}
             />
+          )}
+          {visualType === 'BALLOON' && (
+            <BalloonVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+          )}
+          {visualType === 'HORSE_RACE' && (
+            <HorseRaceVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+          )}
+          {visualType === 'DUCK_RACE' && (
+            <DuckRaceVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+          )}
+          {visualType === 'ROCKET' && (
+            <RocketVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
           )}
         </div>
 
