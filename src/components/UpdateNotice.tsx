@@ -33,7 +33,7 @@ export const UpdateNotice: React.FC = () => {
         </div>
         <div className="space-y-3 px-6 py-5 text-sm text-slate-200">
           <p><strong>🎈 Bong bóng</strong> — hiệu ứng chọn tên sinh động.</p>
-          <p><strong>🏇 Đua ngựa · 🦆 Đua vịt · 🚀 Tên lửa</strong> — thêm lựa chọn trình diễn khi gọi học sinh.</p>
+          <p><strong>🏇 Đua ngựa · 🚣 Đua thuyền · 🚀 Tên lửa</strong> — thêm lựa chọn trình diễn khi gọi học sinh.</p>
           <p><strong>👦 Nam · 👧 Nữ</strong> — lọc nhanh đối tượng quay; phần chọn khoảng STT cũng đã gọn hơn.</p>
           <p className="rounded-xl bg-emerald-950/50 px-3 py-2 text-emerald-300">Dữ liệu lớp, điểm và lịch sử của bạn vẫn được giữ nguyên.</p>
           <button onClick={close} className="mt-1 w-full rounded-xl bg-indigo-500 px-4 py-2.5 font-black text-white hover:bg-indigo-400">Khám phá ngay</button>

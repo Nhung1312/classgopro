@@ -61,7 +61,7 @@ import { CardsVisual } from './visuals/CardsVisual';
 import { ChestVisual } from './visuals/ChestVisual';
 import { BalloonVisual } from './visuals/BalloonVisual';
 import { HorseRaceVisual } from './visuals/HorseRaceVisual';
-import { DuckRaceVisual } from './visuals/DuckRaceVisual';
+import { BoatRaceVisual } from './visuals/BoatRaceVisual';
 import { RocketVisual } from './visuals/RocketVisual';
 
 interface SpinScreenProps {
@@ -131,6 +131,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayName, setDisplayName] = useState<string>('???');
+  const [targetWinner, setTargetWinner] = useState<Student | null>(null);
   const [selectedResult, setSelectedResult] = useState<MultiSelectionResult | null>(null);
   const [hasCompleted, setHasCompleted] = useState(false);
   const [quickScore, setQuickScore] = useState<string>('');
@@ -243,6 +244,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     const result = chooseMultipleStudents(candidatePool, effectiveCount, selectionMode);
     if (!result || result.selectedStudents.length === 0) return;
 
+    setTargetWinner(result.selectedStudents[0]);
     setIsSpinning(true);
     setHasCompleted(false);
     setSelectedResult(null);
@@ -577,7 +579,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     { id: 'CHEST', label: 'Hộp May Mắn', icon: <Gift className="w-4 h-4" /> },
   { id: 'BALLOON', label: 'Bong Bóng', icon: <span className="text-base">🎈</span> },
   { id: 'HORSE_RACE', label: 'Đua Ngựa', icon: <span className="text-base">🏇</span> },
-  { id: 'DUCK_RACE', label: 'Đua Vịt', icon: <span className="text-base">🦆</span> },
+  { id: 'BOAT_RACE', label: 'Đua Thuyền', icon: <span className="text-base">🚣</span> },
   { id: 'ROCKET', label: 'Tên Lửa', icon: <span className="text-base">🚀</span> },
   ];
 
@@ -874,7 +876,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           {/* Call Target Filter - quick chips for classroom use */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5 text-amber-400" />
+              <Filter className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden sm:inline">Đối tượng:</span>
             </span>
             <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/70 flex-wrap">
@@ -895,7 +897,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                   disabled={isSpinning}
                   className={`px-2.5 py-1 rounded-lg font-bold transition-all whitespace-nowrap ${
                     targetFilter === item.id
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
                   } disabled:opacity-50 disabled:pointer-events-none`}
                   title={
@@ -1040,7 +1042,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                 students={targetCandidates.length > 0 ? targetCandidates : eligibleStudents}
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
-                winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+                winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
                 currentAngle={wheelAngle}
                 size={WHEEL_SIZES[wheelSizeOption].size}
                 nameStyle={nameStyle}
@@ -1123,20 +1125,51 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               displayName={displayName}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
             />
           )}
           {visualType === 'BALLOON' && (
-            <BalloonVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <BalloonVisual
+              students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
+              isSpinning={isSpinning}
+              hasCompleted={hasCompleted}
+              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
+              selectedStudents={selectedResult?.selectedStudents}
+              duration={settings.spinDuration || 3800}
+              allClassStudents={students}
+            />
           )}
           {visualType === 'HORSE_RACE' && (
-            <HorseRaceVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <HorseRaceVisual
+              students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
+              isSpinning={isSpinning}
+              hasCompleted={hasCompleted}
+              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
+              selectedStudents={selectedResult?.selectedStudents}
+              duration={settings.spinDuration || 3800}
+            />
           )}
-          {visualType === 'DUCK_RACE' && (
-            <DuckRaceVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+          {(visualType === 'BOAT_RACE' || (visualType as string) === 'DUCK_RACE') && (
+            <BoatRaceVisual
+              students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
+              isSpinning={isSpinning}
+              hasCompleted={hasCompleted}
+              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
+              selectedStudents={selectedResult?.selectedStudents}
+              duration={settings.spinDuration || 3800}
+              allClassStudents={students}
+            />
           )}
           {visualType === 'ROCKET' && (
-            <RocketVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <RocketVisual
+              students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
+              isSpinning={isSpinning}
+              hasCompleted={hasCompleted}
+              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
+              selectedStudents={selectedResult?.selectedStudents}
+              duration={settings.spinDuration || 3800}
+              allClassStudents={students}
+            />
           )}
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Student, NameDisplayStyle } from '../../types';
 import { formatStudentDisplayName } from '../../utils/studentDisplay';
 
@@ -14,21 +14,30 @@ interface WheelVisualProps {
   allClassStudents?: Student[];
 }
 
-// Crisp vibrant color palette for wheel slices
+// Sophisticated ClassGo palette: slate/navy, soft indigo, blue, emerald, amber, soft red (no neon purple or harsh orange)
 const SLICE_COLORS = [
-  '#ef4444', // Red
-  '#f97316', // Orange
-  '#f59e0b', // Amber
-  '#10b981', // Emerald
-  '#06b6d4', // Cyan
   '#3b82f6', // Blue
+  '#4f46e5', // Indigo
+  '#0ea5e9', // Sky
+  '#10b981', // Emerald
+  '#f59e0b', // Soft Amber
+  '#ef4444', // Soft Red
+  '#0d9488', // Teal
   '#6366f1', // Indigo
-  '#8b5cf6', // Violet
-  '#ec4899', // Pink
-  '#14b8a6', // Teal
-  '#84cc16', // Lime
-  '#d946ef', // Fuchsia
+  '#64748b', // Slate
+  '#8b5cf6', // Muted Violet
+  '#0284c7', // Deep Sky
+  '#059669', // Forest Emerald
 ];
+
+interface FlyingLetter {
+  char: string;
+  index: number;
+  scatterX: number;
+  scatterY: number;
+  scatterRotate: number;
+  scatterScale: number;
+}
 
 export const WheelVisual: React.FC<WheelVisualProps> = ({
   students,
@@ -42,6 +51,58 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
   allClassStudents,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Winner's display name for letter assembly
+  const winnerDisplayName = useMemo(() => {
+    if (!winner) return '';
+    return formatStudentDisplayName(
+      winner,
+      allClassStudents || students,
+      nameStyle as NameDisplayStyle,
+      false
+    );
+  }, [winner, allClassStudents, students, nameStyle]);
+
+  // Generate letter state for flying effect
+  const [letters, setLetters] = useState<FlyingLetter[]>([]);
+
+  // Update letters when winner or spinning state changes
+  useEffect(() => {
+    if (!winnerDisplayName) {
+      setLetters([]);
+      return;
+    }
+
+    const chars = winnerDisplayName.split('');
+    const newLetters: FlyingLetter[] = chars.map((char, index) => ({
+      char,
+      index,
+      scatterX: (Math.random() - 0.5) * 220,
+      scatterY: (Math.random() - 0.5) * 60 - 20,
+      scatterRotate: (Math.random() - 0.5) * 50,
+      scatterScale: 0.85 + Math.random() * 0.35,
+    }));
+    setLetters(newLetters);
+  }, [winnerDisplayName]);
+
+  // While spinning, periodically animate the flying scattered letters
+  useEffect(() => {
+    if (!isSpinning || letters.length === 0) return;
+
+    const interval = setInterval(() => {
+      setLetters((prev) =>
+        prev.map((l) => ({
+          ...l,
+          scatterX: (Math.random() - 0.5) * 240,
+          scatterY: (Math.random() - 0.5) * 70 - 15,
+          scatterRotate: (Math.random() - 0.5) * 60,
+          scatterScale: 0.8 + Math.random() * 0.4,
+        }))
+      );
+    }, 160);
+
+    return () => clearInterval(interval);
+  }, [isSpinning, letters.length]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -65,10 +126,10 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
       // Empty wheel placeholder
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = '#1e293b';
+      ctx.fillStyle = '#0f172a';
       ctx.fill();
       ctx.lineWidth = 4 * scaleFactor;
-      ctx.strokeStyle = '#475569';
+      ctx.strokeStyle = '#334155';
       ctx.stroke();
 
       ctx.fillStyle = '#94a3b8';
@@ -80,13 +141,13 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     }
 
     const totalStudents = students.length;
-    // Cap visual slices if too many students to keep text legible, but map accurately
+    // Cap visual slices if too many students to keep text legible
     const maxVisualSlices = Math.min(totalStudents, 36);
     const sliceAngle = (2 * Math.PI) / maxVisualSlices;
 
     ctx.save();
     ctx.translate(centerX, centerY);
-    // currentAngle in radians (0 is at 3 o'clock; we want pointer at top 12 o'clock so offset -PI/2)
+    // currentAngle in radians (0 is at 3 o'clock; offset -PI/2 for top 12 o'clock pointer)
     ctx.rotate((currentAngle * Math.PI) / 180 - Math.PI / 2);
 
     // Draw slices
@@ -103,7 +164,7 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
       ctx.closePath();
 
       if (isWinnerSlice) {
-        ctx.fillStyle = '#fbbf24'; // Bright gold for winner
+        ctx.fillStyle = '#fbbf24'; // Warm gold for winner
       } else {
         ctx.fillStyle = SLICE_COLORS[i % SLICE_COLORS.length];
       }
@@ -160,15 +221,15 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
 
     ctx.restore();
 
-    // Outer wheel ring (metallic frame)
+    // Outer wheel ring (metallic frame with ClassGo navy/indigo theme)
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
     ctx.lineWidth = Math.round(9 * scaleFactor);
     const grad = ctx.createLinearGradient(0, 0, size, size);
     grad.addColorStop(0, '#f59e0b');
-    grad.addColorStop(0.5, '#6366f1');
-    grad.addColorStop(1, '#3b82f6');
-    ctx.strokeStyle = isSpinning ? grad : hasCompleted ? '#10b981' : '#475569';
+    grad.addColorStop(0.5, '#4f46e5');
+    grad.addColorStop(1, '#0284c7');
+    ctx.strokeStyle = isSpinning ? grad : hasCompleted ? '#10b981' : '#334155';
     ctx.stroke();
 
     // Decorative outer studs
@@ -189,7 +250,7 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.lineWidth = Math.round(4 * scaleFactor);
-    ctx.strokeStyle = hasCompleted ? '#fbbf24' : '#6366f1';
+    ctx.strokeStyle = hasCompleted ? '#fbbf24' : '#4f46e5';
     ctx.stroke();
 
     // Center Icon / Sparkle
@@ -208,7 +269,7 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
     ctx.lineTo(centerX + pointerW, 4);
     ctx.lineTo(centerX, pointerH);
     ctx.closePath();
-    ctx.fillStyle = '#f43f5e';
+    ctx.fillStyle = '#ef4444';
     ctx.fill();
     ctx.lineWidth = Math.max(2, 2.5 * scaleFactor);
     ctx.strokeStyle = '#ffffff';
@@ -224,15 +285,52 @@ export const WheelVisual: React.FC<WheelVisualProps> = ({
 
   return (
     <div className="relative flex flex-col items-center justify-center select-none py-2">
-      {/* Outer ambient glow */}
+      {/* Flying & Converging Letters Banner above the wheel */}
+      {(isSpinning || hasCompleted) && winnerDisplayName && (
+        <div className="mb-2 h-11 flex items-center justify-center relative z-20 overflow-visible px-4">
+          <div className="relative flex items-center justify-center min-w-[200px]">
+            {letters.map((item) => {
+              const isSpace = item.char === ' ';
+              // When spinning: scattered; when completed: perfectly converged (0, 0, 0)
+              const posX = hasCompleted ? 0 : item.scatterX;
+              const posY = hasCompleted ? 0 : item.scatterY;
+              const rot = hasCompleted ? 0 : item.scatterRotate;
+              const scale = hasCompleted ? 1 : item.scatterScale;
+
+              return (
+                <span
+                  key={item.index}
+                  style={{
+                    transform: `translate(${posX}px, ${posY}px) rotate(${rot}deg) scale(${scale})`,
+                    transition: hasCompleted
+                      ? 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s, color 0.3s'
+                      : 'transform 0.16s ease-out',
+                  }}
+                  className={`inline-flex items-center justify-center font-black ${
+                    isSpace
+                      ? 'w-2.5 sm:w-3'
+                      : hasCompleted
+                      ? 'px-1 sm:px-1.5 py-0.5 mx-0.5 rounded-lg bg-amber-400 text-slate-950 text-base sm:text-xl shadow-md border border-amber-200'
+                      : 'px-1 sm:px-1.5 py-0.5 mx-0.5 rounded-lg bg-indigo-900/90 text-indigo-100 text-sm sm:text-base border border-indigo-400/50 shadow-md backdrop-blur-sm'
+                  }`}
+                >
+                  {isSpace ? '\u00A0' : item.char}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Outer ambient glow in subtle navy/indigo or amber */}
       <div
         style={{ width: Math.round(size * 0.75), height: Math.round(size * 0.75) }}
         className={`absolute rounded-full blur-3xl transition-opacity duration-500 pointer-events-none ${
           isSpinning
-            ? 'bg-indigo-500/30 opacity-100 scale-110'
+            ? 'bg-indigo-500/25 opacity-100 scale-110'
             : hasCompleted
-            ? 'bg-amber-400/30 opacity-100 scale-120'
-            : 'bg-slate-700/10 opacity-30'
+            ? 'bg-amber-400/25 opacity-100 scale-120'
+            : 'bg-slate-800/10 opacity-30'
         }`}
       />
 
