@@ -862,36 +862,47 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
             </select>
           </div>
 
-          {/* Call Target Filter */}
-          <div className="flex items-center gap-1.5">
+          {/* Call Target Filter - quick chips for classroom use */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-slate-400 font-semibold flex items-center gap-1">
               <Filter className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Đối tượng:</span>
             </span>
-            <select
-              value={targetFilter}
-              onChange={(e) => {
-                setTargetFilter(e.target.value as CallTargetFilter);
-                soundEngine.playTick(1.1);
-              }}
-              disabled={isSpinning}
-              className="bg-slate-800 border border-slate-700 text-slate-200 rounded-xl px-2.5 py-1 font-bold text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-              title="Lọc nhóm học sinh ưu tiên kiểm tra"
-            >
-              <option value="ALL">Toàn bộ lớp ({eligibleStudents.length})</option>
-              <option value="STT_RANGE">
-                🔢 Theo khoảng STT ({targetFilter === 'STT_RANGE' ? `${targetCandidates.length} bạn` : 'Từ STT... đến...'})
-              </option>
-              {studentsWithoutTx1.length > 0 && (
-                <option value="NO_SCORE_TX1">Chưa có điểm TX1 ({studentsWithoutTx1.length})</option>
-              )}
-              {femaleStudents.length > 0 && (
-                <option value="FEMALE_ONLY">Chỉ học sinh Nữ ({femaleStudents.length})</option>
-              )}
-              {maleStudents.length > 0 && (
-                <option value="MALE_ONLY">Chỉ học sinh Nam ({maleStudents.length})</option>
-              )}
-            </select>
+            <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/70 flex-wrap">
+              {[
+                { id: 'ALL' as CallTargetFilter, label: `Tất cả (${eligibleStudents.length})` },
+                { id: 'MALE_ONLY' as CallTargetFilter, label: `👦 Nam (${maleStudents.length})` },
+                { id: 'FEMALE_ONLY' as CallTargetFilter, label: `👧 Nữ (${femaleStudents.length})` },
+                { id: 'NO_SCORE_TX1' as CallTargetFilter, label: `📝 Chưa TX1 (${studentsWithoutTx1.length})` },
+                { id: 'STT_RANGE' as CallTargetFilter, label: '🔢 Theo STT' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setTargetFilter(item.id);
+                    soundEngine.playTick(1.1);
+                  }}
+                  disabled={isSpinning}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    targetFilter === item.id
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                  } disabled:opacity-50 disabled:pointer-events-none`}
+                  title={
+                    item.id === 'MALE_ONLY'
+                      ? 'Chỉ quay trong nhóm học sinh Nam đã có thông tin giới tính'
+                      : item.id === 'FEMALE_ONLY'
+                      ? 'Chỉ quay trong nhóm học sinh Nữ đã có thông tin giới tính'
+                      : item.id === 'STT_RANGE'
+                      ? 'Chọn học sinh theo khoảng số thứ tự'
+                      : 'Lọc nhóm học sinh ưu tiên kiểm tra'
+                  }
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -900,10 +911,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2.5 bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-amber-950/40 border border-amber-500/40 rounded-2xl px-3 py-2 text-xs shadow-md animate-fade-in">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-amber-300 font-extrabold flex items-center gap-1.5 text-xs">
-                <span>🔢 Giới hạn STT:</span>
+                <span>🔢 Khoảng STT</span>
               </span>
               <div className="flex items-center gap-1.5">
-                <span className="text-slate-300 font-medium">Từ STT</span>
+                <span className="text-slate-400 font-medium">Từ</span>
                 <input
                   type="number"
                   min={1}
@@ -920,7 +931,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                   disabled={isSpinning}
                   className="w-14 bg-slate-950 border border-amber-500/60 rounded-xl px-2 py-1 text-center font-mono font-black text-amber-200 text-xs focus:ring-2 focus:ring-amber-400 focus:outline-none shadow-inner"
                 />
-                <span className="text-slate-300 font-medium">đến STT</span>
+                <span className="text-slate-500 font-black">→</span>
                 <input
                   type="number"
                   min={sttFrom}
