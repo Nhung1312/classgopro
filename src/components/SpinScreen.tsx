@@ -235,7 +235,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     if (isSpinning || eligibleStudents.length === 0) return;
 
     // 1. Filter candidates according to selected targetFilter
-    const candidatePool = targetCandidates.length > 0 ? targetCandidates : eligibleStudents;
+    const candidatePool = targetFilter === 'ALL' ? eligibleStudents : targetCandidates;
+    if (candidatePool.length === 0) return;
 
     // 2. Run algorithm FIRST to guarantee determinism
     const effectiveCount = Math.min(pickCount, candidatePool.length);
@@ -1126,16 +1127,16 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
             />
           )}
           {visualType === 'BALLOON' && (
-            <BalloonVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <BalloonVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
           )}
           {visualType === 'HORSE_RACE' && (
-            <HorseRaceVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <HorseRaceVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
           )}
           {visualType === 'DUCK_RACE' && (
-            <DuckRaceVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <DuckRaceVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
           )}
           {visualType === 'ROCKET' && (
-            <RocketVisual displayName={displayName} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
+            <RocketVisual students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates} isSpinning={isSpinning} hasCompleted={hasCompleted} winner={selectedResult ? selectedResult.selectedStudents[0] : null} />
           )}
         </div>
 
