@@ -77,6 +77,7 @@ import { AuthModal } from './components/AuthModal';
 import { UpgradeProModal } from './components/UpgradeProModal';
 import { PaymentHistoryModal } from './components/PaymentHistoryModal';
 import { SubscriptionExpiredModal } from './components/SubscriptionExpiredModal';
+import { UpdateNotice } from './components/UpdateNotice';
 
 export default function App() {
   // 1. Core State
@@ -1188,6 +1189,9 @@ export default function App() {
         onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
         userEmail={currentUser?.email || undefined}
       />
+
+      {/* One-time release notice: local UI only, does not touch teacher/student data */}
+      <UpdateNotice />
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-3 text-center text-xs text-slate-500">
