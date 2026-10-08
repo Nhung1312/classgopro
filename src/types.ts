@@ -4,6 +4,7 @@ export interface Student {
   callCount: number;
   gender?: 'nam' | 'nu' | 'khac';
   studentCode?: string;
+  parentPhone?: string; // SĐT phụ huynh (luồng thông tin học sinh)
   notes?: string;
   lastCalledAt?: string;
   isAbsent?: boolean; // Temporary absent for today's session

@@ -13,6 +13,7 @@ import {
   Calendar,
   Award,
   BookOpen,
+  Phone,
 } from 'lucide-react';
 import { Student, DisciplineRecord, DisciplineViolationType } from '../types';
 
@@ -211,6 +212,11 @@ export const StudentProfileCard: React.FC<StudentProfileCardProps> = ({
                     | Giới tính: {student.gender === 'nam' ? 'Nam' : student.gender === 'nu' ? 'Nữ' : 'Khác'}
                   </span>
                 )}
+                {student.parentPhone && (
+                  <span className="text-emerald-400 font-mono flex items-center gap-1">
+                    | SĐT PH: {student.parentPhone}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -378,6 +384,12 @@ export const StudentProfileCard: React.FC<StudentProfileCardProps> = ({
                   {student.studentCode && (
                     <span className="text-slate-400 font-mono bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700 text-xs">
                       Mã: {student.studentCode}
+                    </span>
+                  )}
+                  {student.parentPhone && (
+                    <span className="text-emerald-400 font-mono bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/60 text-xs flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-emerald-400" />
+                      {student.parentPhone}
                     </span>
                   )}
                 </div>

@@ -62,6 +62,7 @@ import { SpinScreen } from './components/SpinScreen';
 import { PresentationOverlay } from './components/PresentationOverlay';
 import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
+import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -770,13 +771,14 @@ export default function App() {
         for (let i = 0; i < batchClasses.length; i++) {
           const item = batchClasses[i];
           if (item.targetClassId) {
-            // Update existing class
+            // Update existing class with safe metadata preservation
             currentClassesList = currentClassesList.map((cls) => {
               if (cls.id === item.targetClassId) {
-                const finalStudents =
-                  item.mode === 'APPEND'
-                    ? [...cls.students, ...item.students]
-                    : item.students;
+                const finalStudents = mergeEduStudentsWithExisting(
+                  cls.students,
+                  item.students,
+                  item.mode || 'REPLACE'
+                );
                 return {
                   ...cls,
                   subject: item.subject !== undefined ? item.subject : cls.subject,
@@ -818,13 +820,14 @@ export default function App() {
         handleUpdateClasses(updated);
         handleSelectClass(newClass.id);
       } else {
-        // Update single existing class
+        // Update single existing class with safe metadata preservation
         const updated = classes.map((cls) => {
           if (cls.id === targetId) {
-            const finalStudents =
-              mode === 'REPLACE'
-                ? importedStudents
-                : [...cls.students, ...importedStudents];
+            const finalStudents = mergeEduStudentsWithExisting(
+              cls.students,
+              importedStudents,
+              mode
+            );
             return {
               ...cls,
               subject: newClassSubject !== undefined ? newClassSubject : cls.subject,

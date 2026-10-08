@@ -13,10 +13,12 @@ import {
   FilePlus,
   ArrowUpDown,
   FileSpreadsheet,
+  Phone,
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { soundEngine } from '../utils/audio';
 import { isSampleClasses } from '../utils/storage';
+import { StudentInfoModal } from './StudentInfoModal';
 
 interface ClassManagerProps {
   classes: ClassRoom[];
@@ -68,6 +70,9 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
   const [isRenamingClass, setIsRenamingClass] = useState(false);
   const [renameClassName, setRenameClassName] = useState('');
   const [renameSubject, setRenameSubject] = useState('');
+
+  // Student Info Modal state (independent flow)
+  const [showStudentInfoModal, setShowStudentInfoModal] = useState(false);
 
   const activeClass = classes.find((c) => c.id === activeClassId) || classes[0];
 
@@ -391,6 +396,15 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
             {/* Student list action buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                onClick={() => setShowStudentInfoModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition-all shadow-sm"
+                title="Xuất / Nhập Giới tính & SĐT phụ huynh qua file Excel riêng biệt (không ảnh hưởng sổ điểm)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Thông tin HS (Excel)</span>
+              </button>
+
+              <button
                 onClick={() => setShowAddStudentModal(true)}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition-colors"
               >
@@ -485,6 +499,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
                   <th className="py-3 px-3 w-12 text-center">STT</th>
                   <th className="py-3 px-3">Họ và tên</th>
                   <th className="py-3 px-3 hidden sm:table-cell">Mã HS</th>
+                  <th className="py-3 px-3 hidden md:table-cell">SĐT PH</th>
                   <th className="py-3 px-3 text-center">Số lần lên</th>
                   <th className="py-3 px-3 text-center">⭐ Sao thưởng</th>
                   <th className="py-3 px-3 text-center">Điểm danh</th>
@@ -553,6 +568,17 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
                             />
                           ) : (
                             student.studentCode || '—'
+                          )}
+                        </td>
+
+                        <td className="py-2.5 px-3 hidden md:table-cell text-slate-300 text-xs font-mono">
+                          {student.parentPhone ? (
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-emerald-400/70" />
+                              {student.parentPhone}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
 
@@ -917,6 +943,20 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Student Info Export & Import Modal (Separate Flow) */}
+      {showStudentInfoModal && activeClass && (
+        <StudentInfoModal
+          classroom={activeClass}
+          onUpdateStudents={(classId, updatedStudents) => {
+            onUpdateClass({
+              ...activeClass,
+              students: updatedStudents,
+            });
+          }}
+          onClose={() => setShowStudentInfoModal(false)}
+        />
       )}
     </div>
   );
