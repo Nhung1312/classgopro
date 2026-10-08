@@ -25,13 +25,14 @@ interface BoatRacer {
   strokePhase: number;
 }
 
-// 5 Vibrant Rowing / Racing Team Themes matching ClassGo dark theme
+// 6 Vibrant Rowing / Racing Team Themes matching ClassGo dark theme
 const BOAT_THEMES = [
   { hullColor: '#0284c7', hullAccent: '#38bdf8', oarColor: '#bae6fd' }, // Cyan / Sky
   { hullColor: '#4f46e5', hullAccent: '#818cf8', oarColor: '#c7d2fe' }, // Indigo
   { hullColor: '#059669', hullAccent: '#34d399', oarColor: '#a7f3d0' }, // Emerald
   { hullColor: '#d97706', hullAccent: '#fbbf24', oarColor: '#fde68a' }, // Amber
   { hullColor: '#dc2626', hullAccent: '#f87171', oarColor: '#fecaca' }, // Crimson
+  { hullColor: '#7c3aed', hullAccent: '#c084fc', oarColor: '#e9d5ff' }, // Royal Purple
 ];
 
 export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
@@ -39,14 +40,27 @@ export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
   isSpinning,
   hasCompleted,
   winner,
+  selectedStudents,
   duration = 3800,
   allClassStudents,
 }) => {
-  // Select 5 boat racers, strictly preserving deterministic winner
+  // Resolve active winners (single or multiple)
+  const activeWinners = useMemo(() => {
+    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
+    if (winner) return [winner];
+    return [];
+  }, [selectedStudents, winner]);
+
+  // Select 5-6 boat racers, strictly including all active winners
   const racers = useMemo<BoatRacer[]>(() => {
-    const pool = students.slice(0, 5);
-    if (winner && !pool.some((s) => s.id === winner.id)) {
-      pool[pool.length > 0 ? pool.length - 1 : 0] = winner;
+    const winnerIds = new Set(activeWinners.map((w) => w.id));
+    const nonWinners = students.filter((s) => !winnerIds.has(s.id));
+    const targetSize = Math.max(5, Math.min(6, Math.max(students.length, activeWinners.length)));
+
+    const pool = [...activeWinners];
+    for (const nw of nonWinners) {
+      if (pool.length >= targetSize) break;
+      pool.push(nw);
     }
 
     return pool.map((student, idx) => {
@@ -56,12 +70,12 @@ export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
         student,
         stt,
         ...BOAT_THEMES[idx % BOAT_THEMES.length],
-        yLanePercent: 14 + idx * 17, // Staggered vertical water lanes
+        yLanePercent: 14 + idx * 16, // Staggered vertical water lanes
         strokeFreq: 1.6 + idx * 0.35,
         strokePhase: idx * 1.5,
       };
     });
-  }, [students, winner, allClassStudents]);
+  }, [students, activeWinners, allClassStudents]);
 
   const [animProgress, setAnimProgress] = useState(0);
   const [rowStroke, setRowStroke] = useState(0); // Rowing cycle (0 or 1)
@@ -171,7 +185,7 @@ export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
 
           {/* Racing Boats with Water Spray Wake & Names */}
           {racers.map((racer, idx) => {
-            const isWinner = winner?.id === racer.id;
+            const isWinner = activeWinners.some((w) => w.id === racer.id);
             const isEndingPhase = animProgress >= 0.85;
 
             // X-position (percentage across river, 6% to 88%)
@@ -219,122 +233,171 @@ export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
                   isWinner && isEndingPhase ? 'scale-110' : 'scale-100'
                 }`}
               >
-                {/* Water spray & Wake foam behind boat */}
+                {/* Water spray & Wake foam trail behind boat */}
                 {(animProgress > 0 || hasCompleted) && (
-                  <div className="flex items-center gap-1 opacity-75 -mr-1">
-                    <div className="w-3 h-1.5 rounded-full bg-sky-200/90 animate-ping" />
-                    <div className="w-4 h-1 rounded-full bg-white/80 animate-pulse" />
+                  <div className="flex items-center gap-1 opacity-80 -mr-1 pointer-events-none">
+                    <div className="w-3.5 h-1.5 rounded-full bg-cyan-200/90 animate-ping" />
+                    <div className="w-5 h-1 rounded-full bg-white/80 animate-pulse" />
+                    <div className="w-2.5 h-1 rounded-full bg-sky-300/60" />
                   </div>
                 )}
 
                 {/* Sleek Racing Boat SVG */}
                 <div
-                  className={`relative w-16 h-11 sm:w-20 sm:h-12 drop-shadow-xl transition-transform ${
+                  className={`relative w-18 h-12 sm:w-22 sm:h-14 drop-shadow-xl transition-transform ${
                     isSpinning && rowStroke === 1
                       ? '-translate-y-0.5 rotate-[-1.5deg]'
                       : 'translate-y-0.5 rotate-[1.5deg]'
                   }`}
                 >
-                  <svg viewBox="0 0 120 70" className="w-full h-full overflow-visible">
+                  <svg viewBox="0 0 130 70" className="w-full h-full overflow-visible">
                     <defs>
                       <linearGradient id={`hull-grad-${racer.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor={racer.hullColor} />
-                        <stop offset="70%" stopColor={racer.hullAccent} />
-                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0.9" />
+                        <stop offset="60%" stopColor={racer.hullAccent} />
+                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0.95" />
+                      </linearGradient>
+
+                      <linearGradient id={`deck-grad-${racer.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#0f172a" />
+                        <stop offset="100%" stopColor="#1e293b" />
                       </linearGradient>
                     </defs>
 
-                    {/* Left & Right Oars (Rowing Motion) */}
+                    {/* Dual Rowing Oars (Animated pulling motion) */}
                     <g
                       transform={
                         isSpinning && rowStroke === 1
-                          ? 'rotate(-12 55 35)'
-                          : 'rotate(12 55 35)'
+                          ? 'rotate(-14 62 35)'
+                          : 'rotate(14 62 35)'
                       }
                       className="transition-transform duration-150"
                     >
-                      {/* Top Oar */}
-                      <line x1="28" y1="12" x2="62" y2="35" stroke={racer.oarColor} strokeWidth="3" strokeLinecap="round" />
-                      <ellipse cx="26" cy="11" rx="8" ry="4" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="1" transform="rotate(-30 26 11)" />
+                      {/* Top Port Oar */}
+                      <line x1="30" y1="10" x2="68" y2="35" stroke={racer.oarColor} strokeWidth="3" strokeLinecap="round" />
+                      <ellipse cx="28" cy="9" rx="9" ry="4.5" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="1" transform="rotate(-30 28 9)" />
+                      {/* Top Oar Splash Ripple */}
+                      {isSpinning && (
+                        <circle cx="28" cy="9" r="4" fill="none" stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
+                      )}
 
-                      {/* Bottom Oar */}
-                      <line x1="28" y1="58" x2="62" y2="35" stroke={racer.oarColor} strokeWidth="3" strokeLinecap="round" />
-                      <ellipse cx="26" cy="59" rx="8" ry="4" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="1" transform="rotate(30 26 59)" />
+                      {/* Bottom Starboard Oar */}
+                      <line x1="30" y1="60" x2="68" y2="35" stroke={racer.oarColor} strokeWidth="3" strokeLinecap="round" />
+                      <ellipse cx="28" cy="61" rx="9" ry="4.5" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="1" transform="rotate(30 28 61)" />
+                      {/* Bottom Oar Splash Ripple */}
+                      {isSpinning && (
+                        <circle cx="28" cy="61" r="4" fill="none" stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
+                      )}
                     </g>
 
-                    {/* Streamlined Boat Hull */}
-                    {/* Stern (tail) on left -> Pointed Bow (front) on right */}
+                    {/* Aerodynamic Racing Hull */}
+                    {/* Stern on left (10, 35) -> Sharp pointed Bow on right (124, 35) */}
                     <path
-                      d="M 12 35 C 18 24, 60 22, 114 35 C 60 48, 18 46, 12 35 Z"
+                      d="M 10 35 C 16 22, 65 20, 124 35 C 65 50, 16 48, 10 35 Z"
                       fill={`url(#hull-grad-${racer.id})`}
                       stroke="#0f172a"
                       strokeWidth="2"
                     />
 
-                    {/* Cockpit / Deck Inner Recess */}
-                    <ellipse cx="56" cy="35" rx="34" ry="7" fill="#0f172a" opacity="0.8" />
+                    {/* Cockpit / Rowing Deck Recess */}
+                    <ellipse cx="62" cy="35" rx="38" ry="7.5" fill={`url(#deck-grad-${racer.id})`} />
 
-                    {/* Racing Stripe */}
+                    {/* High-speed Racing Stripe */}
                     <path
-                      d="M 28 35 L 102 35"
+                      d="M 28 35 L 112 35"
                       stroke="#ffffff"
-                      strokeWidth="1.8"
-                      strokeDasharray="4 2"
-                      opacity="0.9"
+                      strokeWidth="2"
+                      strokeDasharray="5 2.5"
+                      opacity="0.95"
                     />
 
-                    {/* Rower Athlete Silhouette */}
-                    <circle cx="56" cy="35" r="5.5" fill="#f8fafc" stroke={racer.hullColor} strokeWidth="1.5" />
-                    <path d="M 52 35 Q 56 31, 62 35" stroke="#f8fafc" strokeWidth="2.5" strokeLinecap="round" />
+                    {/* Stern Flag / Fin */}
+                    <polygon points="12,35 6,24 18,28" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="0.8" />
 
-                    {/* Bow Splash / Water Cut at front tip */}
+                    {/* Rower Athlete Silhouette in Rowing Action */}
+                    {/* Head / Visor */}
+                    <circle cx="62" cy="35" r="6" fill="#f8fafc" stroke={racer.hullColor} strokeWidth="1.8" />
+                    {/* Athletic Torso / Shoulders */}
+                    <path d="M 58 35 Q 63 30, 70 35" stroke="#f8fafc" strokeWidth="3" strokeLinecap="round" />
+
+                    {/* Bow Wave Slicing Splash at pointed front */}
                     <path
-                      d="M 112 35 Q 118 30, 115 26 M 112 35 Q 118 40, 115 44"
+                      d="M 120 35 Q 128 28, 124 22 M 120 35 Q 128 42, 124 48"
                       stroke="#e0f2fe"
-                      strokeWidth="2"
+                      strokeWidth="2.2"
                       strokeLinecap="round"
                       fill="none"
-                      opacity="0.8"
+                      opacity="0.85"
                     />
                   </svg>
 
-                  {/* Winner Crown directly on top of boat */}
+                  {/* Winner Crown directly on top of champion boat */}
                   {isWinner && hasCompleted && (
                     <div className="absolute -top-6 left-1/2 -translate-x-1/2 animate-bounce">
-                      <span className="text-2xl drop-shadow-md">👑</span>
+                      <span className="text-2xl filter drop-shadow">👑</span>
                     </div>
                   )}
                 </div>
 
-                {/* Student Name tag MOVES WITH THE BOAT IN THE WATER */}
+                {/* Clean STT Badge ONLY (No student name during the race) */}
                 <div
-                  className={`px-2 py-0.5 rounded-lg text-center border max-w-[85px] sm:max-w-[105px] transition-all shadow-md whitespace-nowrap ${
+                  style={{
+                    borderColor: isWinner && isEndingPhase ? '#f59e0b' : racer.hullAccent,
+                  }}
+                  className={`px-2.5 py-1 rounded-full text-center border shadow-lg font-black text-xs sm:text-sm tracking-wider whitespace-nowrap transition-transform ${
                     isWinner && isEndingPhase
-                      ? 'bg-amber-400 text-slate-950 font-black border-yellow-200 shadow-amber-400/50 scale-105 ring-1 ring-amber-300'
-                      : 'bg-slate-900/90 text-slate-100 border-slate-700 font-bold'
+                      ? 'bg-amber-400 text-slate-950 scale-110 shadow-amber-400/50 ring-2 ring-amber-300'
+                      : 'bg-slate-950/95 text-white border-2'
                   }`}
                 >
-                  <span className="text-[10px] sm:text-xs truncate block">
-                    {isWinner && isEndingPhase ? `★ ${racer.student.name}` : racer.student.name}
-                  </span>
+                  #{racer.stt}
                 </div>
               </div>
             );
           })}
 
           {/* Grand Regatta Champion Announcement inside arena when completed */}
-          {hasCompleted && winner && (
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 animate-scale-in text-center px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/20 max-w-md w-[92%]">
-              <div className="text-[10px] font-black tracking-widest uppercase text-amber-400 flex items-center justify-center gap-1">
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                QUÁN QUÂN ĐƯỜNG ĐUA THUYỀN VỀ ĐÍCH ĐẦU TIÊN!
+          {hasCompleted && activeWinners.length > 0 && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 animate-scale-in text-center px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/20 max-w-lg w-[94%]">
+              <div className="text-[10px] font-black tracking-widest uppercase text-amber-400 flex items-center justify-center gap-1.5">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                {activeWinners.length === 1
+                  ? 'QUÁN QUÂN ĐƯỜNG ĐUA THUYỀN VỀ ĐÍCH ĐẦU TIÊN!'
+                  : `${activeWinners.length} HỌC SINH ĐƯỢC GỌI LÊN BẢNG!`}
               </div>
-              <h2 className="text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-0.5 truncate">
-                👑 {winner.name}
-              </h2>
-              <div className="text-[11px] font-bold text-slate-300 mt-0.5">
-                Lần thứ {winner.callCount} lên bảng
-              </div>
+
+              {activeWinners.length === 1 ? (
+                <>
+                  <h2 className="text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-1 truncate">
+                    👑 {activeWinners[0].name}
+                  </h2>
+                  <div className="text-xs font-bold text-slate-300 mt-1 flex items-center justify-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px]">
+                      STT #{getStudentSTT(activeWinners[0], allClassStudents || students)}
+                    </span>
+                    <span>Lần thứ {activeWinners[0].callCount} lên bảng</span>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 max-h-48 overflow-y-auto">
+                  {activeWinners.map((w) => {
+                    const stt = getStudentSTT(w, allClassStudents || students);
+                    return (
+                      <div
+                        key={w.id}
+                        className="px-3.5 py-1.5 rounded-xl bg-slate-800/95 border border-amber-400/80 text-amber-300 font-black text-sm sm:text-base shadow-md flex items-center gap-2"
+                      >
+                        <span className="text-amber-400">👑</span>
+                        <span>#{stt}</span>
+                        <span>{w.name}</span>
+                        <span className="text-[11px] font-medium text-slate-300">
+                          ({w.callCount} lần)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

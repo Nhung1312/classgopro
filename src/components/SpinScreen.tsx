@@ -18,6 +18,8 @@ import {
   Layers,
   LayoutGrid,
   Gift,
+  Rocket,
+  Sailboat,
   Clock,
   BookOpen,
   Users,
@@ -63,6 +65,39 @@ import { BalloonVisual } from './visuals/BalloonVisual';
 import { HorseRaceVisual } from './visuals/HorseRaceVisual';
 import { BoatRaceVisual } from './visuals/BoatRaceVisual';
 import { RocketVisual } from './visuals/RocketVisual';
+
+const BalloonIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M12 2a7 7 0 0 0-7 7c0 5 4 8 7 8s7-3 7-8a7 7 0 0 0-7-7z" />
+    <path d="M10.5 17 12 19l1.5-2" />
+    <path d="M12 19v3" />
+    <path d="M9.5 6.5A3.5 3.5 0 0 1 13 4" />
+  </svg>
+);
+
+const HorseIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M19 21H5" />
+    <path d="M16 21v-4a5 5 0 0 0-1-3l.5-4a1 1 0 0 0-1.5-1l-3 1.5L9 7a1 1 0 0 0-1.5.5L5.5 11a4 4 0 0 0 0 4l2.5 1.5V21" />
+    <circle cx="10" cy="11" r="0.75" fill="currentColor" />
+  </svg>
+);
 
 interface SpinScreenProps {
   activeClass: ClassRoom;
@@ -132,6 +167,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayName, setDisplayName] = useState<string>('???');
   const [targetWinner, setTargetWinner] = useState<Student | null>(null);
+  const [targetWinners, setTargetWinners] = useState<Student[]>([]);
   const [selectedResult, setSelectedResult] = useState<MultiSelectionResult | null>(null);
   const [hasCompleted, setHasCompleted] = useState(false);
   const [quickScore, setQuickScore] = useState<string>('');
@@ -245,6 +281,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     if (!result || result.selectedStudents.length === 0) return;
 
     setTargetWinner(result.selectedStudents[0]);
+    setTargetWinners(result.selectedStudents);
     setIsSpinning(true);
     setHasCompleted(false);
     setSelectedResult(null);
@@ -577,10 +614,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     { id: 'SLOT', label: 'Dải Cuộn', icon: <Layers className="w-4 h-4" /> },
     { id: 'CARDS', label: 'Lật Thẻ Bài', icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'CHEST', label: 'Hộp May Mắn', icon: <Gift className="w-4 h-4" /> },
-  { id: 'BALLOON', label: 'Bong Bóng', icon: <span className="text-base">🎈</span> },
-  { id: 'HORSE_RACE', label: 'Đua Ngựa', icon: <span className="text-base">🏇</span> },
-  { id: 'BOAT_RACE', label: 'Đua Thuyền', icon: <span className="text-base">🚣</span> },
-  { id: 'ROCKET', label: 'Tên Lửa', icon: <span className="text-base">🚀</span> },
+    { id: 'BALLOON', label: 'Bong Bóng', icon: <BalloonIcon className="w-4 h-4" /> },
+    { id: 'HORSE_RACE', label: 'Đua Ngựa', icon: <HorseIcon className="w-4 h-4" /> },
+    { id: 'BOAT_RACE', label: 'Đua Thuyền', icon: <Sailboat className="w-4 h-4" /> },
+    { id: 'ROCKET', label: 'Tên Lửa', icon: <Rocket className="w-4 h-4" /> },
   ];
 
   return (
@@ -1134,7 +1171,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents}
+              selectedStudents={selectedResult?.selectedStudents || targetWinners}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />
@@ -1145,8 +1182,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents}
+              selectedStudents={selectedResult?.selectedStudents || targetWinners}
               duration={settings.spinDuration || 3800}
+              allClassStudents={students}
             />
           )}
           {(visualType === 'BOAT_RACE' || (visualType as string) === 'DUCK_RACE') && (
@@ -1155,7 +1193,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents}
+              selectedStudents={selectedResult?.selectedStudents || targetWinners}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />
@@ -1166,7 +1204,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents}
+              selectedStudents={selectedResult?.selectedStudents || targetWinners}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />

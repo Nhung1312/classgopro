@@ -40,14 +40,27 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
   isSpinning,
   hasCompleted,
   winner,
+  selectedStudents,
   duration = 3800,
   allClassStudents,
 }) => {
-  // Select up to 7 candidate rockets, strictly preserving deterministic winner
+  // Resolve active winners (single or multiple)
+  const activeWinners = useMemo(() => {
+    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
+    if (winner) return [winner];
+    return [];
+  }, [selectedStudents, winner]);
+
+  // Select candidate rockets (max 7-8), strictly including all active winners
   const candidates = useMemo<RocketItem[]>(() => {
-    const pool = students.slice(0, 7);
-    if (winner && !pool.some((s) => s.id === winner.id)) {
-      pool[pool.length > 0 ? pool.length - 1 : 0] = winner;
+    const winnerIds = new Set(activeWinners.map((w) => w.id));
+    const nonWinners = students.filter((s) => !winnerIds.has(s.id));
+    const targetSize = Math.max(5, Math.min(8, Math.max(students.length, activeWinners.length)));
+
+    const pool = [...activeWinners];
+    for (const nw of nonWinners) {
+      if (pool.length >= targetSize) break;
+      pool.push(nw);
     }
 
     return pool.map((student, idx) => {
@@ -62,7 +75,7 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
         harmonicPhase2: idx * 2.1,
       };
     });
-  }, [students, winner, allClassStudents]);
+  }, [students, activeWinners, allClassStudents]);
 
   // Continuous animation progress (0 to 1) and flame flicker frame
   const [animProgress, setAnimProgress] = useState(0);
@@ -174,7 +187,7 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
 
           {/* Rockets ascending continuously */}
           {candidates.map((c) => {
-            const isWinner = winner?.id === c.student.id;
+            const isWinner = activeWinners.some((w) => w.id === c.student.id);
             const isEndingPhase = animProgress >= 0.85;
 
             // Horizontal position: distinct lane across the bottom with gentle sway
@@ -317,25 +330,40 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
           })}
 
           {/* Grand Orbit Victory Announcement in Center when finished */}
-          {hasCompleted && winner && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 animate-scale-in text-center px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/25 max-w-md w-[92%]">
+          {hasCompleted && activeWinners.length > 0 && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 animate-scale-in text-center px-4 py-3 rounded-2xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/25 max-w-lg w-[94%]">
               <div className="text-[10px] font-black tracking-widest uppercase text-amber-400 flex items-center justify-center gap-1">
-                <Trophy className="w-3.5 h-3.5" /> TÊN LỬA VƯỢT QUỸ ĐẠO CHIẾN THẮNG!
+                <Trophy className="w-3.5 h-3.5" />
+                {activeWinners.length === 1
+                  ? 'TÊN LỬA VƯỢT QUỸ ĐẠO CHIẾN THẮNG!'
+                  : `${activeWinners.length} HỌC SINH ĐƯỢC GỌI LÊN BẢNG!`}
               </div>
 
-              {/* Clear STT + Name of winner */}
-              <div className="mt-1 flex items-center justify-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-black text-sm border border-amber-400/40">
-                  STT #{winnerSTT}
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-black text-amber-300 tracking-tight leading-tight truncate">
-                  {winner.name}
-                </h2>
-              </div>
-
-              <div className="text-[11px] font-bold text-slate-300 mt-1">
-                Lần thứ {winner.callCount} lên bảng
-              </div>
+              {activeWinners.length === 1 ? (
+                <>
+                  <h2 className="mt-1 text-2xl sm:text-3xl font-black text-amber-300 tracking-tight leading-tight truncate px-2">
+                    👑 {activeWinners[0].name}
+                  </h2>
+                  <div className="text-[11px] font-bold text-slate-300 mt-1">
+                    Lần thứ {activeWinners[0].callCount} lên bảng
+                  </div>
+                </>
+              ) : (
+                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 max-h-44 overflow-y-auto">
+                  {activeWinners.map((w) => (
+                    <div
+                      key={w.id}
+                      className="px-3.5 py-1.5 rounded-xl bg-slate-800/95 border border-amber-400/80 text-amber-300 font-black text-sm sm:text-base shadow-md flex items-center gap-2"
+                    >
+                      <span className="text-amber-400">👑</span>
+                      <span>{w.name}</span>
+                      <span className="text-[11px] font-medium text-slate-300">
+                        ({w.callCount} lần)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

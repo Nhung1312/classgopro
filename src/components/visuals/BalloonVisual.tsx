@@ -101,14 +101,27 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
   isSpinning,
   hasCompleted,
   winner,
+  selectedStudents,
   duration = 3800,
   allClassStudents,
 }) => {
-  // Select up to 8 candidate balloons, strictly preserving deterministic winner
+  // Resolve active winners (single or multiple)
+  const activeWinners = useMemo(() => {
+    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
+    if (winner) return [winner];
+    return [];
+  }, [selectedStudents, winner]);
+
+  // Select up to 8 candidate balloons, strictly including all active winners
   const candidates = useMemo<BalloonCandidate[]>(() => {
-    const pool = students.slice(0, 8);
-    if (winner && !pool.some((s) => s.id === winner.id)) {
-      pool[pool.length > 0 ? pool.length - 1 : 0] = winner;
+    const winnerIds = new Set(activeWinners.map((w) => w.id));
+    const nonWinners = students.filter((s) => !winnerIds.has(s.id));
+    const targetSize = Math.max(6, Math.min(8, Math.max(students.length, activeWinners.length)));
+
+    const pool = [...activeWinners];
+    for (const nw of nonWinners) {
+      if (pool.length >= targetSize) break;
+      pool.push(nw);
     }
 
     const count = Math.max(1, pool.length);
@@ -122,7 +135,7 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
         phaseOffset: (idx / count) * 2 * Math.PI,
       };
     });
-  }, [students, winner, allClassStudents]);
+  }, [students, activeWinners, allClassStudents]);
 
   // Continuous animation state: progress (0 to 1) and continuous elapsed time (ms)
   const [animProgress, setAnimProgress] = useState(0);
@@ -222,7 +235,8 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
           {/* Active 3D Transparent Spheres (Without string) */}
           {!isPopped &&
             candidates.map((c, idx) => {
-              const isWinner = winner?.id === c.student.id;
+              const isWinner = activeWinners.some((w) => w.id === c.student.id);
+              const winnerIdx = activeWinners.findIndex((w) => w.id === c.student.id);
               const isEndingPhase = animProgress >= 0.82;
 
               // Figure-8 Lemniscate parametric coordinates:
@@ -238,11 +252,14 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
               let scale = 1;
 
               if (isEndingPhase) {
-                // Final 18%: Winner balloon moves to center and expands, other balloons fade out
+                // Final 18%: Winner balloons converge towards center and expand, other balloons fade out
                 const endLerp = (animProgress - 0.82) / 0.18;
                 if (isWinner) {
-                  // Ease towards center (50%, 48%)
-                  xPercent = xPercent + (50 - xPercent) * endLerp;
+                  const targetX =
+                    activeWinners.length > 1
+                      ? 50 + (winnerIdx - (activeWinners.length - 1) / 2) * 22
+                      : 50;
+                  xPercent = xPercent + (targetX - xPercent) * endLerp;
                   yPercent = yPercent + (48 - yPercent) * endLerp;
                   scale = 1 + endLerp * 0.45; // Balloon zooms up before popping
                 } else {
@@ -409,31 +426,48 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
             })}
 
           {/* Balloon Pop & Winner Result Reveal in Center */}
-          {isPopped && winner && (
+          {isPopped && activeWinners.length > 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-40 animate-scale-in">
-              <div className="relative flex flex-col items-center text-center p-6 sm:p-8 rounded-3xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/25 max-w-lg mx-auto">
+              <div className="relative flex flex-col items-center text-center p-6 sm:p-8 rounded-3xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/25 max-w-lg mx-auto w-[92%]">
                 {/* Pop Burst Flash Glow */}
                 <div className="absolute -top-12 w-52 h-52 rounded-full bg-amber-400/20 blur-3xl pointer-events-none animate-ping" />
 
                 {/* Big Crown */}
-                <span className="text-5xl sm:text-6xl animate-bounce mb-2">👑</span>
+                <span className="text-4xl sm:text-5xl animate-bounce mb-2">👑</span>
 
-                {/* Winner STT Tag */}
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 font-black text-sm sm:text-base mb-2">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  <span>HỌC SINH SỐ #{winnerSTT}</span>
-                </div>
+                {activeWinners.length === 1 ? (
+                  <>
+                    <h2 className="text-3xl sm:text-4xl font-black text-amber-300 tracking-tight drop-shadow-lg leading-tight px-2">
+                      {activeWinners[0].name}
+                    </h2>
 
-                {/* Winner Full Name */}
-                <h2 className="text-3xl sm:text-5xl font-black text-amber-300 tracking-tight drop-shadow-lg leading-tight px-2">
-                  {winner.name}
-                </h2>
-
-                <div className="mt-3 text-xs sm:text-sm font-bold text-slate-300">
-                  <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
-                    Lần thứ {winner.callCount} lên bảng
-                  </span>
-                </div>
+                    <div className="mt-2 text-xs sm:text-sm font-bold text-slate-300">
+                      <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
+                        Lần thứ {activeWinners[0].callCount} lên bảng
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs sm:text-sm font-black tracking-widest uppercase text-amber-400 mb-2">
+                      {activeWinners.length} HỌC SINH ĐƯỢC GỌI LÊN BẢNG!
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2 max-w-md max-h-48 overflow-y-auto">
+                      {activeWinners.map((w) => (
+                        <div
+                          key={w.id}
+                          className="px-3.5 py-1.5 rounded-xl bg-slate-800/95 border border-amber-400/80 text-amber-300 font-black text-sm sm:text-base shadow-md flex items-center gap-2"
+                        >
+                          <span className="text-amber-400">👑</span>
+                          <span>{w.name}</span>
+                          <span className="text-[11px] font-medium text-slate-300">
+                            ({w.callCount} lần)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
