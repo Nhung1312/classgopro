@@ -22,7 +22,7 @@ import {
   Keyboard,
   BookOpen,
 } from 'lucide-react';
-import { ClassRoom, Student } from '../types';
+import { ClassRoom, Student, DisciplineRecord, DisciplineViolationType } from '../types';
 import { calculateStudentGrade } from '../utils/gradeCalculator';
 import { exportEduGradebookToExcel, exportVnEduGradebookToExcel } from '../utils/gradeExporter';
 import {
@@ -33,6 +33,7 @@ import {
   getCommentFromRules,
 } from '../utils/vnEduComments';
 import { AutoCommentRulesModal } from './AutoCommentRulesModal';
+import { StudentProfileCard } from './StudentProfileCard';
 import { soundEngine } from '../utils/audio';
 
 const GRADEBOOK_SUBJECT_OPTIONS = [
@@ -64,6 +65,8 @@ interface GradebookScreenProps {
   onUpdateClassStudents: (classId: string, students: Student[]) => void;
   onUpdateAllClasses?: (updatedClasses: ClassRoom[]) => void;
   onAwardStars: (studentId: string, count: number) => void;
+  disciplineRecords?: DisciplineRecord[];
+  disciplineViolationTypes?: DisciplineViolationType[];
 }
 
 export const GradebookScreen: React.FC<GradebookScreenProps> = ({
@@ -73,11 +76,14 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
   onUpdateClassStudents,
   onUpdateAllClasses,
   onAwardStars,
+  disciplineRecords = [],
+  disciplineViolationTypes = [],
 }) => {
   const currentClass = classes.find((c) => c.id === activeClassId) || classes[0];
   const [searchTerm, setSearchTerm] = useState('');
   const [quickSaveFeedback, setQuickSaveFeedback] = useState<string | null>(null);
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
+  const [selectedProfileStudent, setSelectedProfileStudent] = useState<Student | null>(null);
 
   // Subject selector state
   const [isSubjectSelectorOpen, setIsSubjectSelectorOpen] = useState(false);
@@ -779,12 +785,17 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
                       </td>
 
                       <td className="py-2.5 px-3 border-r border-slate-800/60">
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          <span>{student.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProfileStudent(student)}
+                          className="font-bold text-white hover:text-sky-300 transition-colors flex items-center gap-1.5 text-left group/btn"
+                          title="Bấm để xem Thẻ học sinh (Hồ sơ, điểm số, nề nếp)"
+                        >
+                          <span className="group-hover/btn:underline underline-offset-2">{student.name}</span>
                           {student.gender === 'nu' && (
                             <span className="text-[10px] text-pink-400 font-normal">(Nữ)</span>
                           )}
-                        </div>
+                        </button>
                         {student.studentCode && (
                           <div className="text-[10px] text-slate-500">{student.studentCode}</div>
                         )}
@@ -1231,6 +1242,17 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Student Profile Card Modal */}
+      {selectedProfileStudent && (
+        <StudentProfileCard
+          student={selectedProfileStudent}
+          className={currentClass.name}
+          disciplineRecords={disciplineRecords}
+          disciplineViolationTypes={disciplineViolationTypes}
+          onClose={() => setSelectedProfileStudent(null)}
+        />
       )}
     </div>
   );

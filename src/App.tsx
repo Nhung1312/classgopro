@@ -995,6 +995,8 @@ export default function App() {
             onOpenExpiredModal={() => setIsExpiredModalOpen(true)}
             onRecordDisciplineFromSpin={handleRecordDisciplineFromSpin}
             onUndoDisciplineRecord={handleUndoDisciplineRecord}
+            disciplineRecords={disciplineRecords}
+            disciplineViolationTypes={violationTypes}
           />
         )}
 
@@ -1025,6 +1027,8 @@ export default function App() {
             }}
             onUpdateAllClasses={handleUpdateClasses}
             onAwardStars={handleAwardStars}
+            disciplineRecords={disciplineRecords}
+            disciplineViolationTypes={violationTypes}
           />
         )}
 

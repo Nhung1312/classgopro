@@ -44,6 +44,8 @@ import {
   NameDisplayStyle,
   WheelSizeOption,
   CallTargetFilter,
+  DisciplineRecord,
+  DisciplineViolationType,
 } from '../types';
 import { chooseMultipleStudents, getEligibleStudents, MultiSelectionResult } from '../utils/fairAlgorithm';
 import {
@@ -56,6 +58,7 @@ import { soundEngine } from '../utils/audio';
 import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
 import { speechEngine } from '../utils/speech';
 import { MathRenderer } from './MathRenderer';
+import { StudentProfileCard } from './StudentProfileCard';
 
 import { WheelVisual } from './visuals/WheelVisual';
 import { SlotVisual } from './visuals/SlotVisual';
@@ -123,6 +126,8 @@ interface SpinScreenProps {
   onOpenExpiredModal?: () => void;
   onRecordDisciplineFromSpin?: (student: Student, violationTypeId: string, note?: string) => string | void;
   onUndoDisciplineRecord?: (recordId: string) => void;
+  disciplineRecords?: DisciplineRecord[];
+  disciplineViolationTypes?: DisciplineViolationType[];
 }
 
 export const SpinScreen: React.FC<SpinScreenProps> = ({
@@ -149,6 +154,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   onOpenExpiredModal,
   onRecordDisciplineFromSpin,
   onUndoDisciplineRecord,
+  disciplineRecords = [],
+  disciplineViolationTypes = [],
 }) => {
   const [visualType, setVisualType] = useState<SpinVisualType>(
     settings.defaultVisualType || 'WHEEL'
@@ -164,6 +171,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const [sttFrom, setSttFrom] = useState<number>(1);
   const [sttTo, setSttTo] = useState<number>(() => Math.max(1, Math.min(15, activeClass?.students?.length || 15)));
 
+  const [selectedProfileStudent, setSelectedProfileStudent] = useState<Student | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayName, setDisplayName] = useState<string>('???');
   const [targetWinner, setTargetWinner] = useState<Student | null>(null);
@@ -1096,11 +1104,23 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                         key={winner.id}
                         className="py-2.5 px-5 sm:px-6 rounded-2xl bg-slate-900/95 border-2 border-amber-400 text-amber-300 font-black text-xl sm:text-2xl md:text-3xl shadow-xl flex items-center gap-2.5 flex-wrap justify-center"
                       >
-                        <span>🎉 {displayWinnerName}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProfileStudent(winner)}
+                          className="hover:underline underline-offset-4 hover:text-white transition-colors cursor-pointer text-left"
+                          title="Bấm vào tên để xem Thẻ học sinh"
+                        >
+                          🎉 {displayWinnerName}
+                        </button>
                         {nameStyle === 'ONLY_STT' && (
-                          <span className="text-sm font-semibold text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProfileStudent(winner)}
+                            className="text-sm font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-0.5 rounded-lg border border-slate-700 transition-colors"
+                            title="Bấm vào tên để xem Thẻ học sinh"
+                          >
                             ({winner.name})
-                          </span>
+                          </button>
                         )}
                         <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono">
                           STT {stt}
@@ -1129,18 +1149,21 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                   formatStudentDisplayName(s, students, nameStyle, false)
                 )}
               />
-              {hasCompleted && selectedResult && selectedResult.selectedStudents.length > 1 && (
+              {hasCompleted && selectedResult && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2 animate-scale-in">
                   {selectedResult.selectedStudents.map((winner, idx) => (
-                    <span
+                    <button
                       key={winner.id}
-                      className="py-1.5 px-4 rounded-xl bg-slate-900/90 border border-amber-400 text-amber-300 font-bold text-sm sm:text-base shadow-md flex items-center gap-2"
+                      type="button"
+                      onClick={() => setSelectedProfileStudent(winner)}
+                      className="py-1.5 px-4 rounded-xl bg-slate-900/90 hover:bg-slate-850 border border-amber-400 text-amber-300 hover:text-white font-bold text-sm sm:text-base shadow-md flex items-center gap-2 transition-all hover:scale-105"
+                      title="Bấm vào tên để xem Thẻ học sinh"
                     >
-                      <span>#{idx + 1} {formatStudentDisplayName(winner, students, nameStyle, false)}</span>
+                      <span className="hover:underline underline-offset-2">#{idx + 1} {formatStudentDisplayName(winner, students, nameStyle, false)}</span>
                       <span className="text-xs font-mono text-amber-400/80 bg-amber-950/50 px-1.5 py-0.5 rounded">
                         STT {getStudentSTT(winner, students)}
                       </span>
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -1279,9 +1302,22 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-emerald-400 font-bold text-sm">📝 Đánh giá nhanh kết quả:</span>
-              <span className="text-xs text-slate-300 font-semibold">
-                {selectedResult.selectedStudents.map((s) => s.name).join(', ')}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {selectedResult.selectedStudents.map((s, idx) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedProfileStudent(s)}
+                    className="text-xs text-sky-300 hover:text-white font-bold bg-slate-900/80 hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-slate-700 hover:border-sky-400/50 transition-all flex items-center gap-1 group/btn shadow-sm"
+                    title="Bấm để xem Thẻ học sinh (Hồ sơ, điểm số, nề nếp)"
+                  >
+                    <span className="group-hover/btn:underline underline-offset-2">{s.name}</span>
+                    {idx < selectedResult.selectedStudents.length - 1 && (
+                      <span className="text-slate-600 font-normal">,</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* Absent / Cancel roll button */}
             <button
@@ -1501,6 +1537,17 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Student Profile Card Modal */}
+      {selectedProfileStudent && (
+        <StudentProfileCard
+          student={selectedProfileStudent}
+          className={activeClass?.name}
+          disciplineRecords={disciplineRecords}
+          disciplineViolationTypes={disciplineViolationTypes}
+          onClose={() => setSelectedProfileStudent(null)}
+        />
+      )}
     </div>
   );
 };
