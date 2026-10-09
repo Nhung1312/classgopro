@@ -228,168 +228,228 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
             <span className="text-[10px] font-mono text-sky-400/60 uppercase">Orbit 100km</span>
           </div>
 
-          {/* Rockets ascending continuously */}
-          {candidates.map((c) => {
-            const isWinner = activeWinners.some((w) => w.id === c.student.id);
-            const isEndingPhase = animProgress >= 0.85;
+          {/* Rockets ascending continuously (GAME STATE ONLY: UNMOUNTED WHEN RESULT IS PRESENTED) */}
+          {!hasCompleted &&
+            candidates.map((c) => {
+              const isWinner = activeWinners.some((w) => w.id === c.student.id);
+              const isEndingPhase = animProgress >= 0.85;
 
-            // Multi-echelon staggered horizontal distribution:
-            let baseLaneX = 8 + (c.laneIndex / (count - 1 || 1)) * 84;
-            // Gentle sinusoidal sway (max +-2%)
-            const swayX = Math.sin(animProgress * Math.PI * 3 + c.harmonicPhase1) * 2;
-            const xPercent = baseLaneX + swayX;
+              // Multi-echelon staggered horizontal distribution:
+              let baseLaneX = 8 + (c.laneIndex / (count - 1 || 1)) * 84;
+              // Gentle sinusoidal sway (max +-2%)
+              const swayX = Math.sin(animProgress * Math.PI * 3 + c.harmonicPhase1) * 2;
+              const xPercent = baseLaneX + swayX;
 
-            // Base launchpad stagger per echelon
-            const echelonBaseOffset = c.echelon * 3.5;
+              // Base launchpad stagger per echelon
+              const echelonBaseOffset = c.echelon * 3.5;
 
-            // Continuous upward altitude (percentage from bottom):
-            let altitude = 4 + echelonBaseOffset;
+              // Continuous upward altitude (percentage from bottom):
+              let altitude = 4 + echelonBaseOffset;
 
-            if (animProgress > 0) {
-              const baseAscent = 4 + animProgress * 62;
-              const harmonic1 = Math.sin(animProgress * Math.PI * 4 + c.harmonicPhase1) * 8;
-              const harmonic2 = Math.cos(animProgress * Math.PI * 6 + c.harmonicPhase2) * 4.5;
-              const harmonicDelta = harmonic1 + harmonic2;
+              if (animProgress > 0) {
+                const baseAscent = 4 + animProgress * 62;
+                const harmonic1 = Math.sin(animProgress * Math.PI * 4 + c.harmonicPhase1) * 8;
+                const harmonic2 = Math.cos(animProgress * Math.PI * 6 + c.harmonicPhase2) * 4.5;
+                const harmonicDelta = harmonic1 + harmonic2;
 
-              if (!isEndingPhase) {
-                altitude = Math.max(4, Math.min(74, baseAscent + harmonicDelta + echelonBaseOffset));
-              } else {
-                const endLerp = (animProgress - 0.85) / 0.15;
-                if (isWinner) {
-                  altitude = 68 + endLerp * 22; // Surges to 90%
+                if (!isEndingPhase) {
+                  altitude = Math.max(4, Math.min(74, baseAscent + harmonicDelta + echelonBaseOffset));
                 } else {
-                  altitude = 50 + Math.sin(c.laneIndex * 1.8) * 8 + echelonBaseOffset;
+                  const endLerp = (animProgress - 0.85) / 0.15;
+                  if (isWinner) {
+                    altitude = 68 + endLerp * 22; // Surges to 90%
+                  } else {
+                    altitude = 50 + Math.sin(c.laneIndex * 1.8) * 8 + echelonBaseOffset;
+                  }
                 }
               }
-            } else if (hasCompleted) {
-              altitude = isWinner ? 90 : 50 + Math.sin(c.laneIndex * 1.8) * 8 + echelonBaseOffset;
-            }
 
-            return (
-              <div
-                key={c.id}
-                style={{
-                  left: `${xPercent}%`,
-                  bottom: `${altitude}%`,
-                  transform: 'translate(-50%, 0)',
-                  transition: isEndingPhase ? 'bottom 0.25s ease-out' : 'none',
-                  zIndex: isWinner && isEndingPhase ? 35 : 10 + c.echelon * 8 + (c.laneIndex % 8),
-                }}
-                className="absolute flex flex-col items-center pointer-events-none"
-              >
-                {/* Winner Crown on top of rocket */}
-                {isWinner && hasCompleted && (
-                  <div className="animate-bounce -mb-1">
-                    <span className="text-2xl drop-shadow-md">👑</span>
-                  </div>
-                )}
-
-                {/* Rocket Body */}
+              return (
                 <div
-                  onClick={() => onSelectStudentProfile?.(c.student)}
-                  className={`relative ${rocketSizeConfig.wrapperClass} drop-shadow-xl transition-transform pointer-events-auto ${
-                    onSelectStudentProfile ? 'cursor-pointer hover:scale-125 hover:z-40' : ''
-                  } ${
-                    isWinner && isEndingPhase ? 'scale-125' : 'scale-100'
-                  }`}
-                  title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${c.student.name} (STT #${c.stt})` : undefined}
+                  key={c.id}
+                  style={{
+                    left: `${xPercent}%`,
+                    bottom: `${altitude}%`,
+                    transform: 'translate(-50%, 0)',
+                    transition: isEndingPhase ? 'bottom 0.25s ease-out' : 'none',
+                    zIndex: isWinner && isEndingPhase ? 35 : 10 + c.echelon * 8 + (c.laneIndex % 8),
+                  }}
+                  className="absolute flex flex-col items-center pointer-events-none"
                 >
-                  <svg viewBox="0 0 100 150" className="w-full h-full overflow-visible">
-                    <defs>
-                      <linearGradient id={`rocket-hull-${c.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#64748b" />
-                        <stop offset="30%" stopColor="#f8fafc" />
-                        <stop offset="70%" stopColor="#94a3b8" />
-                        <stop offset="100%" stopColor="#475569" />
-                      </linearGradient>
+                  {/* Rocket Body */}
+                  <div
+                    onClick={() => {
+                      if (!isSpinning) {
+                        onSelectStudentProfile?.(c.student);
+                      }
+                    }}
+                    className={`relative ${rocketSizeConfig.wrapperClass} drop-shadow-xl transition-transform pointer-events-auto ${
+                      !isSpinning && onSelectStudentProfile ? 'cursor-pointer hover:scale-125 hover:z-40' : ''
+                    } ${
+                      isWinner && isEndingPhase ? 'scale-125' : 'scale-100'
+                    }`}
+                    title={!isSpinning && onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${c.student.name} (STT #${c.stt})` : undefined}
+                  >
+                    <svg viewBox="0 0 100 150" className="w-full h-full overflow-visible">
+                      <defs>
+                        <linearGradient id={`rocket-hull-${c.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#64748b" />
+                          <stop offset="30%" stopColor="#f8fafc" />
+                          <stop offset="70%" stopColor="#94a3b8" />
+                          <stop offset="100%" stopColor="#475569" />
+                        </linearGradient>
 
-                      <linearGradient id={`flame-grad-${c.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stopColor="#ffffff" />
-                        <stop offset="25%" stopColor="#fef08a" />
-                        <stop offset="60%" stopColor="#f59e0b" />
-                        <stop offset="100%" stopColor="#ef4444" />
-                      </linearGradient>
-                    </defs>
+                        <linearGradient id={`flame-grad-${c.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#ffffff" />
+                          <stop offset="25%" stopColor="#fef08a" />
+                          <stop offset="60%" stopColor="#f59e0b" />
+                          <stop offset="100%" stopColor="#ef4444" />
+                        </linearGradient>
+                      </defs>
 
-                    {/* Stabilizer Fins */}
-                    <path d="M28 95 L8 122 L28 116 Z" fill={c.trimColor} stroke={c.border} strokeWidth="1.8" />
-                    <path d="M72 95 L92 122 L72 116 Z" fill={c.trimColor} stroke={c.border} strokeWidth="1.8" />
+                      {/* Stabilizer Fins */}
+                      <path d="M28 95 L8 122 L28 116 Z" fill={c.trimColor} stroke={c.border} strokeWidth="1.8" />
+                      <path d="M72 95 L92 122 L72 116 Z" fill={c.trimColor} stroke={c.border} strokeWidth="1.8" />
 
-                    {/* Rocket Fuselage */}
-                    <path
-                      d="M50 10 C36 32, 28 70, 28 116 L72 116 C72 70, 64 32, 50 10 Z"
-                      fill={`url(#rocket-hull-${c.id})`}
-                      stroke={isWinner && isEndingPhase ? '#fde047' : '#334155'}
-                      strokeWidth={isWinner && isEndingPhase ? 2.5 : 1.5}
-                    />
+                      {/* Rocket Fuselage */}
+                      <path
+                        d="M50 10 C36 32, 28 70, 28 116 L72 116 C72 70, 64 32, 50 10 Z"
+                        fill={`url(#rocket-hull-${c.id})`}
+                        stroke={isWinner && isEndingPhase ? '#fde047' : '#334155'}
+                        strokeWidth={isWinner && isEndingPhase ? 2.5 : 1.5}
+                      />
 
-                    {/* Nose Cone Trim */}
-                    <path
-                      d="M50 10 C44 20, 40 30, 40 38 L60 38 C60 30, 56 20, 50 10 Z"
-                      fill={c.trimColor}
-                      stroke={c.border}
-                      strokeWidth="1.2"
-                    />
+                      {/* Nose Cone Trim */}
+                      <path
+                        d="M50 10 C44 20, 40 30, 40 38 L60 38 C60 30, 56 20, 50 10 Z"
+                        fill={c.trimColor}
+                        stroke={c.border}
+                        strokeWidth="1.2"
+                      />
 
-                    {/* Cockpit Window */}
-                    <circle cx="50" cy="58" r="10" fill="#0284c7" stroke="#e2e8f0" strokeWidth="2" />
-                    <ellipse cx="47" cy="54" rx="4" ry="2" fill="#ffffff" opacity="0.8" />
+                      {/* Cockpit Window */}
+                      <circle cx="50" cy="58" r="10" fill="#0284c7" stroke="#e2e8f0" strokeWidth="2" />
+                      <ellipse cx="47" cy="54" rx="4" ry="2" fill="#ffffff" opacity="0.8" />
 
-                    {/* Exhaust Nozzle */}
-                    <polygon points="38,116 62,116 66,124 34,124" fill="#1e293b" />
+                      {/* Exhaust Nozzle */}
+                      <polygon points="38,116 62,116 66,124 34,124" fill="#1e293b" />
 
-                    {/* Dynamic Thrust Flame */}
-                    {(animProgress > 0 || isSpinning) && (
-                      <g>
-                        <ellipse
-                          cx="50"
-                          cy={132 + flameTick * 3}
-                          rx={10 + flameTick * 2}
-                          ry={16 + flameTick * 4}
-                          fill={`url(#flame-grad-${c.id})`}
-                          className="opacity-95"
-                        />
-                        <ellipse
-                          cx="50"
-                          cy={127 + flameTick * 2}
-                          rx={5 + flameTick}
-                          ry={9 + flameTick * 2}
-                          fill="#ffffff"
-                        />
-                      </g>
-                    )}
-                  </svg>
+                      {/* Dynamic Thrust Flame */}
+                      {(animProgress > 0 || isSpinning) && (
+                        <g>
+                          <ellipse
+                            cx="50"
+                            cy={132 + flameTick * 3}
+                            rx={10 + flameTick * 2}
+                            ry={16 + flameTick * 4}
+                            fill={`url(#flame-grad-${c.id})`}
+                            className="opacity-95"
+                          />
+                          <ellipse
+                            cx="50"
+                            cy={127 + flameTick * 2}
+                            rx={5 + flameTick}
+                            ry={9 + flameTick * 2}
+                            fill="#ffffff"
+                          />
+                        </g>
+                      )}
+                    </svg>
 
-                  {/* STT Badge on Rocket Center */}
-                  <div className="absolute inset-0 flex items-center justify-center top-6 pointer-events-none">
-                    <span
-                      style={{ backgroundColor: c.trimColor, color: '#0f172a' }}
-                      className={`font-black ${rocketSizeConfig.sttClass} ${rocketSizeConfig.badgePadding} rounded-full shadow-md border border-white/60 tracking-tight leading-none`}
-                    >
-                      #{c.stt}
-                    </span>
+                    {/* STT Badge on Rocket Center */}
+                    <div className="absolute inset-0 flex items-center justify-center top-6 pointer-events-none">
+                      <span
+                        style={{ backgroundColor: c.trimColor, color: '#0f172a' }}
+                        className={`font-black ${rocketSizeConfig.sttClass} ${rocketSizeConfig.badgePadding} rounded-full shadow-md border border-white/60 tracking-tight leading-none`}
+                      >
+                        #{c.stt}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
-          {/* Winner Announcement Card when Orbit Reached */}
+          {/* Winner Announcement Card when Orbit Reached (CLEAN RESULT PRESENTATION) */}
           {hasCompleted && activeWinners.length > 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-40 animate-scale-in">
               <div className="relative flex flex-col items-center text-center p-6 sm:p-8 rounded-3xl bg-slate-900/95 border-2 border-sky-400 shadow-2xl shadow-sky-500/25 max-w-lg mx-auto w-[92%]">
                 <div className="absolute -top-12 w-52 h-52 rounded-full bg-sky-400/20 blur-3xl pointer-events-none animate-ping" />
 
-                <span className="text-4xl sm:text-5xl animate-bounce mb-2">🚀</span>
-
                 {activeWinners.length === 1 ? (
                   <>
-                    <div className="text-[11px] font-black uppercase tracking-widest text-sky-400 mb-1">
-                      CHẠM TỚI QUỸ ĐẠO KHÔNG GIAN
+                    <div className="text-[11px] font-black uppercase tracking-widest text-sky-400 mb-1 flex items-center gap-1.5">
+                      <span>🚀</span>
+                      <span>CHẠM TỚI QUỸ ĐẠO KHÔNG GIAN</span>
                     </div>
+
+                    {/* ROCKET WINNER VISUAL WITH SINGLE STT ON HULL */}
+                    <button
+                      type="button"
+                      onClick={() => onSelectStudentProfile?.(activeWinners[0])}
+                      className={`relative flex flex-col items-center my-2 ${
+                        onSelectStudentProfile ? 'cursor-pointer hover:scale-105 transition-transform' : ''
+                      }`}
+                      title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}` : undefined}
+                    >
+                      <div className="text-2xl animate-bounce -mb-1">👑</div>
+                      <div className="relative w-16 h-24 sm:w-20 sm:h-28 drop-shadow-[0_0_25px_rgba(56,189,248,0.5)]">
+                        <svg viewBox="0 0 100 150" className="w-full h-full overflow-visible">
+                          <defs>
+                            <linearGradient id={`winner-hull-${activeWinners[0].id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#38bdf8" />
+                              <stop offset="35%" stopColor="#ffffff" />
+                              <stop offset="70%" stopColor="#bae6fd" />
+                              <stop offset="100%" stopColor="#0284c7" />
+                            </linearGradient>
+                            <linearGradient id="winner-flame-res" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="#ffffff" />
+                              <stop offset="25%" stopColor="#fef08a" />
+                              <stop offset="60%" stopColor="#f59e0b" />
+                              <stop offset="100%" stopColor="#ef4444" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Fins */}
+                          <path d="M28 95 L6 124 L28 116 Z" fill="#f59e0b" stroke="#fef08a" strokeWidth="2" />
+                          <path d="M72 95 L94 124 L72 116 Z" fill="#f59e0b" stroke="#fef08a" strokeWidth="2" />
+
+                          {/* Fuselage */}
+                          <path
+                            d="M50 8 C34 32, 26 70, 26 116 L74 116 C74 70, 66 32, 50 8 Z"
+                            fill={`url(#winner-hull-${activeWinners[0].id})`}
+                            stroke="#fde047"
+                            strokeWidth="2.5"
+                          />
+
+                          {/* Nose Cone */}
+                          <path d="M50 8 C43 20, 39 30, 39 38 L61 38 C61 30, 57 20, 50 8 Z" fill="#f59e0b" stroke="#fde047" strokeWidth="1.5" />
+
+                          {/* Cockpit Window */}
+                          <circle cx="50" cy="56" r="11" fill="#0284c7" stroke="#ffffff" strokeWidth="2" />
+                          <ellipse cx="47" cy="52" rx="4" ry="2.5" fill="#ffffff" opacity="0.85" />
+
+                          {/* Nozzle */}
+                          <polygon points="36,116 64,116 68,124 32,124" fill="#0f172a" />
+
+                          {/* Flame */}
+                          <ellipse cx="50" cy="134" rx="11" ry="17" fill="url(#winner-flame-res)" className="animate-pulse" />
+                          <ellipse cx="50" cy="128" rx="5" ry="9" fill="#ffffff" />
+                        </svg>
+
+                        {/* STT Badge on Rocket Fuselage: ONLY STT DISPLAY */}
+                        <div className="absolute inset-0 flex items-center justify-center top-6 pointer-events-none">
+                          <span className="font-black text-sm sm:text-base px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-md border border-white leading-none">
+                            #{getStudentSTT(activeWinners[0], allClassStudents || students)}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* FULL STUDENT NAME PROMINENTLY DISPLAYED */}
                     <h2
                       onClick={() => onSelectStudentProfile?.(activeWinners[0])}
-                      className={`text-3xl sm:text-4xl font-black text-amber-300 tracking-tight drop-shadow-lg leading-tight px-2 ${
+                      className={`text-3xl sm:text-4xl font-black text-amber-300 tracking-tight drop-shadow-lg leading-tight px-2 mt-1 ${
                         onSelectStudentProfile ? 'cursor-pointer hover:underline hover:text-white transition-colors' : ''
                       }`}
                       title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}` : undefined}
@@ -398,39 +458,42 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
                     </h2>
 
                     <div className="mt-2 text-xs sm:text-sm font-bold text-slate-300">
-                      <button
-                        type="button"
-                        onClick={() => onSelectStudentProfile?.(activeWinners[0])}
-                        className={`px-3 py-1 rounded-full bg-slate-800 border border-slate-700 ${
-                          onSelectStudentProfile ? 'hover:bg-slate-700 hover:border-sky-400/50 cursor-pointer transition-colors' : ''
-                        }`}
-                        title={onSelectStudentProfile ? 'Bấm để xem Thẻ học sinh' : undefined}
-                      >
+                      <span className="px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 shadow-sm">
                         Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng
-                      </button>
+                      </span>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="text-xs sm:text-sm font-black tracking-widest uppercase text-sky-400 mb-2">
-                      {activeWinners.length} TÊN LỬA ĐẠT QUỸ ĐẠO XUẤT SẮC!
+                    <div className="text-xs sm:text-sm font-black tracking-widest uppercase text-sky-400 mb-2 flex items-center gap-1.5">
+                      <span>🚀</span>
+                      <span>{activeWinners.length} TÊN LỬA ĐẠT QUỸ ĐẠO XUẤT SẮC!</span>
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-2 max-w-md max-h-48 overflow-y-auto">
-                      {activeWinners.map((w) => (
-                        <button
-                          key={w.id}
-                          type="button"
-                          onClick={() => onSelectStudentProfile?.(w)}
-                          className="px-3.5 py-1.5 rounded-xl bg-slate-800/95 hover:bg-slate-750 border border-sky-400/80 hover:border-sky-300 text-amber-300 hover:text-white font-black text-sm sm:text-base shadow-md flex items-center gap-2 cursor-pointer hover:scale-105 transition-all text-left"
-                          title="Bấm để xem Thẻ học sinh"
-                        >
-                          <span className="text-sky-400">🚀</span>
-                          <span className="hover:underline">{w.name}</span>
-                          <span className="text-[11px] font-medium text-slate-300">
-                            ({Math.max(1, w.callCount ?? 1)} lần)
-                          </span>
-                        </button>
-                      ))}
+                      {activeWinners.map((w) => {
+                        const stt = getStudentSTT(w, allClassStudents || students);
+                        return (
+                          <button
+                            key={w.id}
+                            type="button"
+                            onClick={() => onSelectStudentProfile?.(w)}
+                            className="px-3.5 py-2 rounded-xl bg-slate-800/95 hover:bg-slate-750 border border-sky-400/80 hover:border-sky-300 text-amber-300 hover:text-white font-black text-sm sm:text-base shadow-md flex items-center gap-2.5 cursor-pointer hover:scale-105 transition-all text-left"
+                            title="Bấm để xem Thẻ học sinh"
+                          >
+                            <span className="w-7 h-7 rounded-full bg-sky-500/20 border border-sky-400 flex items-center justify-center text-xs font-black text-sky-300 shrink-0">
+                              #{stt}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="hover:underline truncate text-sm font-black text-amber-300">
+                                {w.name}
+                              </div>
+                              <div className="text-[11px] font-medium text-slate-300">
+                                Lần thứ {Math.max(1, w.callCount ?? 1)} lên bảng
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </>
                 )}

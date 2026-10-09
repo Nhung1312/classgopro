@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { Trophy, Flag } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Trophy, Flag, Flame, Sparkles } from 'lucide-react';
 import { Student } from '../../types';
 import { getStudentSTT } from '../../utils/studentDisplay';
 
@@ -14,88 +14,150 @@ interface HorseRaceProps {
   onSelectStudentProfile?: (student: Student) => void;
 }
 
-interface HorseRacer {
+interface TrackRacer {
   id: string;
   student: Student;
   stt: number;
-  laneNumber: number;
-  jockeySilk: string;
-  silkAccent: string;
-  saddleBorder: string;
-  horseColor: string;
-  horseHighlight: string;
-  maneColor: string;
-  surgeFreq: number;
-  surgePhase: number;
+  bgGradient: string;
+  borderColor: string;
+  glowColor: string;
+  textColor: string;
+  packOffset: number; // 0 (leader) to 1 (tail)
+  jostlePhase: number;
 }
 
-// 8 Elite Thoroughbred & Jockey Teams
-const HORSE_TEAMS = [
+// 8 Vibrant 3D Neon Acrylic Spherical Ball Palettes
+const RACER_PALETTES = [
   {
-    jockeySilk: '#2563eb', // Team Blue
-    silkAccent: '#60a5fa',
-    saddleBorder: '#1d4ed8',
-    horseColor: '#78350f', // Chestnut
-    horseHighlight: '#9a3412',
-    maneColor: '#451a03',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #67e8f9 0%, #06b6d4 50%, #0e7490 100%)', // Cyan
+    borderColor: '#a5f3fc',
+    glowColor: 'rgba(6, 182, 212, 0.65)',
+    textColor: '#083344',
   },
   {
-    jockeySilk: '#dc2626', // Team Crimson
-    silkAccent: '#f87171',
-    saddleBorder: '#b91c1c',
-    horseColor: '#1e293b', // Midnight Black
-    horseHighlight: '#334155',
-    maneColor: '#0f172a',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #fca5a5 0%, #ef4444 50%, #991b1b 100%)', // Red
+    borderColor: '#fecaca',
+    glowColor: 'rgba(239, 68, 68, 0.65)',
+    textColor: '#450a0a',
   },
   {
-    jockeySilk: '#059669', // Team Emerald
-    silkAccent: '#34d399',
-    saddleBorder: '#047857',
-    horseColor: '#92400e', // Bay Brown
-    horseHighlight: '#b45309',
-    maneColor: '#451a03',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #86efac 0%, #22c55e 50%, #15803d 100%)', // Emerald
+    borderColor: '#bbf7d0',
+    glowColor: 'rgba(34, 197, 94, 0.65)',
+    textColor: '#052e16',
   },
   {
-    jockeySilk: '#d97706', // Team Amber
-    silkAccent: '#fbbf24',
-    saddleBorder: '#b45309',
-    horseColor: '#475569', // Dapple Grey
-    horseHighlight: '#64748b',
-    maneColor: '#1e293b',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #fde047 0%, #eab308 50%, #854d0e 100%)', // Gold
+    borderColor: '#fef08a',
+    glowColor: 'rgba(234, 179, 8, 0.65)',
+    textColor: '#1e1b4b',
   },
   {
-    jockeySilk: '#7c3aed', // Team Royal Purple
-    silkAccent: '#a78bfa',
-    saddleBorder: '#6d28d9',
-    horseColor: '#854d0e', // Golden Sorrel
-    horseHighlight: '#a16207',
-    maneColor: '#581c87',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #d8b4fe 0%, #a855f7 50%, #6b21a8 100%)', // Violet
+    borderColor: '#f3e8ff',
+    glowColor: 'rgba(168, 85, 247, 0.65)',
+    textColor: '#2e1065',
   },
   {
-    jockeySilk: '#0891b2', // Team Cyan
-    silkAccent: '#22d3ee',
-    saddleBorder: '#0e7490',
-    horseColor: '#52525b', // Slate Thoroughbred
-    horseHighlight: '#71717a',
-    maneColor: '#27272a',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #fdba74 0%, #f97316 50%, #9a3412 100%)', // Orange
+    borderColor: '#ffedd5',
+    glowColor: 'rgba(249, 115, 22, 0.65)',
+    textColor: '#431407',
   },
   {
-    jockeySilk: '#ea580c', // Team Tangerine
-    silkAccent: '#fb923c',
-    saddleBorder: '#c2410c',
-    horseColor: '#713f12', // Dark Sorrel
-    horseHighlight: '#a16207',
-    maneColor: '#361e05',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #f472b6 0%, #ec4899 50%, #9d174d 100%)', // Fuchsia
+    borderColor: '#fce7f3',
+    glowColor: 'rgba(236, 72, 153, 0.65)',
+    textColor: '#500724',
   },
   {
-    jockeySilk: '#db2777', // Team Ruby Rose
-    silkAccent: '#f472b6',
-    saddleBorder: '#be185d',
-    horseColor: '#3f3f46', // Charcoal
-    horseHighlight: '#52525b',
-    maneColor: '#18181b',
+    bgGradient: 'radial-gradient(circle at 32% 28%, #a3e635 0%, #84cc16 50%, #3f6212 100%)', // Lime
+    borderColor: '#ecfccb',
+    glowColor: 'rgba(132, 204, 22, 0.65)',
+    textColor: '#1a2e05',
   },
 ];
+
+// SVG ViewBox dimensions: 1000 x 500
+export const TRACK_PATH_D =
+  'M 80 70 C 240 60, 390 90, 540 80 C 710 70, 900 90, 910 190 C 920 270, 740 240, 560 240 C 380 240, 220 220, 120 290 C 40 340, 110 420, 320 420 C 520 420, 730 410, 900 420';
+
+// Mathematical Cubic Bezier Arc-Length Lookup Table Generator (1001 uniform steps)
+function buildArcLengthLut() {
+  function bezier(
+    p0: { x: number; y: number },
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    p3: { x: number; y: number },
+    t: number
+  ) {
+    const mt = 1 - t;
+    return {
+      x: mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x,
+      y: mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y,
+    };
+  }
+
+  const segments = [
+    { p0: { x: 80, y: 70 }, p1: { x: 240, y: 60 }, p2: { x: 390, y: 90 }, p3: { x: 540, y: 80 } },
+    { p0: { x: 540, y: 80 }, p1: { x: 710, y: 70 }, p2: { x: 900, y: 90 }, p3: { x: 910, y: 190 } },
+    { p0: { x: 910, y: 190 }, p1: { x: 920, y: 270 }, p2: { x: 740, y: 240 }, p3: { x: 560, y: 240 } },
+    { p0: { x: 560, y: 240 }, p1: { x: 380, y: 240 }, p2: { x: 220, y: 220 }, p3: { x: 120, y: 290 } },
+    { p0: { x: 120, y: 290 }, p1: { x: 40, y: 340 }, p2: { x: 110, y: 420 }, p3: { x: 320, y: 420 } },
+    { p0: { x: 320, y: 420 }, p1: { x: 520, y: 420 }, p2: { x: 730, y: 410 }, p3: { x: 900, y: 420 } },
+  ];
+
+  const rawPoints: { x: number; y: number; dist: number }[] = [];
+  let totalArcLen = 0;
+  let prev = segments[0].p0;
+  rawPoints.push({ x: prev.x, y: prev.y, dist: 0 });
+
+  for (const seg of segments) {
+    const steps = 150;
+    for (let i = 1; i <= steps; i++) {
+      const pt = bezier(seg.p0, seg.p1, seg.p2, seg.p3, i / steps);
+      const d = Math.hypot(pt.x - prev.x, pt.y - prev.y);
+      totalArcLen += d;
+      rawPoints.push({ x: pt.x, y: pt.y, dist: totalArcLen });
+      prev = pt;
+    }
+  }
+
+  const SAMPLES = 1000;
+  const lut: { x: number; y: number }[] = [];
+  for (let i = 0; i <= SAMPLES; i++) {
+    const targetDist = (i / SAMPLES) * totalArcLen;
+    let lo = 0;
+    let hi = rawPoints.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (rawPoints[mid].dist < targetDist) lo = mid + 1;
+      else hi = mid;
+    }
+    const idx = Math.max(1, lo);
+    const pA = rawPoints[idx - 1];
+    const pB = rawPoints[idx];
+    const span = pB.dist - pA.dist || 1;
+    const factor = Math.max(0, Math.min(1, (targetDist - pA.dist) / span));
+    lut.push({
+      x: pA.x + (pB.x - pA.x) * factor,
+      y: pA.y + (pB.y - pA.y) * factor,
+    });
+  }
+  return lut;
+}
+
+const ARC_LUT = buildArcLengthLut();
+
+function getTrackCoordinates(s: number): { xPercent: number; yPercent: number } {
+  const clamped = Math.max(0, Math.min(1, s));
+  const idx = Math.min(1000, Math.max(0, Math.round(clamped * 1000)));
+  const pt = ARC_LUT[idx];
+  return {
+    xPercent: (pt.x / 1000) * 100,
+    yPercent: (pt.y / 500) * 100,
+  };
+}
 
 export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
   students,
@@ -107,78 +169,73 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
   allClassStudents,
   onSelectStudentProfile,
 }) => {
-  // Resolve active winners strictly from allClassStudents || students by id
+  // 1. Resolve active winners strictly from allClassStudents || students by ID
   const activeWinners = useMemo(() => {
-    const raw = (selectedStudents && selectedStudents.length > 0)
-      ? selectedStudents
-      : (winner ? [winner] : []);
-    const sourcePool = allClassStudents || students;
-    return raw.map((w) => sourcePool.find((s) => s.id === w.id) || w);
+    const raw =
+      selectedStudents && selectedStudents.length > 0
+        ? selectedStudents
+        : winner
+        ? [winner]
+        : [];
+    const pool = allClassStudents || students;
+    return raw.map((w) => pool.find((s) => s.id === w.id) || w);
   }, [selectedStudents, winner, allClassStudents, students]);
 
-  // 1 STUDENT = EXACTLY 1 HORSE (NO SLICE, NO HARDCODED LIMITS)
-  const racers = useMemo<HorseRacer[]>(() => {
-    if (!students || students.length === 0) return [];
-
-    return students.map((student, idx) => {
-      const stt = getStudentSTT(student, allClassStudents || students);
+  // 2. Adaptive number circle sizing based on class size (projector-optimized legibility)
+  const sizeConfig = useMemo(() => {
+    const count = students.length;
+    if (count <= 20) {
       return {
-        id: student.id,
-        student,
+        ballPx: 38,
+        sttFont: 'text-sm font-black',
+        ringClass: 'ring-2',
+        packSpan: 0.22,
+      };
+    } else if (count <= 35) {
+      return {
+        ballPx: 31,
+        sttFont: 'text-xs font-black',
+        ringClass: 'ring-1.5',
+        packSpan: 0.28,
+      };
+    } else {
+      return {
+        ballPx: 25,
+        sttFont: 'text-[10px] font-black',
+        ringClass: 'ring-1',
+        packSpan: 0.35,
+      };
+    }
+  }, [students.length]);
+
+  // 3. Exact 1:1 Mapping: Every student in `students` = exactly 1 number circle
+  const racers = useMemo<TrackRacer[]>(() => {
+    if (!students || students.length === 0) return [];
+    const count = students.length;
+
+    return students.map((st, idx) => {
+      const palette = RACER_PALETTES[idx % RACER_PALETTES.length];
+      const stt = getStudentSTT(st, allClassStudents || students);
+
+      // Distribute evenly along the caravan from pack leader (0) to pack tail (1)
+      const packOffset = count > 1 ? idx / (count - 1) : 0;
+      const jostlePhase = (idx * 1.8) % (Math.PI * 2);
+
+      return {
+        id: st.id,
+        student: st,
         stt,
-        laneNumber: idx + 1,
-        ...HORSE_TEAMS[idx % HORSE_TEAMS.length],
-        surgeFreq: 1.5 + (idx % 7) * 0.45,
-        surgePhase: idx * 1.35,
+        ...palette,
+        packOffset,
+        jostlePhase,
       };
     });
   }, [students, allClassStudents]);
 
-  // Adaptive lane & horse styling based on count
-  const adaptiveConfig = useMemo(() => {
-    const count = racers.length;
-    if (count <= 8) {
-      // Large
-      return {
-        laneHeight: 'h-13 sm:h-15',
-        horseSize: 'w-16 h-11 sm:w-20 sm:h-14',
-        laneBadge: 'w-6 h-6 text-xs',
-        sttBadge: 'px-2.5 py-1 text-xs sm:text-sm',
-      };
-    }
-    if (count <= 18) {
-      // Medium
-      return {
-        laneHeight: 'h-10 sm:h-11',
-        horseSize: 'w-13 h-9 sm:w-15 sm:h-10',
-        laneBadge: 'w-5 h-5 text-[10px]',
-        sttBadge: 'px-2 py-0.5 text-[10px] sm:text-xs',
-      };
-    }
-    if (count <= 30) {
-      // Small
-      return {
-        laneHeight: 'h-8 sm:h-9',
-        horseSize: 'w-11 h-7 sm:w-13 sm:h-8',
-        laneBadge: 'w-4.5 h-4.5 text-[9px]',
-        sttBadge: 'px-1.5 py-0.2 text-[9px] sm:text-[10px]',
-      };
-    }
-    // 31 - 45+ Compact
-    return {
-      laneHeight: 'h-7 sm:h-7.5',
-      horseSize: 'w-9 h-6 sm:w-11 sm:h-7',
-      laneBadge: 'w-4 h-4 text-[8px]',
-      sttBadge: 'px-1 py-0.1 text-[8px] sm:text-[9px]',
-    };
-  }, [racers.length]);
-
+  // 4. Smooth 60fps Animation Loop with React state
   const [animProgress, setAnimProgress] = useState(0);
-  const [gallopFrame, setGallopFrame] = useState(0);
   const animRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
-  const trackContainerRef = useRef<HTMLDivElement>(null);
-  const winnerLaneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isSpinning) {
@@ -189,7 +246,6 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
         const elapsed = now - startTimeRef.current;
         const p = Math.min(1, elapsed / duration);
         setAnimProgress(p);
-        setGallopFrame(Math.floor((elapsed / 80) % 4));
 
         if (p < 1) {
           animRef.current = requestAnimationFrame(loop);
@@ -199,10 +255,6 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
       animRef.current = requestAnimationFrame(loop);
     } else if (hasCompleted) {
       setAnimProgress(1);
-      // Auto-scroll to winner lane smoothly if scrollable
-      if (winnerLaneRef.current) {
-        winnerLaneRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
     } else {
       setAnimProgress(0);
       if (animRef.current) cancelAnimationFrame(animRef.current);
@@ -213,316 +265,413 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
     };
   }, [isSpinning, hasCompleted, duration]);
 
-  const count = racers.length;
-
   return (
     <div className="w-full max-w-4xl py-2 px-2 select-none flex flex-col items-center">
-      {/* Race Track Arena */}
-      <div className="relative w-full rounded-3xl overflow-hidden border border-slate-800 bg-gradient-to-b from-slate-950 via-[#0d1726] to-slate-950 p-3 sm:p-5 shadow-2xl">
-        {/* Derby Top Banner */}
-        <div className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-2.5 mb-2">
+      {/* Main Track Arena */}
+      <div className="relative w-full rounded-3xl overflow-hidden border border-sky-500/30 bg-gradient-to-b from-slate-950 via-[#0a1224] to-[#060a14] p-3 sm:p-5 shadow-2xl h-[430px] sm:h-[470px] flex flex-col justify-between">
+        
+        {/* Subtle Ambient Stadium Floodlights */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-10 left-1/4 w-80 h-80 rounded-full bg-cyan-500/10 blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-sky-500/10 via-transparent to-transparent pointer-events-none" />
+        </div>
+
+        {/* Top Header Information */}
+        <div className="relative z-20 flex items-center justify-between border-b border-slate-800/80 pb-2.5 mb-1">
           <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-black tracking-widest uppercase text-indigo-400">
-              TRƯỜNG ĐUA CHIẾN MÃ DERBY
+            <div className="w-7 h-7 rounded-xl bg-sky-500/20 border border-sky-400 flex items-center justify-center text-sm shadow-md shadow-sky-500/30">
+              🏁
+            </div>
+            <div>
+              <span className="text-xs font-black tracking-widest uppercase text-sky-400 block leading-tight">
+                ĐƯỜNG ĐUA SỐ
+              </span>
+              <span className="text-[10px] text-slate-400 hidden sm:inline">
+                Đường đua uốn lượn mềm mại • Bứt tốc về đích
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-300">
+              {isSpinning ? (
+                <span className="text-amber-300 font-bold animate-pulse flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-amber-400 animate-bounce" />
+                  <span>Đoàn xe số đang bứt phá qua các góc cua uốn lượn...</span>
+                </span>
+              ) : hasCompleted ? (
+                <span className="text-amber-300 font-bold flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {activeWinners.length > 1
+                      ? `Đã có ${activeWinners.length} số xuất sắc cán đích!`
+                      : 'Đã có chiến mã số xuất sắc cán đích!'}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-slate-400">
+                  {students.length > 0
+                    ? `Hiện có ${students.length} viên số trên vạch xuất phát • Nhấn QUAY TÊN để bắt đầu`
+                    : 'Chưa có học sinh phù hợp bộ lọc'}
+                </span>
+              )}
             </span>
           </div>
-          <span className="text-xs font-medium text-slate-300">
-            {isSpinning ? (
-              <span className="text-sky-300 font-bold animate-pulse flex items-center gap-1.5">
-                🏇 Các chiến mã đang phi nước đại và bứt tốc...
-              </span>
-            ) : hasCompleted ? (
-              <span className="text-amber-300 font-bold flex items-center gap-1">
-                <Flag className="w-3.5 h-3.5 text-amber-400" />
-                {activeWinners.length > 1
-                  ? `Đã có ${activeWinners.length} chiến mã cán đích vinh quang!`
-                  : 'Chiến mã đã cán đích vinh quang!'}
-              </span>
-            ) : (
-              <span className="text-slate-400">
-                {count > 0
-                  ? `Hiện có ${count} chiến mã (${count} HS) tại cổng xuất phát • Nhấn QUAY TÊN để xuất phát`
-                  : 'Chưa có học sinh phù hợp bộ lọc'}
-              </span>
-            )}
-          </span>
         </div>
 
-        {/* Real Racetrack Lanes (Adaptive & Scrollable for crowded classes) */}
-        <div
-          ref={trackContainerRef}
-          className="relative z-10 space-y-1 sm:space-y-1.5 max-h-[350px] sm:max-h-[410px] overflow-y-auto pr-1"
-        >
-          {racers.map((racer, idx) => {
-            const isWinner = activeWinners.some((w) => w.id === racer.id);
-            const isEndingPhase = animProgress >= 0.85;
+        {/* Center Arena Canvas: Smooth Ribbon Track Polyline */}
+        <div className="relative z-10 flex-1 w-full h-full flex items-center justify-center overflow-hidden">
+          
+          {/* SVG Asphalt Ribbon Track */}
+          <svg
+            viewBox="0 0 1000 500"
+            preserveAspectRatio="none"
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          >
+            <defs>
+              {/* Neon Glow Filter */}
+              <filter id="trackNeonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="6" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
 
-            // X-position (percentage across screen, 5% to 88%)
-            let xPos = 5;
+            {/* 1. Track Outer Ambient Shadow & Glow */}
+            <path
+              d={TRACK_PATH_D}
+              fill="none"
+              stroke="#0284c7"
+              strokeWidth="56"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.25"
+              filter="url(#trackNeonGlow)"
+            />
 
-            if (animProgress > 0) {
-              const baseRun = animProgress * 68;
-              const surge =
-                Math.sin(animProgress * Math.PI * 4 * racer.surgeFreq + racer.surgePhase) * 11 +
-                Math.cos(animProgress * Math.PI * 6 + idx) * 7;
+            {/* 2. Track Curbs / Borders */}
+            <path
+              d={TRACK_PATH_D}
+              fill="none"
+              stroke="#0369a1"
+              strokeWidth="50"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
 
-              if (!isEndingPhase) {
-                xPos = Math.max(5, Math.min(73, baseRun + surge));
-              } else {
-                const endLerp = (animProgress - 0.85) / 0.15;
-                if (isWinner) {
-                  xPos = 72 + endLerp * 16; // Crosses finish wire first (88%)!
+            {/* 3. Asphalt Surface */}
+            <path
+              d={TRACK_PATH_D}
+              fill="none"
+              stroke="#0b1329"
+              strokeWidth="42"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* 4. Dashed Golden Guide Divider */}
+            <path
+              d={TRACK_PATH_D}
+              fill="none"
+              stroke="#facc15"
+              strokeWidth="1.8"
+              strokeDasharray="9 7"
+              strokeLinecap="round"
+              opacity="0.65"
+            />
+          </svg>
+
+          {/* START BANNER (Start: x=8%, y=14%) */}
+          <div
+            style={{ left: '8%', top: '14%', transform: 'translate(-50%, -130%)' }}
+            className="absolute pointer-events-none z-20 flex flex-col items-center"
+          >
+            <div className="px-2.5 py-0.5 rounded-md bg-emerald-950/95 border border-emerald-400 text-[10px] font-black tracking-wider text-emerald-300 shadow-lg flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>START 🚦</span>
+            </div>
+            <div className="w-0.5 h-3 bg-emerald-400/80" />
+          </div>
+
+          {/* FINISH ARCH GATE (Finish: x=90%, y=84%) */}
+          <div
+            style={{ left: '90%', top: '84%', transform: 'translate(-50%, -50%)' }}
+            className="absolute pointer-events-none z-25 flex flex-col items-center"
+          >
+            {/* Checkered Finish Arch Bar */}
+            <div className="absolute -top-7 px-3 py-0.5 rounded-md bg-slate-900/95 border-2 border-amber-400 text-amber-300 font-black text-[11px] shadow-[0_0_15px_rgba(251,191,36,0.5)] flex items-center gap-1 animate-pulse">
+              <span>🏁 ĐÍCH</span>
+            </div>
+            {/* Checkered Finish Line Strip */}
+            <div className="w-3 h-12 bg-repeating-conic from-white to-slate-950 rounded-sm border border-amber-400/80 shadow-md flex flex-col justify-between py-0.5">
+              <div className="w-full h-1 bg-white" />
+              <div className="w-full h-1 bg-slate-950" />
+              <div className="w-full h-1 bg-white" />
+              <div className="w-full h-1 bg-slate-950" />
+            </div>
+          </div>
+
+          {/* NUMBER RACER CIRCLES TRAVELING ALONG THE WINDING TRACK (GAME STATE ONLY: UNMOUNTED WHEN RESULT IS PRESENTED) */}
+          {!hasCompleted &&
+            racers.map((racer, idx) => {
+              const isWinner = activeWinners.some((w) => w.id === racer.id);
+              let s = 0.05;
+              let scale = 1.0;
+              let isSurging = false;
+
+              if (isSpinning) {
+                const p = animProgress;
+
+                // Base caravan progression along the winding path:
+                // - Cruising (p < 0.80): smoothly advances across the 3 sweeping tiers
+                // - Final Sprint (p >= 0.80): winner accelerates smoothly to finish line
+                let baseProgress: number;
+                if (p < 0.80) {
+                  const cruiseT = p / 0.80;
+                  baseProgress =
+                    0.04 + sizeConfig.packSpan + Math.pow(cruiseT, 0.96) * (0.84 - sizeConfig.packSpan);
                 } else {
-                  xPos = 58 + Math.sin(idx * 2) * 8;
+                  const decelT = (p - 0.80) / 0.20;
+                  const ease = 1 - Math.pow(1 - decelT, 3);
+                  baseProgress = 0.84 + ease * 0.08;
                 }
+
+                const packPos = racer.packOffset * sizeConfig.packSpan;
+                const jostle =
+                  Math.sin(p * Math.PI * 7 + racer.jostlePhase) * (p < 0.80 ? 0.015 : 0.005);
+                s = baseProgress - packPos + jostle;
+
+                // Winner Acceleration Sprint (p >= 0.80)
+                if (isWinner) {
+                  if (p >= 0.80) {
+                    const surgeT = (p - 0.80) / 0.20;
+                    const surgeEase = Math.pow(surgeT, 2.2);
+                    const winnerIdx = activeWinners.findIndex((w) => w.id === racer.id);
+                    const targetFinishS =
+                      activeWinners.length > 1
+                        ? 1.0 - winnerIdx * 0.032
+                        : 1.0;
+                    // Smoothly blend from current position to finish line along the exact curve
+                    s = s * (1 - surgeEase) + targetFinishS * surgeEase;
+                    scale = 1.0 + surgeEase * 0.32;
+                    isSurging = true;
+                  }
+                } else {
+                  // Non-winners keep running smoothly behind
+                  s = Math.min(0.86, s);
+                }
+              } else {
+                // Idle state: caravan distributed neatly behind START on top tier
+                s = Math.max(
+                  0.015,
+                  0.04 + sizeConfig.packSpan - racer.packOffset * sizeConfig.packSpan
+                );
               }
-            } else if (hasCompleted) {
-              xPos = isWinner ? 88 : 58 + Math.sin(idx * 2) * 8;
-            }
 
-            const yBob = isSpinning
-              ? gallopFrame === 0
-                ? -2
-                : gallopFrame === 2
-                ? 2
-                : 0
-              : 0;
+              s = Math.max(0.01, Math.min(1.0, s));
+              const pt = getTrackCoordinates(s);
 
-            return (
-              <div
-                key={racer.id}
-                ref={isWinner ? winnerLaneRef : null}
-                className={`relative ${adaptiveConfig.laneHeight} rounded-xl border transition-all duration-300 overflow-hidden flex items-center px-2 ${
-                  isWinner && isEndingPhase
-                    ? 'border-amber-400 bg-gradient-to-r from-slate-900 via-indigo-950/90 to-amber-500/25 shadow-lg ring-1 ring-amber-400/50'
-                    : 'border-slate-800/80 bg-slate-900/70 hover:bg-slate-900/90'
-                }`}
-              >
-                {/* Racetrack Turf texture */}
-                <div className="absolute inset-0 pointer-events-none opacity-15 bg-[repeating-linear-gradient(90deg,transparent,transparent_20px,rgba(255,255,255,0.05)_20px,rgba(255,255,255,0.05)_40px)]" />
-
-                {/* Left Stall Gate & Track Lane Number */}
-                <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center">
-                  <div
-                    style={{ backgroundColor: racer.jockeySilk, borderColor: racer.saddleBorder }}
-                    className={`${adaptiveConfig.laneBadge} rounded-lg text-white font-black flex items-center justify-center shadow-md border`}
-                    title={`Làn đua số ${racer.laneNumber}`}
-                  >
-                    L{racer.laneNumber}
-                  </div>
-                </div>
-
-                {/* Distance Markers */}
-                <div className="absolute left-[25%] top-0 bottom-0 border-l border-dashed border-slate-700/40 pointer-events-none" />
-                <div className="absolute left-[50%] top-0 bottom-0 border-l border-dashed border-slate-700/40 pointer-events-none" />
-                <div className="absolute left-[75%] top-0 bottom-0 border-l border-dashed border-slate-700/40 pointer-events-none" />
-
-                {/* Checkered Finish Line at 86% */}
-                <div className="absolute right-5 sm:right-7 top-0 bottom-0 w-2.5 sm:w-3 flex flex-col justify-between py-0.5 z-0 opacity-85 pointer-events-none">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-1.5 sm:h-2 w-full ${i % 2 === 0 ? 'bg-amber-300' : 'bg-slate-900'}`}
-                    />
-                  ))}
-                </div>
-
-                {/* Running Horse & STT Badge */}
+              return (
                 <div
+                  key={racer.id}
                   style={{
-                    left: `${xPos}%`,
-                    top: `calc(50% + ${yBob}px)`,
-                    transform: 'translate(-50%, -50%)',
-                    transition: isEndingPhase ? 'left 0.25s ease-out' : 'none',
+                    left: `${pt.xPercent.toFixed(2)}%`,
+                    top: `${pt.yPercent.toFixed(2)}%`,
+                    transform: `translate(-50%, -50%) scale(${scale.toFixed(2)})`,
+                    zIndex: isSurging ? 35 : 15 + idx,
+                    transition: isSpinning ? 'none' : 'all 0.25s ease-out',
                   }}
-                  onClick={() => onSelectStudentProfile?.(racer.student)}
-                  className={`absolute z-20 flex items-center gap-1.5 transition-transform ${
-                    onSelectStudentProfile ? 'cursor-pointer hover:scale-125 hover:z-30' : ''
-                  } ${
-                    isWinner && isEndingPhase ? 'scale-105' : 'scale-100'
+                  onClick={() => {
+                    // Only allow clicking profile when not in the middle of spinning
+                    if (!isSpinning) {
+                      onSelectStudentProfile?.(racer.student);
+                    }
+                  }}
+                  className={`absolute select-none pointer-events-auto ${
+                    !isSpinning && onSelectStudentProfile ? 'cursor-pointer hover:scale-110' : ''
                   }`}
-                  title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${racer.student.name} (STT #${racer.stt})` : undefined}
+                  title={
+                    !isSpinning && onSelectStudentProfile
+                      ? `Bấm để xem Thẻ học sinh: ${racer.student.name}`
+                      : undefined
+                  }
                 >
-                  {/* Dust Particles */}
-                  {(animProgress > 0 || hasCompleted) && (
-                    <div className="flex items-center gap-1 opacity-70 -mr-1">
-                      <div className="w-1.5 h-1 rounded-full bg-amber-400/60 animate-ping" />
-                    </div>
-                  )}
-
-                  {/* Galloping Thoroughbred Horse SVG */}
-                  <div className={`relative ${adaptiveConfig.horseSize} drop-shadow-xl`}>
-                    <svg viewBox="0 0 120 75" className="w-full h-full overflow-visible">
-                      <defs>
-                        <linearGradient id={`horse-body-${racer.id}`} x1="0%" y1="0%" x2="100%" y2="50%">
-                          <stop offset="0%" stopColor={racer.horseHighlight} />
-                          <stop offset="60%" stopColor={racer.horseColor} />
-                          <stop offset="100%" stopColor="#1e1b18" />
-                        </linearGradient>
-                      </defs>
-
-                      {/* Tail */}
-                      <path
-                        d={
-                          gallopFrame % 2 === 0
-                            ? 'M 18 36 C 8 40, 2 54, 8 68 C 12 56, 16 48, 22 42 Z'
-                            : 'M 18 36 C 6 34, 0 46, 6 60 C 10 50, 14 44, 22 42 Z'
-                        }
-                        fill={racer.maneColor}
-                        opacity="0.9"
-                      />
-
-                      {/* Back Legs */}
-                      <path
-                        d={
-                          gallopFrame === 0
-                            ? 'M 24 38 Q 12 54, 4 64'
-                            : gallopFrame === 1
-                            ? 'M 24 38 Q 18 52, 14 66'
-                            : gallopFrame === 2
-                            ? 'M 24 38 Q 28 50, 32 66'
-                            : 'M 24 38 Q 16 48, 8 58'
-                        }
-                        stroke={racer.horseColor}
-                        strokeWidth="3.6"
-                        strokeLinecap="round"
-                        fill="none"
-                      />
-
-                      {/* Horse Muscular Body */}
-                      <path
-                        d="M 22 36 C 22 28, 38 28, 48 30 C 58 32, 64 26, 70 18 C 76 10, 84 8, 92 12 C 94 14, 98 16, 94 20 C 88 24, 82 26, 78 34 C 74 42, 68 46, 52 46 C 36 46, 26 44, 22 36 Z"
-                        fill={`url(#horse-body-${racer.id})`}
-                        stroke="#0f172a"
-                        strokeWidth="1.2"
-                      />
-
-                      {/* Mane */}
-                      <path d="M 68 18 Q 72 26, 66 32" stroke={racer.maneColor} strokeWidth="3" strokeLinecap="round" />
-
-                      {/* Saddle Cloth */}
-                      <path
-                        d="M 40 30 L 54 30 L 52 38 L 38 38 Z"
-                        fill={racer.jockeySilk}
-                        stroke={racer.saddleBorder}
-                        strokeWidth="1"
-                      />
-
-                      {/* Jockey */}
-                      <circle cx="46" cy="18" r="4.5" fill={racer.jockeySilk} stroke="#ffffff" strokeWidth="0.8" />
-                      <path d="M 42 22 L 50 20 L 48 30 L 42 28 Z" fill={racer.silkAccent} />
-
-                      {/* Front Galloping Legs */}
-                      <path
-                        d={
-                          gallopFrame === 0
-                            ? 'M 66 36 Q 80 48, 92 56'
-                            : gallopFrame === 1
-                            ? 'M 66 36 Q 78 52, 84 66'
-                            : gallopFrame === 2
-                            ? 'M 66 36 Q 72 50, 70 66'
-                            : 'M 66 36 Q 60 48, 54 60'
-                        }
-                        stroke={racer.horseColor}
-                        strokeWidth="3.6"
-                        strokeLinecap="round"
-                        fill="none"
-                      />
-                    </svg>
-
-                    {/* Winner Crown on top of champion horse */}
-                    {isWinner && hasCompleted && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 animate-bounce">
-                        <span className="text-base sm:text-xl filter drop-shadow">👑</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Clean STT Badge */}
+                  {/* 3D Circular Number Ball */}
                   <div
                     style={{
-                      borderColor: isWinner && isEndingPhase ? '#f59e0b' : racer.saddleBorder,
+                      width: `${sizeConfig.ballPx}px`,
+                      height: `${sizeConfig.ballPx}px`,
+                      background: racer.bgGradient,
+                      borderColor: racer.borderColor,
+                      boxShadow: `inset -2px -3px 5px rgba(0, 0, 0, 0.65), inset 2px 3px 5px rgba(255, 255, 255, 0.75), 0 4px 10px ${racer.glowColor}`,
                     }}
-                    className={`${adaptiveConfig.sttBadge} rounded-full text-center border shadow-lg font-black tracking-wider whitespace-nowrap transition-transform ${
-                      isWinner && isEndingPhase
-                        ? 'bg-amber-400 text-slate-950 scale-110 shadow-amber-400/50 ring-2 ring-amber-300'
-                        : 'bg-slate-950/95 text-white border-2'
+                    className={`relative rounded-full border flex items-center justify-center transition-shadow ${
+                      sizeConfig.ringClass
                     }`}
                   >
-                    #{racer.stt}
+                    {/* Gloss Glint */}
+                    <div className="absolute top-0.5 left-1 w-2.5 h-1.5 rounded-full bg-white/85 blur-[0.3px] pointer-events-none" />
+
+                    {/* STT Number displayed upright for readability */}
+                    <span
+                      style={{ color: racer.textColor }}
+                      className={`${sizeConfig.sttFont} leading-none tracking-tighter drop-shadow-xs`}
+                    >
+                      {racer.stt}
+                    </span>
                   </div>
                 </div>
+              );
+            })}
+
+          {/* GRAND WINNER PRESENTATION AREA (APPEARS WHEN COMPLETED) */}
+          {hasCompleted && activeWinners.length > 0 && (
+            <div className="absolute inset-0 z-40 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-3 animate-fade-in pointer-events-auto">
+              <div className="text-center max-w-xl w-full px-4 py-4 rounded-3xl bg-slate-900/95 border-2 border-amber-400 shadow-[0_0_50px_rgba(245,158,11,0.35)] space-y-3 animate-scale-in">
+                
+                {/* Winner Header Banner */}
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-2xl animate-bounce">🏁</span>
+                  <div className="text-xs sm:text-sm font-black tracking-widest uppercase text-amber-400 flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    <span>
+                      {activeWinners.length === 1
+                        ? 'SỐ CÁN ĐÍCH ĐẦU TIÊN'
+                        : `KẾT QUẢ ${activeWinners.length} SỐ CÁN ĐÍCH`}
+                    </span>
+                  </div>
+                  <span className="text-2xl animate-bounce">🏁</span>
+                </div>
+
+                {/* Single Winner Display: Big Winner Ball + Full Student Name */}
+                {activeWinners.length === 1 ? (
+                  <div className="flex flex-col items-center gap-2.5 py-1">
+                    {/* Big 3D Winning Number Ball */}
+                    <button
+                      type="button"
+                      onClick={() => onSelectStudentProfile?.(activeWinners[0])}
+                      className={`relative ${
+                        onSelectStudentProfile
+                          ? 'cursor-pointer hover:scale-105 transition-transform'
+                          : ''
+                      }`}
+                      title={
+                        onSelectStudentProfile
+                          ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}`
+                          : undefined
+                      }
+                    >
+                      <div
+                        style={{
+                          background:
+                            'radial-gradient(circle at 35% 30%, #fef08a 0%, #eab308 50%, #854d0e 100%)',
+                          boxShadow:
+                            'inset -6px -8px 14px rgba(0, 0, 0, 0.7), inset 6px 8px 14px rgba(255, 255, 255, 0.8), 0 10px 25px rgba(234, 179, 8, 0.6)',
+                        }}
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-amber-200 flex items-center justify-center ring-4 ring-amber-400/50"
+                      >
+                        {/* Specular Glint */}
+                        <div className="absolute top-2 left-3 w-5 h-2.5 rounded-full bg-white/90 blur-[0.5px]" />
+                        {/* Center STT Badge: SINGLE STT DISPLAY */}
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white shadow-xl flex items-center justify-center border-2 border-slate-300">
+                          <span className="font-black text-xl sm:text-2xl text-slate-950">
+                            #{getStudentSTT(activeWinners[0], allClassStudents || students)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="absolute -top-3 -right-2 text-2xl animate-pulse">
+                        👑
+                      </div>
+                    </button>
+
+                    {/* FULL STUDENT NAME PROMINENTLY DISPLAYED */}
+                    <div className="text-center">
+                      <h2
+                        onClick={() => onSelectStudentProfile?.(activeWinners[0])}
+                        className={`text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-1 ${
+                          onSelectStudentProfile
+                            ? 'cursor-pointer hover:underline hover:text-white transition-colors'
+                            : ''
+                        }`}
+                        title={
+                          onSelectStudentProfile
+                            ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}`
+                            : undefined
+                        }
+                      >
+                        {activeWinners[0].name}
+                      </h2>
+                      <div className="text-xs sm:text-sm font-bold text-slate-300 mt-2 flex items-center justify-center">
+                        <span className="px-3.5 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 shadow-sm">
+                          Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Multiple Winners Display: Grid of Finished Balls + Full Names */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto px-1 py-1">
+                    {activeWinners.map((w, idx) => {
+                      const stt = getStudentSTT(w, allClassStudents || students);
+                      const palette = RACER_PALETTES[idx % RACER_PALETTES.length];
+                      return (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => onSelectStudentProfile?.(w)}
+                          className="px-3.5 py-2 rounded-2xl bg-slate-800/90 hover:bg-slate-750 border border-amber-400/70 hover:border-amber-300 text-amber-300 font-black text-sm sm:text-base shadow-lg flex items-center gap-3 transition-transform hover:scale-[1.02] cursor-pointer text-left w-full"
+                          title="Bấm để xem Thẻ học sinh"
+                        >
+                          {/* Mini 3D Ball */}
+                          <div
+                            style={{
+                              background: palette.bgGradient,
+                              boxShadow: `inset -2px -3px 5px rgba(0,0,0,0.6), inset 2px 3px 5px rgba(255,255,255,0.7), 0 2px 6px ${palette.glowColor}`,
+                              borderColor: palette.borderColor,
+                            }}
+                            className="w-10 h-10 rounded-full border flex items-center justify-center shrink-0"
+                          >
+                            <span
+                              style={{ color: palette.textColor }}
+                              className="font-black text-sm leading-none"
+                            >
+                              #{stt}
+                            </span>
+                          </div>
+
+                          {/* Student Details: Full Name & Stats */}
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="text-amber-200 hover:text-white hover:underline font-black text-sm truncate">
+                              {w.name}
+                            </div>
+                            <div className="text-[11px] font-medium text-slate-300">
+                              Lần thứ {Math.max(1, w.callCount ?? 1)} lên bảng
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            );
-          })}
+            </div>
+          )}
         </div>
 
-        {/* Grand Victory Announcement inside track when completed */}
-        {hasCompleted && activeWinners.length > 0 && (
-          <div className="mt-2 text-center p-3 sm:p-4 rounded-2xl bg-slate-900/95 border-2 border-amber-400 shadow-xl shadow-amber-500/20 max-w-lg mx-auto animate-scale-in">
-            <div className="text-[10px] font-black tracking-widest uppercase text-amber-400 flex items-center justify-center gap-1.5">
-              <Trophy className="w-4 h-4 text-amber-400" />
-              {activeWinners.length === 1
-                ? 'CHIẾN MÃ CÁN ĐÍCH ĐẦU TIÊN!'
-                : `${activeWinners.length} CHIẾN MÃ CÁN ĐÍCH XUẤT SẮC!`}
-            </div>
-
-            {activeWinners.length === 1 ? (
-              <>
-                <h2
-                  onClick={() => onSelectStudentProfile?.(activeWinners[0])}
-                  className={`text-2xl sm:text-3xl font-black text-amber-300 tracking-tight leading-tight mt-1 truncate px-2 ${
-                    onSelectStudentProfile ? 'cursor-pointer hover:underline hover:text-white transition-colors' : ''
-                  }`}
-                  title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}` : undefined}
-                >
-                  👑 {activeWinners[0].name}
-                </h2>
-                <div className="text-xs font-bold text-slate-300 mt-1 flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSelectStudentProfile?.(activeWinners[0])}
-                    className={`px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px] ${
-                      onSelectStudentProfile ? 'hover:bg-amber-400/30 cursor-pointer transition-colors' : ''
-                    }`}
-                    title={onSelectStudentProfile ? 'Bấm để xem Thẻ học sinh' : undefined}
-                  >
-                    STT #{getStudentSTT(activeWinners[0], allClassStudents || students)}
-                  </button>
-                  <span>Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng</span>
-                </div>
-              </>
-            ) : (
-              <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 max-h-48 overflow-y-auto">
-                {activeWinners.map((w) => {
-                  const stt = getStudentSTT(w, allClassStudents || students);
-                  return (
-                    <button
-                      key={w.id}
-                      type="button"
-                      onClick={() => onSelectStudentProfile?.(w)}
-                      className="px-3.5 py-1.5 rounded-xl bg-slate-800/95 hover:bg-slate-750 border border-amber-400/80 hover:border-amber-300 text-amber-300 hover:text-white font-black text-sm sm:text-base shadow-md flex items-center gap-2 cursor-pointer hover:scale-105 transition-all text-left"
-                      title="Bấm để xem Thẻ học sinh"
-                    >
-                      <span className="text-amber-400">👑</span>
-                      <span>#{stt}</span>
-                      <span className="hover:underline">{w.name}</span>
-                      <span className="text-[11px] font-medium text-slate-300">
-                        ({Math.max(1, w.callCount ?? 1)} lần)
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer info */}
-        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400 pt-2 mt-1.5 border-t border-slate-800/80">
-          <span>🚩 Mỗi học sinh = 1 chiến mã ({count} làn đua) • Cán đích cờ ca-rô bên phải</span>
-          <span>Chiến mã bứt tốc cán đích đầu tiên sẽ chiến thắng!</span>
+        {/* Footer info bar */}
+        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400 pt-2.5 mt-1 border-t border-slate-800/80">
+          <span className="flex items-center gap-1.5">
+            <Flag className="w-3.5 h-3.5 text-sky-400" />
+            <span>
+              Mỗi học sinh = 1 viên số tròn ({racers.length} học sinh) • Chạy nối tiếp trên đường đua uốn lượn
+            </span>
+          </span>
+          <span className="hidden sm:inline">
+            Đoạn cuối winner tăng tốc bứt phá về cổng đích 🏁
+          </span>
         </div>
       </div>
     </div>

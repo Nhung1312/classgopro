@@ -75,6 +75,7 @@ import { HorseRaceVisual } from './visuals/HorseRaceVisual';
 import { BoatRaceVisual } from './visuals/BoatRaceVisual';
 import { RocketVisual } from './visuals/RocketVisual';
 import { MagicCardVisual } from './visuals/MagicCardVisual';
+import { PyramidVisual } from './visuals/PyramidVisual';
 
 const BalloonIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg
@@ -707,9 +708,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     { id: 'MAGIC_CARD', label: 'Lá bài ma thuật', icon: <Wand2 className="w-4 h-4 text-purple-400" /> },
     { id: 'CHEST', label: 'Hộp May Mắn', icon: <Gift className="w-4 h-4" /> },
     { id: 'BALLOON', label: 'Bong Bóng', icon: <BalloonIcon className="w-4 h-4" /> },
-    { id: 'HORSE_RACE', label: 'Đua Ngựa', icon: <HorseIcon className="w-4 h-4" /> },
+    { id: 'HORSE_RACE', label: 'Đường đua số', icon: <span className="text-sm">🏁</span> },
     { id: 'BOAT_RACE', label: 'Quay bi xổ số', icon: <span className="text-sm">🎱</span> },
     { id: 'ROCKET', label: 'Tên Lửa', icon: <Rocket className="w-4 h-4" /> },
+    { id: 'PYRAMID', label: 'Kim tự tháp bí ẩn', icon: <span className="text-sm">🔺</span> },
   ];
 
   return (
@@ -1324,6 +1326,18 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           )}
           {visualType === 'MAGIC_CARD' && (
             <MagicCardVisual
+              students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
+              isSpinning={isSpinning}
+              hasCompleted={hasCompleted}
+              winner={resolvedWinner}
+              selectedStudents={resolvedVisualSelectedStudents}
+              duration={settings.spinDuration || 3800}
+              allClassStudents={students}
+              onSelectStudentProfile={setSelectedProfileStudent}
+            />
+          )}
+          {visualType === 'PYRAMID' && (
+            <PyramidVisual
               students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}

@@ -91,7 +91,7 @@ export type CallTargetFilter = 'ALL' | 'FEMALE_ONLY' | 'MALE_ONLY' | 'NO_SCORE_T
 
 export type WheelSizeOption = 'STANDARD' | 'LARGE' | 'XLARGE';
 
-export type SpinVisualType = 'SLOT' | 'WHEEL' | 'CARDS' | 'CHEST' | 'BALLOON' | 'HORSE_RACE' | 'BOAT_RACE' | 'DUCK_RACE' | 'ROCKET' | 'MAGIC_CARD';
+export type SpinVisualType = 'SLOT' | 'WHEEL' | 'CARDS' | 'CHEST' | 'BALLOON' | 'HORSE_RACE' | 'BOAT_RACE' | 'DUCK_RACE' | 'ROCKET' | 'MAGIC_CARD' | 'PYRAMID';
 
 export type BgmStyle = 'SUSPENSE_GAME' | 'DRUMROLL' | 'CYBER' | 'OFF';
 
