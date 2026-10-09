@@ -170,14 +170,6 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
       return hA - hB;
     });
 
-    // Schedule elimination progress for each non-winner: spaced from 0.08 to 0.88
-    const elimMap = new Map<string, number>();
-    const totalNonWinners = shuffledNonWinners.length;
-    shuffledNonWinners.forEach((st, idx) => {
-      const ratio = 0.08 + (idx / Math.max(1, totalNonWinners)) * 0.80;
-      elimMap.set(st.id, ratio);
-    });
-
     // Distribute students into tiers: place primary winner at apex or prominent tier
     // Arrange students so apex (tier 0) gets winner if possible, or distributes naturally
     const allOrdered: Student[] = [];
@@ -198,9 +190,8 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
         const st = allOrdered[studentPointer];
         const isW = winnerIds.has(st.id);
         const stt = getStudentSTT(st, allClassStudents || students);
-        const initials = getStudentInitials(st.name);
+        const initials = getStudentInitials(st?.name);
         const gradient = getStudentAvatarGradient(st.id || st.name);
-        const elimP = isW ? 999 : elimMap.get(st.id) ?? 0.5;
 
         const blk: PyramidBlock = {
           student: st,
@@ -208,7 +199,7 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
           initials,
           gradient,
           isWinner: isW,
-          elimProgress: elimP,
+          elimProgress: isW ? 999 : 0.5,
           tierIndex: tIdx,
           colIndex: c,
         };
@@ -220,6 +211,32 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
 
         studentPointer++;
       }
+    });
+
+    if (winnerIds.size === 0 && allBlocks.length > 0) {
+      allBlocks[0].isWinner = true;
+      allBlocks[0].elimProgress = 999;
+      foundWinnerBlock = allBlocks[0];
+    }
+
+    // Elimination sequence: BOTTOM (đáy) TO TOP (đỉnh)
+    // Non-winner blocks at highest tierIndex (base / đáy) eliminate first;
+    // blocks at lower tierIndex (towards apex / đỉnh) eliminate last.
+    const nonWinnerBlocks = allBlocks.filter((b) => !b.isWinner);
+    nonWinnerBlocks.sort((a, b) => {
+      // 1. Higher tierIndex (bottom of pyramid) eliminates first
+      if (b.tierIndex !== a.tierIndex) {
+        return b.tierIndex - a.tierIndex;
+      }
+      // 2. Within the same tier, pseudo-random deterministic stagger
+      const hA = (a.student.id.charCodeAt(0) * 31 + a.student.name.charCodeAt(0)) % 100;
+      const hB = (b.student.id.charCodeAt(0) * 31 + b.student.name.charCodeAt(0)) % 100;
+      return hA - hB;
+    });
+
+    const totalNonWinners = nonWinnerBlocks.length;
+    nonWinnerBlocks.forEach((blk, idx) => {
+      blk.elimProgress = 0.08 + (idx / Math.max(1, totalNonWinners)) * 0.80;
     });
 
     return {
@@ -235,35 +252,35 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
     if (count <= 12) {
       return {
         block: 'w-14 sm:w-16 h-12 sm:h-14',
-        sttText: 'text-sm sm:text-base font-black',
-        avatar: 'w-5 h-5 text-[10px]',
+        sttText: 'text-xs sm:text-sm',
+        initialsText: 'text-xs sm:text-sm',
         gap: 'gap-2 sm:gap-3',
         rowGap: 'gap-2 sm:gap-2.5',
       };
     }
     if (count <= 25) {
       return {
-        block: 'w-11 sm:w-13 h-10 sm:h-11',
-        sttText: 'text-xs sm:text-sm font-black',
-        avatar: 'w-4 h-4 text-[8px]',
+        block: 'w-11 sm:w-12 h-10 sm:h-12',
+        sttText: 'text-[11px] sm:text-xs',
+        initialsText: 'text-[10px] sm:text-[11px]',
         gap: 'gap-1.5 sm:gap-2',
         rowGap: 'gap-1.5 sm:gap-2',
       };
     }
     if (count <= 38) {
       return {
-        block: 'w-8.5 sm:w-10.5 h-8 sm:h-9.5',
-        sttText: 'text-[11px] sm:text-xs font-bold',
-        avatar: 'w-3.5 h-3.5 text-[7px]',
+        block: 'w-[38px] sm:w-[46px] h-[38px] sm:h-[44px]',
+        sttText: 'text-[10px] sm:text-[11px]',
+        initialsText: 'text-[9px] sm:text-[10px]',
         gap: 'gap-1 sm:gap-1.5',
         rowGap: 'gap-1 sm:gap-1.5',
       };
     }
     // 39 - 50+ students
     return {
-      block: 'w-7.5 sm:w-8.5 h-7 sm:h-8',
-      sttText: 'text-[9px] sm:text-[10px] font-bold',
-      avatar: 'hidden',
+      block: 'w-[32px] sm:w-[38px] h-[34px] sm:h-[40px]',
+      sttText: 'text-[9px] sm:text-[10px]',
+      initialsText: 'text-[8px] sm:text-[9px]',
       gap: 'gap-1',
       rowGap: 'gap-1',
     };
@@ -573,35 +590,36 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
                         }`}
                       >
                         {/* Top Capstone Notch */}
-                        <div className="w-full flex items-center justify-between text-[7px] text-amber-400/80 font-mono leading-none">
+                        <div className="w-full flex items-center justify-between text-[7px] text-amber-400/80 font-mono leading-none flex-shrink-0 select-none">
                           <span>✦</span>
                           <span>✦</span>
                         </div>
 
-                        {/* STT Number Prominently on Face */}
-                        <div className="flex-1 flex flex-col items-center justify-center my-auto">
-                          <span
-                            className={`${blockSizeConfig.sttText} ${
+                        {/* STT Number on Line 1 & Initials 2 Letters on Line 2 */}
+                        <div className="flex-1 flex flex-col items-center justify-center my-auto min-h-0 w-full overflow-hidden select-none">
+                          <div
+                            className={`${blockSizeConfig.sttText} leading-tight font-black truncate ${
                               isSurvivingWinner
                                 ? 'text-amber-950 font-black'
                                 : 'text-amber-200 drop-shadow'
                             }`}
                           >
                             #{blk.stt}
-                          </span>
+                          </div>
 
-                          {/* Mini Avatar Pill if configured */}
-                          {blockSizeConfig.avatar !== 'hidden' && (
-                            <div
-                              className={`mt-0.5 rounded-full bg-gradient-to-br ${blk.gradient} flex items-center justify-center text-white font-bold select-none shadow-sm ${blockSizeConfig.avatar}`}
-                            >
-                              {blk.initials}
-                            </div>
-                          )}
+                          <div
+                            className={`${blockSizeConfig.initialsText} leading-tight font-extrabold tracking-wider truncate flex-shrink-0 mt-0.5 ${
+                              isSurvivingWinner
+                                ? 'text-amber-950/90 font-black'
+                                : 'text-amber-300 drop-shadow'
+                            }`}
+                          >
+                            {blk.initials}
+                          </div>
                         </div>
 
                         {/* Bottom Stone Bevel */}
-                        <div className="w-full h-0.5 bg-amber-500/30 rounded-full" />
+                        <div className="w-full h-0.5 bg-amber-500/30 rounded-full flex-shrink-0" />
                       </div>
                     );
                   })}

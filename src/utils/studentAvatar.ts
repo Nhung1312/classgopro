@@ -1,10 +1,12 @@
 // Utility for generating avatar initials and deterministic background gradients
 
-export const getStudentInitials = (name: string): string => {
+export const getStudentInitials = (name?: string | null): string => {
+  if (!name || typeof name !== 'string') return 'HS';
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
+  if (parts.length === 0) return 'HS';
   if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
+    const single = parts[0].slice(0, 2).toUpperCase();
+    return single.length === 1 ? single + single : single;
   }
   // Take first letter of second-to-last word and last word (e.g., Nguyễn Minh Anh -> M + A = MA)
   const secondLast = parts[parts.length - 2];
