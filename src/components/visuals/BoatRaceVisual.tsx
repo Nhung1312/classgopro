@@ -11,6 +11,7 @@ interface LotteryBallsVisualProps {
   selectedStudents?: Student[];
   duration?: number;
   allClassStudents?: Student[];
+  onSelectStudentProfile?: (student: Student) => void;
 }
 
 interface LotteryBall {
@@ -26,20 +27,19 @@ interface LotteryBall {
 
   // Orbit parameters (deterministic, smooth, physics-free)
   orbitType: 'circle' | 'ellipse_horizontal' | 'ellipse_tilted';
-  radiusX: number; // in percentage of chamber (12% to 30%)
-  radiusY: number; // in percentage of chamber (10% to 22%)
+  radiusX: number; // in percentage of chamber (22% to 42%)
+  radiusY: number; // in percentage of chamber (16% to 32%)
   phase: number;   // initial angle phase in radians
-  speedFactor: number; // subtle variation (0.85 to 1.25)
+  speedFactor: number; // subtle variation (0.92 to 1.18)
   tiltAngle: number;   // tilt angle in radians
-  bounceFreq: number;  // bounce oscillations per revolution (2.0 to 4.0)
-  bounceAmp: number;   // bounce amplitude in % (1.2% to 2.8%)
+  bounceFreq: number;  // bounce oscillations per revolution (2.5 to 4.2)
+  bounceAmp: number;   // bounce amplitude in % (2.4% to 4.2%)
   bouncePhase: number;
 
-  // Rendered position & orientation
-  x: number;
-  y: number;
+  // Initial rendered position
+  initialX: number;
+  initialY: number;
   radius: number; // in px
-  rot: number;    // subtle visual wobble
 }
 
 // 8 Vibrant 3D Lottery Ball Color Palettes (Rich casino / television lottery style)
@@ -110,6 +110,7 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
   selectedStudents,
   duration = 3800,
   allClassStudents,
+  onSelectStudentProfile,
 }) => {
   // 1. Resolve up-to-date active winners strictly from allClassStudents || students by id
   const activeWinners = useMemo(() => {
@@ -123,54 +124,84 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
     return raw.map((w) => pool.find((s) => s.id === w.id) || w);
   }, [selectedStudents, winner, allClassStudents, students]);
 
-  // 2. Initialize lottery balls with deterministic orbit & bounce properties
+  // 2. Initialize lottery balls with deterministic orbit & bounce properties (Expanded Radii & Tiers)
   const initialBalls = useMemo<LotteryBall[]>(() => {
     if (!students || students.length === 0) return [];
     const count = students.length;
-    // Ball radius scales nicely: smaller if many students, bigger if few
-    const radius = count > 35 ? 18 : count > 20 ? 21 : 25;
+    // Ball radius scales gracefully with student count
+    const radius = count > 35 ? 17 : count > 20 ? 19 : 23;
+
+    // Number of orbital tracks/rings:
+    const numRings = count <= 8 ? 2 : count <= 18 ? 3 : 4;
 
     return students.map((st, idx) => {
       const theme = LOTTERY_BALL_THEMES[idx % LOTTERY_BALL_THEMES.length];
       const stt = getStudentSTT(st, allClassStudents || students);
 
-      // Assign one of 3 orbit patterns:
-      // Pattern 0: Tròn (Circle)
-      // Pattern 1: Elip ngang (Horizontal Ellipse)
-      // Pattern 2: Elip nghiêng (Tilted Ellipse)
-      const patternMode = idx % 3;
-      let orbitType: 'circle' | 'ellipse_horizontal' | 'ellipse_tilted' = 'circle';
-      let radiusX = 22;
+      const ringIdx = idx % numRings;
+      let radiusX = 28;
       let radiusY = 22;
       let tiltAngle = 0;
+      let orbitType: 'circle' | 'ellipse_horizontal' | 'ellipse_tilted' = 'circle';
 
-      if (patternMode === 0) {
-        orbitType = 'circle';
-        const ring = 15 + (idx % 3) * 6; // 15%, 21%, 27%
-        radiusX = ring;
-        radiusY = ring * 0.85; // Slight perspective squish to fit drum glass
-        tiltAngle = 0;
-      } else if (patternMode === 1) {
-        orbitType = 'ellipse_horizontal';
-        radiusX = 24 + (idx % 4) * 2.2; // 24% to 30.6%
-        radiusY = 13 + (idx % 3) * 2.5; // 13% to 18%
-        tiltAngle = 0;
+      if (numRings === 2) {
+        if (ringIdx === 0) {
+          radiusX = 26;
+          radiusY = 20;
+          orbitType = 'circle';
+        } else {
+          radiusX = 38;
+          radiusY = 28;
+          tiltAngle = ((idx % 3) - 1) * 0.14;
+          orbitType = 'ellipse_tilted';
+        }
+      } else if (numRings === 3) {
+        if (ringIdx === 0) {
+          radiusX = 24;
+          radiusY = 18;
+          orbitType = 'circle';
+        } else if (ringIdx === 1) {
+          radiusX = 32;
+          radiusY = 24;
+          tiltAngle = ((idx % 4) - 1.5) * 0.12;
+          orbitType = 'ellipse_tilted';
+        } else {
+          radiusX = 40;
+          radiusY = 30;
+          tiltAngle = (((idx % 5) - 2) * -0.10);
+          orbitType = 'ellipse_horizontal';
+        }
       } else {
-        orbitType = 'ellipse_tilted';
-        radiusX = 22 + (idx % 3) * 2.8;
-        radiusY = 14 + (idx % 3) * 2.2;
-        // Tilt between -14 deg and +14 deg
-        tiltAngle = (((idx % 5) - 2) * 0.12);
+        // 4 Rings for 20 - 45 students
+        if (ringIdx === 0) {
+          radiusX = 22 + (idx % 2) * 2; // 22% - 24%
+          radiusY = 16 + (idx % 2) * 2; // 16% - 18%
+          orbitType = 'circle';
+        } else if (ringIdx === 1) {
+          radiusX = 28 + (idx % 3) * 1.8; // 28% - 31.6%
+          radiusY = 21 + (idx % 3) * 1.5; // 21% - 24%
+          tiltAngle = ((idx % 3) - 1) * 0.14;
+          orbitType = 'ellipse_tilted';
+        } else if (ringIdx === 2) {
+          radiusX = 34 + (idx % 3) * 1.8; // 34% - 37.6%
+          radiusY = 25 + (idx % 3) * 1.5; // 25% - 28%
+          tiltAngle = (((idx % 5) - 2) * -0.12);
+          orbitType = 'ellipse_tilted';
+        } else {
+          radiusX = 39 + (idx % 3) * 1.5; // 39% - 42%
+          radiusY = 29 + (idx % 3) * 1.5; // 29% - 32%
+          orbitType = 'ellipse_horizontal';
+        }
       }
 
       // Phase distributed evenly around 2*PI with offset so no two overlap
-      const phase = (idx / count) * Math.PI * 2 + ((idx * 1.618) % 1) * 0.4;
-      // Varied speed factor: 0.88 to 1.22
-      const speedFactor = 0.88 + (idx % 7) * 0.055;
-      // Bounce oscillations per revolution: 2.0 to 4.0
-      const bounceFreq = 2.2 + (idx % 4) * 0.55;
-      // Subtle vertical bounce: 1.2% to 2.8% (not too high or erratic)
-      const bounceAmp = 1.2 + (idx % 3) * 0.7;
+      const phase = (idx / count) * Math.PI * 2 + ((idx * 1.618) % 1) * 0.45;
+      // Varied speed factor: 0.92 to 1.18
+      const speedFactor = 0.92 + ((idx * 3) % 7) * 0.04;
+      // Bounce oscillations per revolution: 2.5 to 4.2
+      const bounceFreq = 2.5 + (idx % 4) * 0.55;
+      // Significant vertical bounce: 2.4% to 4.2%
+      const bounceAmp = 2.4 + (idx % 3) * 0.8;
       const bouncePhase = (idx * 2.1) % (Math.PI * 2);
 
       // Initial resting position
@@ -194,130 +225,117 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
         bounceFreq,
         bounceAmp,
         bouncePhase,
-        x: 50 + tiltedX,
-        y: 50 + tiltedY,
+        initialX: 50 + tiltedX,
+        initialY: 50 + tiltedY,
         radius,
-        rot: ((idx % 7) - 3) * 4, // gentle resting angle
       };
     });
   }, [students, allClassStudents]);
 
-  // Balls state
-  const [renderedBalls, setRenderedBalls] = useState<LotteryBall[]>([]);
-  const [drumRotation, setDrumRotation] = useState<number>(0);
-  const [animProgress, setAnimProgress] = useState<number>(0);
+  // Direct DOM references for 60fps hardware-accelerated transforms (0 React re-renders)
+  const ballRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const drumRef = useRef<HTMLDivElement | null>(null);
 
-  // Sync initial balls
-  useEffect(() => {
-    setRenderedBalls(initialBalls.map((b) => ({ ...b })));
-  }, [initialBalls]);
-
-  // Continuous angle & animation loop
+  // Animation timing & angle accumulators
   const animRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const globalAngleRef = useRef<number>(0);
+  const drumAngleRef = useRef<number>(0);
 
   useEffect(() => {
     const winnerIdSet = new Set(activeWinners.map((w) => w.id));
     const chamberCx = 50;
     const chamberCy = 50;
-    const chuteX = 50;
-    const chuteY = 16;
 
     if (isSpinning) {
-      setAnimProgress(0);
       startTimeRef.current = performance.now();
       lastTimeRef.current = performance.now();
 
       const updateLoop = (now: number) => {
-        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.04); // clamp dt in seconds
+        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.04);
         lastTimeRef.current = now;
 
         const elapsed = now - startTimeRef.current;
         const p = Math.min(1, elapsed / duration);
-        setAnimProgress(p);
 
-        // 3-Stage Speed Profile as requested:
-        // 1. Đầu animation (p <= 0.25): chuyển động nhanh hơn
-        // 2. Giữa animation (0.25 < p <= 0.70): chuyển động ổn định
-        // 3. Gần cuối (0.70 < p <= 0.88): giảm tốc dần
-        // 4. Kết thúc (p >= 0.88): winner tiến vào ống chọn, bi khác trôi êm dịu
-        let currentAngularVelocity = 5.2; // rad/s
-        let drumSpeed = 8.5;
-
-        if (p <= 0.25) {
-          // Đầu: nhanh hơn
-          currentAngularVelocity = 5.8;
-          drumSpeed = 9.0;
-        } else if (p <= 0.70) {
-          // Giữa: ổn định
-          currentAngularVelocity = 4.2;
-          drumSpeed = 6.5;
-        } else if (p <= 0.88) {
-          // Gần cuối: giảm tốc dần mượt mà
-          const decelT = (p - 0.70) / 0.18; // 0 -> 1
-          currentAngularVelocity = 4.2 * (1 - decelT * 0.8); // 4.2 -> 0.84
-          drumSpeed = 6.5 * (1 - decelT * 0.8);
+        // High-Energy Angular Speed Profile (in rad/s):
+        // 1. Khởi động (p < 0.20): tăng tốc bứt phá mạnh mẽ (~17.5 rad/s, ~2.8 vòng/s)
+        // 2. Toàn bộ thân animation (0.20 <= p < 0.80): duy trì tốc độ cao ổn định (~15.0 rad/s, ~2.4 vòng/s)
+        // 3. Cuối animation (0.80 <= p < 0.96): hãm tốc mượt mà bằng cubic easing về ~1.5 rad/s
+        // 4. Kết thúc (p >= 0.96): dừng êm dịu, winner định vị tại ống chọn
+        let currentOmega = 15.0;
+        if (p < 0.20) {
+          currentOmega = 15.0 + (1 - p / 0.20) * 2.5; // 17.5 -> 15.0
+        } else if (p < 0.80) {
+          currentOmega = 15.0;
+        } else if (p < 0.96) {
+          const decelT = (p - 0.80) / 0.16; // 0 -> 1
+          const ease = 1 - Math.pow(1 - decelT, 3);
+          currentOmega = 15.0 * (1 - ease) + 1.5 * ease;
         } else {
-          // Giai đoạn chốt winner: trôi chậm nhẹ nhàng
-          const endT = (p - 0.88) / 0.12; // 0 -> 1
-          currentAngularVelocity = Math.max(0.2, 0.84 * (1 - endT));
-          drumSpeed = Math.max(0.3, 1.3 * (1 - endT));
+          const stopT = (p - 0.96) / 0.04;
+          currentOmega = Math.max(0, 1.5 * (1 - stopT));
         }
 
-        // Integrate angle smoothly (guarantees NO jitter, NO teleport, pure mathematical continuity)
-        globalAngleRef.current += currentAngularVelocity * dt;
-        setDrumRotation((prev) => (prev + drumSpeed) % 360);
+        globalAngleRef.current += currentOmega * dt;
+        drumAngleRef.current = (drumAngleRef.current + currentOmega * 1.8) % 360;
+
+        // Mechanical drum spokes rotation
+        if (drumRef.current) {
+          drumRef.current.style.transform = `rotate(${drumAngleRef.current.toFixed(1)}deg)`;
+        }
 
         const currentAngle = globalAngleRef.current;
-        const speedScale = currentAngularVelocity / 4.2;
+        const speedNorm = Math.min(1.5, currentOmega / 10.0);
 
-        // Compute updated ball positions
-        const nextBalls = initialBalls.map((b) => {
+        // Update all ball positions directly in DOM (60fps GPU acceleration, no React re-render lag)
+        initialBalls.forEach((b, idx) => {
+          const el = ballRefs.current[idx];
+          if (!el) return;
+
           const isWinningBall = winnerIdSet.has(b.id);
-
-          // Ball's individual angle along orbit
           const ballAngle = currentAngle * b.speedFactor + b.phase;
 
-          // Ellipse base coords
+          // Ellipse coordinates with expanded radii (22% to 42%)
           const rawX = b.radiusX * Math.cos(ballAngle);
           const rawY = b.radiusY * Math.sin(ballAngle);
 
-          // Tilted rotation transform
+          // Tilted angle transform
           const cosTilt = Math.cos(b.tiltAngle);
           const sinTilt = Math.sin(b.tiltAngle);
           const tiltedX = rawX * cosTilt - rawY * sinTilt;
           const tiltedY = rawX * sinTilt + rawY * cosTilt;
 
-          // Natural vertical bounce (scaled by speed so it settles down when slowing)
-          const bounce = Math.sin(ballAngle * b.bounceFreq + b.bouncePhase) * b.bounceAmp * Math.min(1.4, speedScale);
+          // Dynamic vertical bounce
+          const bounce = Math.sin(ballAngle * b.bounceFreq + b.bouncePhase) * b.bounceAmp * speedNorm;
 
           let x = chamberCx + tiltedX;
           let y = chamberCy + tiltedY + bounce;
+          let rot = Math.sin(ballAngle * 1.5) * 12;
+          let scale = 1.0;
 
-          // Subtle wobble that keeps STT easily readable: ±8 degrees maximum
-          const rot = Math.sin(ballAngle * 1.5) * 8;
-
-          // If winner and in landing phase (p >= 0.85):
-          // Winner smoothly glides into the selection chute (chuteX, chuteY)
-          if (p >= 0.85 && isWinningBall) {
-            const guideT = Math.min(1, (p - 0.85) / 0.15);
-            // Cubic ease-out
+          // Smooth Winner Glide to Selection Chute (NO teleportation, clean continuous transition)
+          if (isWinningBall && p >= 0.78) {
+            const guideT = Math.min(1, (p - 0.78) / 0.22);
             const ease = 1 - Math.pow(1 - guideT, 3);
-            x = x * (1 - ease) + chuteX * ease;
-            y = y * (1 - ease) + chuteY * ease;
+
+            const winnerIdx = activeWinners.findIndex((w) => w.id === b.id);
+            const targetChuteX = activeWinners.length > 1
+              ? 50 + (winnerIdx - (activeWinners.length - 1) / 2) * 12
+              : 50;
+            const targetChuteY = 16;
+
+            x = x * (1 - ease) + targetChuteX * ease;
+            y = y * (1 - ease) + targetChuteY * ease;
+            scale = 1.0 + ease * 0.42;
           }
 
-          return {
-            ...b,
-            x,
-            y,
-            rot,
-          };
+          el.style.left = `${x.toFixed(2)}%`;
+          el.style.top = `${y.toFixed(2)}%`;
+          el.style.transform = `translate(-50%, -50%) rotate(${rot.toFixed(1)}deg) scale(${scale.toFixed(2)})`;
+          el.style.zIndex = isWinningBall && p >= 0.78 ? '35' : '15';
         });
-
-        setRenderedBalls(nextBalls);
 
         if (p < 1) {
           animRef.current = requestAnimationFrame(updateLoop);
@@ -325,21 +343,27 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
       };
 
       animRef.current = requestAnimationFrame(updateLoop);
-    } else if (hasCompleted) {
-      setAnimProgress(1);
-    } else {
-      // Idle state: slow, ambient, relaxing drift inside chamber
-      setAnimProgress(0);
+    } else if (!hasCompleted) {
+      // Idle state: gentle living drift inside chamber
       lastTimeRef.current = performance.now();
 
       const idleLoop = (now: number) => {
         const dt = Math.min((now - lastTimeRef.current) / 1000, 0.04);
         lastTimeRef.current = now;
 
-        globalAngleRef.current += 0.35 * dt; // slow idle spin
+        globalAngleRef.current += 1.2 * dt;
+        drumAngleRef.current = (drumAngleRef.current + 1.2 * 1.5) % 360;
+
+        if (drumRef.current) {
+          drumRef.current.style.transform = `rotate(${drumAngleRef.current.toFixed(1)}deg)`;
+        }
+
         const currentAngle = globalAngleRef.current;
 
-        const nextBalls = initialBalls.map((b) => {
+        initialBalls.forEach((b, idx) => {
+          const el = ballRefs.current[idx];
+          if (!el) return;
+
           const ballAngle = currentAngle * b.speedFactor + b.phase;
           const rawX = b.radiusX * Math.cos(ballAngle);
           const rawY = b.radiusY * Math.sin(ballAngle);
@@ -347,17 +371,18 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
           const sinTilt = Math.sin(b.tiltAngle);
           const tiltedX = rawX * cosTilt - rawY * sinTilt;
           const tiltedY = rawX * sinTilt + rawY * cosTilt;
-          const bounce = Math.sin(ballAngle * b.bounceFreq + b.bouncePhase) * (b.bounceAmp * 0.4);
+          const bounce = Math.sin(ballAngle * b.bounceFreq + b.bouncePhase) * (b.bounceAmp * 0.35);
 
-          return {
-            ...b,
-            x: chamberCx + tiltedX,
-            y: chamberCy + tiltedY + bounce,
-            rot: Math.sin(ballAngle * 1.2) * 5,
-          };
+          const x = chamberCx + tiltedX;
+          const y = chamberCy + tiltedY + bounce;
+          const rot = Math.sin(ballAngle * 1.2) * 6;
+
+          el.style.left = `${x.toFixed(2)}%`;
+          el.style.top = `${y.toFixed(2)}%`;
+          el.style.transform = `translate(-50%, -50%) rotate(${rot.toFixed(1)}deg) scale(1)`;
+          el.style.zIndex = '15';
         });
 
-        setRenderedBalls(nextBalls);
         animRef.current = requestAnimationFrame(idleLoop);
       };
 
@@ -368,8 +393,6 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
   }, [isSpinning, hasCompleted, duration, activeWinners, initialBalls]);
-
-  const isEndingOrCompleted = hasCompleted || animProgress >= 0.90;
 
   return (
     <div className="w-full max-w-4xl py-2 px-2 select-none flex flex-col items-center">
@@ -446,10 +469,7 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
 
             {/* Rotating drum cage ribs / spokes (Mechanical feel) */}
             <div
-              style={{
-                transform: `rotate(${drumRotation}deg)`,
-                transition: isSpinning ? 'none' : 'transform 0.5s ease-out',
-              }}
+              ref={drumRef}
               className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-30"
             >
               <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
@@ -470,9 +490,8 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
             <div className="absolute bottom-3 left-12 right-12 h-6 rounded-[50%] bg-gradient-to-t from-white/10 to-transparent pointer-events-none" />
 
             {/* LOTTERY BALLS INSIDE THE CHAMBER */}
-            {renderedBalls.map((b) => {
+            {initialBalls.map((b, idx) => {
               const isWinner = activeWinners.some((w) => w.id === b.id);
-              const isEndingAndWinner = isEndingOrCompleted && isWinner;
 
               // If completed, winning balls will be displayed in the featured extraction area
               if (hasCompleted && isWinner) {
@@ -482,16 +501,20 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
               return (
                 <div
                   key={b.id}
-                  style={{
-                    left: `${b.x}%`,
-                    top: `${b.y}%`,
-                    transform: `translate(-50%, -50%) rotate(${b.rot}deg) ${
-                      isEndingAndWinner ? 'scale(1.35)' : 'scale(1)'
-                    }`,
-                    zIndex: isEndingAndWinner ? 28 : 15,
-                    transition: isEndingAndWinner ? 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+                  ref={(el) => {
+                    ballRefs.current[idx] = el;
                   }}
-                  className="absolute pointer-events-none cursor-default"
+                  style={{
+                    left: `${b.initialX}%`,
+                    top: `${b.initialY}%`,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 15,
+                  }}
+                  onClick={() => onSelectStudentProfile?.(b.student)}
+                  className={`absolute transition-shadow ${
+                    onSelectStudentProfile ? 'cursor-pointer hover:scale-125 hover:z-40' : 'cursor-default pointer-events-none'
+                  }`}
+                  title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${b.student.name} (STT #${b.stt})` : undefined}
                 >
                   {/* 3D Spherical Lottery Ball */}
                   <div
@@ -502,9 +525,7 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
                       boxShadow: `inset -3px -4px 6px rgba(0, 0, 0, 0.6), inset 3px 4px 6px rgba(255, 255, 255, 0.6), 0 4px 10px ${b.glowColor}`,
                       borderColor: b.borderColor,
                     }}
-                    className={`relative rounded-full border flex items-center justify-center transition-transform ${
-                      isEndingAndWinner ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-slate-950 animate-pulse' : ''
-                    }`}
+                    className="relative rounded-full border flex items-center justify-center transition-transform"
                   >
                     {/* Equatorial Characteristic Lottery Stripe */}
                     <div
@@ -517,9 +538,6 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
 
                     {/* Center White Number Badge: always right-side-up and easily readable */}
                     <div
-                      style={{
-                        transform: `rotate(${-b.rot}deg)`,
-                      }}
                       className="w-[58%] h-[58%] rounded-full bg-white shadow-inner flex items-center justify-center z-10 border border-slate-300/80"
                     >
                       <span
@@ -561,7 +579,11 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
                 {activeWinners.length === 1 ? (
                   <div className="flex flex-col items-center gap-2.5 py-1">
                     {/* Big 3D Extracted Ball */}
-                    <div className="relative">
+                    <div
+                      onClick={() => onSelectStudentProfile?.(activeWinners[0])}
+                      className={`relative ${onSelectStudentProfile ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
+                      title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}` : undefined}
+                    >
                       <div
                         style={{
                           background: 'radial-gradient(circle at 35% 30%, #fef08a 0%, #eab308 50%, #854d0e 100%)',
@@ -585,13 +607,26 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
 
                     {/* Full Name of Student */}
                     <div className="text-center">
-                      <h2 className="text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-1">
+                      <h2
+                        onClick={() => onSelectStudentProfile?.(activeWinners[0])}
+                        className={`text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-1 ${
+                          onSelectStudentProfile ? 'cursor-pointer hover:underline hover:text-white transition-colors' : ''
+                        }`}
+                        title={onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${activeWinners[0].name}` : undefined}
+                      >
                         {activeWinners[0].name}
                       </h2>
                       <div className="text-xs sm:text-sm font-bold text-slate-300 mt-1.5 flex items-center justify-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => onSelectStudentProfile?.(activeWinners[0])}
+                          className={`px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-xs ${
+                            onSelectStudentProfile ? 'hover:bg-amber-400/30 cursor-pointer transition-colors' : ''
+                          }`}
+                          title={onSelectStudentProfile ? 'Bấm để xem Thẻ học sinh' : undefined}
+                        >
                           STT #{getStudentSTT(activeWinners[0], allClassStudents || students)}
-                        </span>
+                        </button>
                         <span className="text-slate-300">
                           Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng
                         </span>
@@ -605,9 +640,12 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
                       const stt = getStudentSTT(w, allClassStudents || students);
                       const theme = LOTTERY_BALL_THEMES[idx % LOTTERY_BALL_THEMES.length];
                       return (
-                        <div
+                        <button
                           key={w.id}
-                          className="px-3.5 py-2 rounded-2xl bg-slate-800/90 border border-amber-400/70 text-amber-300 font-black text-sm sm:text-base shadow-lg flex items-center gap-3 transition-transform hover:scale-[1.02]"
+                          type="button"
+                          onClick={() => onSelectStudentProfile?.(w)}
+                          className="px-3.5 py-2 rounded-2xl bg-slate-800/90 hover:bg-slate-750 border border-amber-400/70 hover:border-amber-300 text-amber-300 font-black text-sm sm:text-base shadow-lg flex items-center gap-3 transition-transform hover:scale-[1.02] cursor-pointer text-left w-full"
+                          title="Bấm để xem Thẻ học sinh"
                         >
                           {/* Mini 3D Ball */}
                           <div
@@ -627,14 +665,14 @@ export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
 
                           {/* Student Details */}
                           <div className="flex-1 text-left min-w-0">
-                            <div className="text-amber-200 font-black text-sm truncate">
+                            <div className="text-amber-200 hover:text-white hover:underline font-black text-sm truncate">
                               {w.name}
                             </div>
                             <div className="text-[11px] font-medium text-slate-300">
                               STT #{stt} • {Math.max(1, w.callCount ?? 1)} lần lên bảng
                             </div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>

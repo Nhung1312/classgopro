@@ -1261,6 +1261,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={resolvedWinner}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
 
@@ -1270,6 +1271,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
               winner={resolvedWinner}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
           {visualType === 'BALLOON' && (
@@ -1281,6 +1283,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
           {visualType === 'HORSE_RACE' && (
@@ -1292,6 +1295,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
           {(visualType === 'BOAT_RACE' || (visualType as string) === 'DUCK_RACE') && (
@@ -1303,6 +1307,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
           {visualType === 'ROCKET' && (
@@ -1314,6 +1319,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
           {visualType === 'MAGIC_CARD' && (
@@ -1325,6 +1331,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
+              onSelectStudentProfile={setSelectedProfileStudent}
             />
           )}
         </div>

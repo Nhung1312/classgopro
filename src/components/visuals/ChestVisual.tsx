@@ -7,6 +7,7 @@ interface ChestVisualProps {
   isSpinning: boolean;
   hasCompleted: boolean;
   winner: Student | null;
+  onSelectStudentProfile?: (student: Student) => void;
 }
 
 export const ChestVisual: React.FC<ChestVisualProps> = ({
@@ -14,6 +15,7 @@ export const ChestVisual: React.FC<ChestVisualProps> = ({
   isSpinning,
   hasCompleted,
   winner,
+  onSelectStudentProfile,
 }) => {
   return (
     <div className="w-full max-w-2xl py-4 px-2 select-none flex flex-col items-center">
@@ -32,13 +34,17 @@ export const ChestVisual: React.FC<ChestVisualProps> = ({
 
         {/* Floating Box / Orb Element */}
         <div
+          onClick={() => hasCompleted && winner && onSelectStudentProfile?.(winner)}
           className={`w-28 h-28 sm:w-36 sm:h-36 rounded-3xl flex flex-col items-center justify-center text-center shadow-2xl transition-all duration-300 border-2 ${
+            hasCompleted && winner && onSelectStudentProfile ? 'cursor-pointer hover:scale-115' : ''
+          } ${
             hasCompleted
               ? 'bg-gradient-to-tr from-amber-500 via-yellow-400 to-amber-600 border-yellow-200 text-slate-950 scale-110 rotate-3 shadow-amber-500/60 ring-4 ring-amber-300/40'
               : isSpinning
               ? 'bg-gradient-to-tr from-indigo-600 via-purple-600 to-sky-500 border-indigo-300 text-white scale-105 animate-bounce shadow-indigo-500/50'
               : 'bg-slate-800/90 border-slate-700 text-amber-400 hover:border-slate-600 shadow-xl'
           }`}
+          title={hasCompleted && winner && onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${winner.name}` : undefined}
         >
           {hasCompleted ? (
             <div className="flex flex-col items-center justify-center space-y-1">
@@ -75,13 +81,15 @@ export const ChestVisual: React.FC<ChestVisualProps> = ({
           }`}
         >
           <div
+            onClick={() => hasCompleted && winner && onSelectStudentProfile?.(winner)}
             className={`text-3xl sm:text-5xl font-black tracking-tight ${
               isSpinning
                 ? 'text-indigo-200 blur-[0.6px]'
                 : hasCompleted
-                ? 'text-amber-300 drop-shadow-lg'
+                ? `text-amber-300 drop-shadow-lg ${winner && onSelectStudentProfile ? 'cursor-pointer hover:underline hover:text-white transition-colors' : ''}`
                 : 'text-slate-500'
             }`}
+            title={hasCompleted && winner && onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${winner.name}` : undefined}
           >
             {displayName}
           </div>

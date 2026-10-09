@@ -8,6 +8,7 @@ interface CardsVisualProps {
   isSpinning: boolean;
   hasCompleted: boolean;
   winner: Student | null;
+  onSelectStudentProfile?: (student: Student) => void;
 }
 
 export const CardsVisual: React.FC<CardsVisualProps> = ({
@@ -16,6 +17,7 @@ export const CardsVisual: React.FC<CardsVisualProps> = ({
   isSpinning,
   hasCompleted,
   winner,
+  onSelectStudentProfile,
 }) => {
   const [activeCardIndex, setActiveCardIndex] = useState<number>(2);
 
@@ -51,15 +53,22 @@ export const CardsVisual: React.FC<CardsVisualProps> = ({
             >
               {isWinnerCard ? (
                 // Winner Card Face Up
-                <div className="flex flex-col items-center justify-center space-y-1 animate-scale-in">
+                <button
+                  type="button"
+                  onClick={() => winner && onSelectStudentProfile?.(winner)}
+                  className={`flex flex-col items-center justify-center space-y-1 animate-scale-in w-full h-full ${
+                    winner && onSelectStudentProfile ? 'cursor-pointer hover:scale-105 transition-transform' : ''
+                  }`}
+                  title={winner && onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${winner.name}` : undefined}
+                >
                   <span className="text-2xl sm:text-3xl">👑</span>
                   <div className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-amber-950">
                     ĐƯỢC CHỌN
                   </div>
-                  <div className="text-xs sm:text-sm font-black text-slate-950 line-clamp-2 px-0.5">
+                  <div className="text-xs sm:text-sm font-black text-slate-950 line-clamp-2 px-0.5 hover:underline">
                     {winner?.name}
                   </div>
-                </div>
+                </button>
               ) : isSpinning ? (
                 // Shuffling Card
                 <div className="flex flex-col items-center justify-center space-y-1">
@@ -96,13 +105,15 @@ export const CardsVisual: React.FC<CardsVisualProps> = ({
           }`}
         >
           <div
+            onClick={() => hasCompleted && winner && onSelectStudentProfile?.(winner)}
             className={`text-2xl sm:text-4xl md:text-5xl font-black tracking-tight ${
               isSpinning
                 ? 'text-indigo-200 blur-[0.6px]'
                 : hasCompleted
-                ? 'text-amber-300 drop-shadow-md'
+                ? `text-amber-300 drop-shadow-md ${winner && onSelectStudentProfile ? 'cursor-pointer hover:underline hover:text-white transition-colors' : ''}`
                 : 'text-slate-500'
             }`}
+            title={hasCompleted && winner && onSelectStudentProfile ? `Bấm để xem Thẻ học sinh: ${winner.name}` : undefined}
           >
             {displayName}
           </div>
