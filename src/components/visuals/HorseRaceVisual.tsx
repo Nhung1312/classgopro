@@ -91,10 +91,12 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
 }) => {
   // Resolve active winners (single or multiple)
   const activeWinners = useMemo(() => {
-    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
-    if (winner) return [winner];
-    return [];
-  }, [selectedStudents, winner]);
+    const raw = (selectedStudents && selectedStudents.length > 0)
+      ? selectedStudents
+      : (winner ? [winner] : []);
+    const sourcePool = allClassStudents || students;
+    return raw.map((w) => sourcePool.find((s) => s.id === w.id) || w);
+  }, [selectedStudents, winner, allClassStudents, students]);
 
   // Select 5-6 racers, strictly including all active winners
   const racers = useMemo<HorseRacer[]>(() => {
@@ -478,7 +480,7 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
                     <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px]">
                       STT #{getStudentSTT(activeWinners[0], allClassStudents || students)}
                     </span>
-                    <span>Lần thứ {activeWinners[0].callCount} lên bảng</span>
+                    <span>Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng</span>
                   </div>
                 </>
               ) : (
@@ -494,7 +496,7 @@ export const HorseRaceVisual: React.FC<HorseRaceProps> = ({
                         <span>#{stt}</span>
                         <span>{w.name}</span>
                         <span className="text-[11px] font-medium text-slate-300">
-                          ({w.callCount} lần)
+                          ({Math.max(1, w.callCount ?? 1)} lần)
                         </span>
                       </div>
                     );

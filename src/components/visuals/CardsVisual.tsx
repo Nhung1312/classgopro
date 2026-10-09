@@ -110,7 +110,7 @@ export const CardsVisual: React.FC<CardsVisualProps> = ({
           {hasCompleted && winner && (
             <div className="mt-2.5 flex items-center justify-center gap-2 text-xs font-bold text-amber-300">
               <Award className="w-4 h-4 text-amber-400" />
-              <span>LẦN THỨ {winner.callCount} LÊN BẢNG</span>
+              <span>LẦN THỨ {Math.max(1, winner.callCount ?? 1)} LÊN BẢNG</span>
             </div>
           )}
         </div>

@@ -80,7 +80,7 @@ export const SlotVisual: React.FC<SlotVisualProps> = ({
           <div className="relative z-20 mt-4 pt-4 border-t border-slate-700/60 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 animate-fade-in">
             <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-sm sm:text-base font-extrabold shadow-md">
               <Award className="w-4 h-4 text-amber-400" />
-              LẦN THỨ {winner.callCount} LÊN BẢNG
+              LẦN THỨ {Math.max(1, winner.callCount ?? 1)} LÊN BẢNG
             </span>
             {winner.studentCode && (
               <span className="text-xs text-slate-400 font-medium">Mã HS: {winner.studentCode}</span>

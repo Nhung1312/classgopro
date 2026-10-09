@@ -107,10 +107,12 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
 }) => {
   // Resolve active winners (single or multiple)
   const activeWinners = useMemo(() => {
-    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
-    if (winner) return [winner];
-    return [];
-  }, [selectedStudents, winner]);
+    const raw = (selectedStudents && selectedStudents.length > 0)
+      ? selectedStudents
+      : (winner ? [winner] : []);
+    const sourcePool = allClassStudents || students;
+    return raw.map((w) => sourcePool.find((s) => s.id === w.id) || w);
+  }, [selectedStudents, winner, allClassStudents, students]);
 
   // Select up to 8 candidate balloons, strictly including all active winners
   const candidates = useMemo<BalloonCandidate[]>(() => {
@@ -443,7 +445,7 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
 
                     <div className="mt-2 text-xs sm:text-sm font-bold text-slate-300">
                       <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700">
-                        Lần thứ {activeWinners[0].callCount} lên bảng
+                        Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng
                       </span>
                     </div>
                   </>
@@ -461,7 +463,7 @@ export const BalloonVisual: React.FC<BalloonVisualProps> = ({
                           <span className="text-amber-400">👑</span>
                           <span>{w.name}</span>
                           <span className="text-[11px] font-medium text-slate-300">
-                            ({w.callCount} lần)
+                            ({Math.max(1, w.callCount ?? 1)} lần)
                           </span>
                         </div>
                       ))}

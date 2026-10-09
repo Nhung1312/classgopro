@@ -46,10 +46,12 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
 }) => {
   // Resolve active winners (single or multiple)
   const activeWinners = useMemo(() => {
-    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
-    if (winner) return [winner];
-    return [];
-  }, [selectedStudents, winner]);
+    const raw = (selectedStudents && selectedStudents.length > 0)
+      ? selectedStudents
+      : (winner ? [winner] : []);
+    const sourcePool = allClassStudents || students;
+    return raw.map((w) => sourcePool.find((s) => s.id === w.id) || w);
+  }, [selectedStudents, winner, allClassStudents, students]);
 
   // Select candidate rockets (max 7-8), strictly including all active winners
   const candidates = useMemo<RocketItem[]>(() => {
@@ -345,7 +347,7 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
                     👑 {activeWinners[0].name}
                   </h2>
                   <div className="text-[11px] font-bold text-slate-300 mt-1">
-                    Lần thứ {activeWinners[0].callCount} lên bảng
+                    Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng
                   </div>
                 </>
               ) : (
@@ -358,7 +360,7 @@ export const RocketVisual: React.FC<RocketVisualProps> = ({
                       <span className="text-amber-400">👑</span>
                       <span>{w.name}</span>
                       <span className="text-[11px] font-medium text-slate-300">
-                        ({w.callCount} lần)
+                        ({Math.max(1, w.callCount ?? 1)} lần)
                       </span>
                     </div>
                   ))}

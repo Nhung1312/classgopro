@@ -12,6 +12,9 @@ export interface StudentInfoPreviewRow {
   parentPhone?: string;
   matched: boolean;
   matchedStudent?: Student;
+  isDuplicateInFile?: boolean;
+  isDuplicateInClass?: boolean;
+  statusText?: string;
   // Cảnh báo nếu có
   warning?: string;
 }
@@ -24,6 +27,8 @@ export interface StudentInfoParseResult {
   totalRows: number;
   matchedCount: number;
   unmatchedCount: number;
+  duplicateCount: number;
+  hasDuplicatesInFile: boolean;
   warnings: string[];
 }
 
@@ -53,7 +58,7 @@ export function normalizeGender(val: any): 'nam' | 'nu' | 'khac' | undefined {
     return 'nam';
   }
   // Nữ
-  if (s === 'nu' || s === 'nữ' || s === 'f' || s === 'female' || s === 'gái' || s === '0' || s === 'nu') {
+  if (s === 'nu' || s === 'nữ' || s === 'f' || s === 'female' || s === 'gái' || s === '0') {
     return 'nu';
   }
   // Khác
@@ -83,7 +88,6 @@ export function normalizeParentPhone(val: any): string | undefined {
   if (!s) return undefined;
 
   // Xóa các ký tự không liên quan trừ số, dấu +, dấu cách, gạch nối
-  // Ví dụ "0912 345 678" -> "0912345678" hoặc chuẩn hóa số nguyên từ Excel (vd 912345678 -> 0912345678 nếu thiếu số 0)
   const cleaned = s.replace(/[\s\.\-_]/g, '');
   if (!cleaned) return undefined;
 
@@ -97,27 +101,73 @@ export function normalizeParentPhone(val: any): string | undefined {
 /**
  * XUẤT FILE THÔNG TIN HỌC SINH (LUỒNG RIÊNG HOÀN TOÀN)
  * Cột: Mã học sinh | Họ và tên | Giới tính | SĐT phụ huynh
- * Tên file ví dụ: Thong_tin_hoc_sinh_7A1.xlsx
+ * KHÓA ĐỊNH DẠNG TEXT '@' CHO CỘT SĐT VÀ MÃ HỌC SINH
  */
 export function exportStudentInfoToExcel(className: string, students: Student[]) {
-  const data = students.map((std) => ({
-    'Mã học sinh': std.studentCode || '',
-    'Họ và tên': std.name,
-    'Giới tính': std.gender === 'nu' ? 'Nữ' : std.gender === 'nam' ? 'Nam' : std.gender === 'khac' ? 'Khác' : '',
-    'SĐT phụ huynh': std.parentPhone || '',
-  }));
+  const header = ['Mã học sinh', 'Họ và tên', 'Giới tính', 'SĐT phụ huynh'];
+  const rows: any[][] = [header];
 
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
+  students.forEach((std) => {
+    const genderStr =
+      std.gender === 'nu' ? 'Nữ' : std.gender === 'nam' ? 'Nam' : std.gender === 'khac' ? 'Khác' : '';
+    const phoneStr = std.parentPhone ? String(std.parentPhone).trim() : '';
+    const codeStr = std.studentCode ? String(std.studentCode).trim() : '';
 
-  // Đặt độ rộng các cột
+    rows.push([
+      codeStr,
+      std.name || '',
+      genderStr,
+      phoneStr,
+    ]);
+  });
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+  // Đặt thuộc tính TEXT (@) cho toàn bộ các ô cột SĐT (cột D / index 3) và Mã HS (cột A / index 0)
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:D1');
+  
+  for (let R = 1; R <= range.e.r; ++R) {
+    // Cột Mã học sinh (col 0)
+    const codeCellRef = XLSX.utils.encode_cell({ c: 0, r: R });
+    if (!worksheet[codeCellRef]) {
+      worksheet[codeCellRef] = { t: 's', v: '', z: '@' };
+    } else {
+      worksheet[codeCellRef].t = 's';
+      worksheet[codeCellRef].v = String(worksheet[codeCellRef].v || '');
+      worksheet[codeCellRef].z = '@';
+    }
+
+    // Cột SĐT phụ huynh (col 3)
+    const phoneCellRef = XLSX.utils.encode_cell({ c: 3, r: R });
+    if (!worksheet[phoneCellRef]) {
+      worksheet[phoneCellRef] = { t: 's', v: '', z: '@' };
+    } else {
+      worksheet[phoneCellRef].t = 's';
+      worksheet[phoneCellRef].v = String(worksheet[phoneCellRef].v || '');
+      worksheet[phoneCellRef].z = '@';
+    }
+  }
+
+  // Định dạng trước 100 dòng trống tiếp theo với format Text '@' để khi giáo viên nhập SĐT mới, Excel ưu tiên Text
+  const maxR = range.e.r + 100;
+  for (let R = range.e.r + 1; R <= maxR; ++R) {
+    const codeCellRef = XLSX.utils.encode_cell({ c: 0, r: R });
+    worksheet[codeCellRef] = { t: 's', v: '', z: '@' };
+    const phoneCellRef = XLSX.utils.encode_cell({ c: 3, r: R });
+    worksheet[phoneCellRef] = { t: 's', v: '', z: '@' };
+  }
+  range.e.r = maxR;
+  worksheet['!ref'] = XLSX.utils.encode_range(range);
+
+  // Độ rộng các cột
   worksheet['!cols'] = [
     { wch: 18 }, // Mã học sinh
     { wch: 26 }, // Họ và tên
     { wch: 14 }, // Giới tính
-    { wch: 20 }, // SĐT phụ huynh
+    { wch: 22 }, // SĐT phụ huynh
   ];
 
+  const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, `Thông tin HS Lớp ${className}`);
 
   const safeClassName = className.replace(/[^a-zA-Z0-9_\-]/g, '_');
@@ -132,13 +182,18 @@ export function exportStudentInfoToExcel(className: string, students: Student[])
  * - Họ và tên
  * - Giới tính / Phái / GT
  * - SĐT phụ huynh / SĐT PH / Điện thoại PH / Số điện thoại phụ huynh
+ * 
+ * KIỂM SOÁT DUPLICATE:
+ * - Phát hiện trùng lặp studentCode trong file import (trim().toLowerCase())
+ * - Phát hiện trùng lặp studentCode trong lớp học hiện tại
  */
 export async function parseStudentInfoFile(
   file: File,
   existingStudents: Student[]
 ): Promise<StudentInfoParseResult> {
   const dataBuffer = await file.arrayBuffer();
-  const workbook = XLSX.read(dataBuffer, { type: 'array' });
+  // Đọc với raw: false và cellText: true để giữ nguyên chuỗi
+  const workbook = XLSX.read(dataBuffer, { type: 'array', cellText: true, raw: false });
 
   if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
     throw new Error('File Excel không có sheet dữ liệu nào.');
@@ -152,7 +207,7 @@ export async function parseStudentInfoFile(
   }
 
   // Chuyển sheet sang mảng 2 chiều
-  const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
   if (rawRows.length === 0) {
     throw new Error('File Excel trống, không có dữ liệu.');
   }
@@ -177,14 +232,20 @@ export async function parseStudentInfoFile(
       const cellVal = String(row[c] || '').trim();
       const norm = normalizeHeaderStr(cellVal);
 
-      // Mã học sinh
+      // Mã học sinh / Mã HS
       if (
         norm === 'mahocsinh' ||
         norm === 'mahs' ||
         norm === 'studentcode' ||
         norm === 'code' ||
         norm === 'masohocsinh' ||
-        norm === 'macc'
+        norm === 'masohs' ||
+        norm === 'macc' ||
+        norm === 'madinhdanh' ||
+        norm.includes('mahocsinh') ||
+        norm.includes('mahs') ||
+        norm.includes('studentcode') ||
+        norm.includes('dinhdanh')
       ) {
         foundCode = c;
       }
@@ -194,21 +255,26 @@ export async function parseStudentInfoFile(
         norm === 'hoten' ||
         norm === 'ten' ||
         norm === 'fullname' ||
-        norm === 'studentname'
+        norm === 'studentname' ||
+        norm === 'tenhocsinh' ||
+        norm.includes('hovaten') ||
+        norm.includes('hoten')
       ) {
         foundName = c;
       }
-      // Giới tính
+      // Giới tính / Phái / GT
       else if (
         norm === 'gioitinh' ||
         norm === 'gt' ||
         norm === 'phai' ||
         norm === 'gender' ||
-        norm === 'sex'
+        norm === 'sex' ||
+        norm.includes('gioitinh') ||
+        norm.includes('phai')
       ) {
         foundGender = c;
       }
-      // SĐT phụ huynh
+      // SĐT phụ huynh / SĐT PH / Điện thoại PH / Số điện thoại phụ huynh
       else if (
         norm.includes('sdt') ||
         norm.includes('dienthoai') ||
@@ -238,14 +304,51 @@ export async function parseStudentInfoFile(
     );
   }
 
-  // Xây dựng danh sách Map học sinh hiện tại theo studentCode
-  // Chuẩn hóa studentCode: trim, lowerCase
+  // 1. Kiểm tra duplicate mã học sinh trong lớp học hiện tại
+  const existingCodeCounts = new Map<string, number>();
+  for (const std of existingStudents) {
+    if (std.studentCode && std.studentCode.trim()) {
+      const c = std.studentCode.trim().toLowerCase();
+      existingCodeCounts.set(c, (existingCodeCounts.get(c) || 0) + 1);
+    }
+  }
+
+  const duplicateCodesInClass = new Set<string>();
+  existingCodeCounts.forEach((count, code) => {
+    if (count > 1) {
+      duplicateCodesInClass.add(code);
+    }
+  });
+
   const studentMapByCode = new Map<string, Student>();
   for (const std of existingStudents) {
     if (std.studentCode && std.studentCode.trim()) {
-      studentMapByCode.set(std.studentCode.trim().toLowerCase(), std);
+      const c = std.studentCode.trim().toLowerCase();
+      // CHỈ ghép nếu mã này duy nhất trong lớp học
+      if (existingCodeCounts.get(c) === 1) {
+        studentMapByCode.set(c, std);
+      }
     }
   }
+
+  // 2. Kiểm tra duplicate mã học sinh trong file import
+  const fileCodeCounts = new Map<string, number>();
+  for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+    const row = rawRows[r];
+    if (!Array.isArray(row)) continue;
+    const rawCode = String(row[codeColIdx] || '').trim();
+    if (rawCode) {
+      const norm = rawCode.toLowerCase();
+      fileCodeCounts.set(norm, (fileCodeCounts.get(norm) || 0) + 1);
+    }
+  }
+
+  const duplicateCodesInFile = new Set<string>();
+  fileCodeCounts.forEach((count, code) => {
+    if (count > 1) {
+      duplicateCodesInFile.add(code);
+    }
+  });
 
   const previewRows: StudentInfoPreviewRow[] = [];
   const warnings: string[] = [];
@@ -265,22 +368,40 @@ export async function parseStudentInfoFile(
     const parsedGender = normalizeGender(rawGender);
     const parsedPhone = normalizeParentPhone(rawPhone);
 
+    const normCode = rawCode.toLowerCase();
+    const isDuplicateInFile = Boolean(rawCode && duplicateCodesInFile.has(normCode));
+    const isDuplicateInClass = Boolean(rawCode && duplicateCodesInClass.has(normCode));
+
     let matched = false;
     let matchedStudent: Student | undefined = undefined;
+    let statusText = 'Không tìm thấy';
     let warning: string | undefined = undefined;
 
-    if (rawCode) {
-      const match = studentMapByCode.get(rawCode.toLowerCase());
+    if (!rawCode) {
+      matched = false;
+      statusText = 'Không có mã HS';
+      warning = 'Dòng này không có Mã học sinh để đối soát.';
+    } else if (isDuplicateInFile) {
+      // Trường hợp trùng mã trong file import: CHẶN KHÔNG GHÉP
+      matched = false;
+      statusText = 'Trùng mã HS trong file';
+      warning = `Mã HS "${rawCode}" xuất hiện ${fileCodeCounts.get(normCode)} lần trong file import. Đây là trường hợp không an toàn!`;
+    } else if (isDuplicateInClass) {
+      // Trường hợp trùng mã trong lớp: CHẶN KHÔNG GHÉP
+      matched = false;
+      statusText = 'Trùng mã HS trong lớp';
+      warning = `Lớp học có ${existingCodeCounts.get(normCode)} học sinh cùng mang mã "${rawCode}". Không thể tự động ghép an toàn.`;
+    } else {
+      const match = studentMapByCode.get(normCode);
       if (match) {
         matched = true;
         matchedStudent = match;
+        statusText = 'Tìm thấy';
       } else {
         matched = false;
+        statusText = 'Không tìm thấy';
         warning = `Không tìm thấy Mã HS "${rawCode}" trong lớp học này.`;
       }
-    } else {
-      matched = false;
-      warning = 'Dòng này không có Mã học sinh để đối soát.';
     }
 
     previewRows.push({
@@ -291,16 +412,32 @@ export async function parseStudentInfoFile(
       parentPhone: parsedPhone,
       matched,
       matchedStudent,
+      isDuplicateInFile,
+      isDuplicateInClass,
+      statusText,
       warning,
     });
   }
 
   const matchedCount = previewRows.filter((r) => r.matched).length;
   const unmatchedCount = previewRows.filter((r) => !r.matched).length;
+  const hasDuplicatesInFile = duplicateCodesInFile.size > 0;
 
-  if (unmatchedCount > 0) {
+  if (hasDuplicatesInFile) {
     warnings.push(
-      `Có ${unmatchedCount} học sinh trong file không khớp với Mã HS hiện tại của lớp. Hệ thống sẽ bỏ qua và chỉ cập nhật những học sinh tìm thấy.`
+      `NGUY HIỂM: Phát hiện ${duplicateCodesInFile.size} mã học sinh bị trùng lặp nhiều lần trong file import (${Array.from(duplicateCodesInFile).join(', ')}). Hệ thống đã chặn nút cập nhật để bảo toàn dữ liệu. Vui lòng sửa lại file Excel!`
+    );
+  }
+
+  if (duplicateCodesInClass.size > 0) {
+    warnings.push(
+      `CẢNH BÁO: Lớp học hiện có ${duplicateCodesInClass.size} mã học sinh bị trùng lặp (${Array.from(duplicateCodesInClass).join(', ')}). Các mã này sẽ không được tự động cập nhật.`
+    );
+  }
+
+  if (unmatchedCount > 0 && !hasDuplicatesInFile) {
+    warnings.push(
+      `Có ${unmatchedCount} học sinh trong file không khớp với Mã HS hợp lệ của lớp. Hệ thống sẽ bỏ qua và chỉ cập nhật những học sinh tìm thấy.`
     );
   }
 
@@ -309,6 +446,8 @@ export async function parseStudentInfoFile(
     totalRows: previewRows.length,
     matchedCount,
     unmatchedCount,
+    duplicateCount: duplicateCodesInFile.size,
+    hasDuplicatesInFile,
     warnings,
   };
 }
@@ -323,17 +462,46 @@ export async function parseStudentInfoFile(
  *     parentPhone: importedParentPhone ?? existingStudent.parentPhone
  * - Nếu file để trống Giới tính hoặc SĐT PH: GIỮ NGUYÊN giá trị hiện có!
  * - TUYỆT ĐỐI KHÔNG sửa/reset: scores.tx1, tx2, tx3, tx4, gk, ck, stars, callCount, lastCalledAt, notes, isAbsent.
+ * - CHẶN DUPLICATE: Tuyệt đối không cho dòng sau ghi đè dòng trước nếu trùng mã.
  * - Trả về mảng students mới với kiểm tra assertion nghiêm ngặt trước & sau.
  */
 export function applyStudentInfoUpdates(
   existingStudents: Student[],
   previewRows: StudentInfoPreviewRow[]
 ): { updatedStudents: Student[]; updatedCount: number } {
-  // Tạo map bản cập nhật theo studentCode (chỉ các dòng matched = true)
+  // 1. Kiểm tra an toàn chặn duplicate mã trong file
+  const seenCodes = new Set<string>();
+  const duplicateCodes = new Set<string>();
+  for (const row of previewRows) {
+    if (row.isDuplicateInFile) {
+      duplicateCodes.add(row.studentCode.trim().toLowerCase());
+    }
+    if (row.matched && row.studentCode) {
+      const codeKey = row.studentCode.trim().toLowerCase();
+      if (seenCodes.has(codeKey)) {
+        duplicateCodes.add(codeKey);
+      }
+      seenCodes.add(codeKey);
+    }
+  }
+
+  if (duplicateCodes.size > 0) {
+    throw new Error(
+      `Lỗi an toàn: Phát hiện mã học sinh bị trùng lặp trong file import (${Array.from(duplicateCodes).join(', ')}). Hệ thống từ chối cập nhật để tránh ghi đè dữ liệu!`
+    );
+  }
+
+  // 2. Tạo map bản cập nhật theo studentCode (chỉ các dòng matched = true và không duplicate)
   const updatesByCode = new Map<string, StudentInfoPreviewRow>();
   for (const row of previewRows) {
-    if (row.matched && row.studentCode) {
-      updatesByCode.set(row.studentCode.trim().toLowerCase(), row);
+    if (row.matched && row.studentCode && !row.isDuplicateInFile && !row.isDuplicateInClass) {
+      const codeKey = row.studentCode.trim().toLowerCase();
+      if (updatesByCode.has(codeKey)) {
+        throw new Error(
+          `Lỗi an toàn: Trùng mã HS "${row.studentCode}" trong danh sách cập nhật. Hủy toàn bộ thao tác!`
+        );
+      }
+      updatesByCode.set(codeKey, row);
     }
   }
 
@@ -380,7 +548,7 @@ export function applyStudentInfoUpdates(
     return updatedStudent;
   });
 
-  // KIỂM TRA BẮT BUỘC (CRITICAL ASSERTION)
+  // 3. KIỂM TRA BẮT BUỘC (CRITICAL ASSERTION)
   // Trước và sau khi import:
   // - So sánh scores (tx1, tx2, tx3, tx4, gk, ck) của từng học sinh
   // - So sánh stars
@@ -425,6 +593,23 @@ export function applyStudentInfoUpdates(
     }
     if (before.notes !== after.notes) {
       throw new Error(`FAIL: Ghi chú của học sinh "${before.name}" bị biến đổi! Hủy cập nhật.`);
+    }
+
+    if (before.studentCode !== after.studentCode) {
+      throw new Error(`FAIL: Mã học sinh của "${before.name}" bị biến đổi! Hủy cập nhật.`);
+    }
+
+    // Kiểm tra tuyệt đối: CHỈ gender và parentPhone được phép thay đổi
+    const allowedChangeKeys = new Set(['gender', 'parentPhone']);
+    const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    for (const key of allKeys) {
+      if (!allowedChangeKeys.has(key)) {
+        if (JSON.stringify((before as any)[key]) !== JSON.stringify((after as any)[key])) {
+          throw new Error(
+            `FAIL: Dữ liệu ngoài luồng "${key}" của học sinh "${before.name}" bị thay đổi trái phép! Hủy cập nhật.`
+          );
+        }
+      }
     }
   }
 

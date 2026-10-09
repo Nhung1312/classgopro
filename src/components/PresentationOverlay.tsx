@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Minimize2,
@@ -90,6 +90,20 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
   const students = activeClass?.students || [];
   const eligibleStudents = getEligibleStudents(students);
 
+  const resolvedSelectedStudents = useMemo(() => {
+    if (!selectedResult) return [];
+    return selectedResult.selectedStudents.map(
+      (oldStudent) => students.find((s) => s.id === oldStudent.id) || oldStudent
+    );
+  }, [selectedResult, students]);
+
+  const resolvedWinner = useMemo(() => {
+    if (resolvedSelectedStudents.length > 0) {
+      return resolvedSelectedStudents[0];
+    }
+    return null;
+  }, [resolvedSelectedStudents]);
+
   // Toggle browser native fullscreen
   const toggleNativeFullscreen = useCallback(() => {
     try {
@@ -166,15 +180,15 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
 
   const handleReplayVoice = () => {
     speechEngine.unlock();
-    if (selectedResult && selectedResult.selectedStudents.length > 0) {
-      if (selectedResult.selectedStudents.length === 1) {
+    if (resolvedSelectedStudents && resolvedSelectedStudents.length > 0) {
+      if (resolvedSelectedStudents.length === 1) {
         speechEngine.speakStudent(
-          selectedResult.selectedStudents[0].name,
-          selectedResult.selectedStudents[0].callCount
+          resolvedSelectedStudents[0].name,
+          Math.max(1, resolvedSelectedStudents[0].callCount ?? 1)
         );
       } else {
         speechEngine.speakMultipleStudents(
-          selectedResult.selectedStudents.map((s) => s.name)
+          resolvedSelectedStudents.map((s) => s.name)
         );
       }
     }
@@ -585,7 +599,7 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
               students={eligibleStudents}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+              winner={resolvedWinner}
               currentAngle={wheelAngle}
               size={
                 settings.wheelSizeOption === 'XLARGE'
@@ -599,7 +613,7 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
             />
             {hasCompleted && selectedResult && (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3 animate-scale-in">
-                {selectedResult.selectedStudents.map((w) => {
+                {resolvedSelectedStudents.map((w) => {
                   const stt = getStudentSTT(w, students);
                   const formattedWinner = formatStudentDisplayName(
                     w,
@@ -644,14 +658,14 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
               displayName={displayName}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+              winner={resolvedWinner}
               reelNames={eligibleStudents.map((s) =>
                 formatStudentDisplayName(s, students, settings.nameDisplayStyle || 'FULL_NAME', false)
               )}
             />
-            {hasCompleted && selectedResult && selectedResult.selectedStudents.length > 1 && (
+            {hasCompleted && selectedResult && resolvedSelectedStudents.length > 1 && (
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2 animate-scale-in">
-                {selectedResult.selectedStudents.map((w, idx) => (
+                {resolvedSelectedStudents.map((w, idx) => (
                   <span
                     key={w.id}
                     className="py-2 px-5 rounded-2xl bg-slate-900/90 border border-amber-400 text-amber-300 font-black text-xl sm:text-3xl shadow-xl flex items-center gap-2"
@@ -689,7 +703,7 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
             displayName={displayName}
             isSpinning={isSpinning}
             hasCompleted={hasCompleted}
-            winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+            winner={resolvedWinner}
           />
         )}
 
@@ -698,7 +712,7 @@ export const PresentationOverlay: React.FC<PresentationOverlayProps> = ({
             displayName={displayName}
             isSpinning={isSpinning}
             hasCompleted={hasCompleted}
-            winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+            winner={resolvedWinner}
           />
         )}
       </div>

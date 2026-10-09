@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { Trophy, Waves, Ship } from 'lucide-react';
+import { Trophy, Sparkles } from 'lucide-react';
 import { Student } from '../../types';
 import { getStudentSTT } from '../../utils/studentDisplay';
 
-interface BoatRaceProps {
+interface LotteryBallsVisualProps {
   students: Student[];
   isSpinning: boolean;
   hasCompleted: boolean;
@@ -13,29 +13,96 @@ interface BoatRaceProps {
   allClassStudents?: Student[];
 }
 
-interface BoatRacer {
+interface LotteryBall {
   id: string;
   student: Student;
   stt: number;
-  hullColor: string;
-  hullAccent: string;
-  oarColor: string;
-  yLanePercent: number; // Vertical depth position in water lane (14% to 80%)
-  strokeFreq: number;
-  strokePhase: number;
+  // Visual theme
+  bgGradient: string;
+  borderColor: string;
+  glowColor: string;
+  stripeColor: string;
+  textColor: string;
+
+  // Orbit parameters (deterministic, smooth, physics-free)
+  orbitType: 'circle' | 'ellipse_horizontal' | 'ellipse_tilted';
+  radiusX: number; // in percentage of chamber (12% to 30%)
+  radiusY: number; // in percentage of chamber (10% to 22%)
+  phase: number;   // initial angle phase in radians
+  speedFactor: number; // subtle variation (0.85 to 1.25)
+  tiltAngle: number;   // tilt angle in radians
+  bounceFreq: number;  // bounce oscillations per revolution (2.0 to 4.0)
+  bounceAmp: number;   // bounce amplitude in % (1.2% to 2.8%)
+  bouncePhase: number;
+
+  // Rendered position & orientation
+  x: number;
+  y: number;
+  radius: number; // in px
+  rot: number;    // subtle visual wobble
 }
 
-// 6 Vibrant Rowing / Racing Team Themes matching ClassGo dark theme
-const BOAT_THEMES = [
-  { hullColor: '#0284c7', hullAccent: '#38bdf8', oarColor: '#bae6fd' }, // Cyan / Sky
-  { hullColor: '#4f46e5', hullAccent: '#818cf8', oarColor: '#c7d2fe' }, // Indigo
-  { hullColor: '#059669', hullAccent: '#34d399', oarColor: '#a7f3d0' }, // Emerald
-  { hullColor: '#d97706', hullAccent: '#fbbf24', oarColor: '#fde68a' }, // Amber
-  { hullColor: '#dc2626', hullAccent: '#f87171', oarColor: '#fecaca' }, // Crimson
-  { hullColor: '#7c3aed', hullAccent: '#c084fc', oarColor: '#e9d5ff' }, // Royal Purple
+// 8 Vibrant 3D Lottery Ball Color Palettes (Rich casino / television lottery style)
+const LOTTERY_BALL_THEMES = [
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #fef08a 0%, #eab308 50%, #854d0e 100%)', // Gold / Amber
+    borderColor: '#fef9c3',
+    glowColor: 'rgba(234, 179, 8, 0.45)',
+    stripeColor: 'rgba(113, 63, 18, 0.4)',
+    textColor: '#1e1b4b',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #bae6fd 0%, #0284c7 50%, #0c4a6e 100%)', // Sky / Cyan
+    borderColor: '#e0f2fe',
+    glowColor: 'rgba(2, 132, 199, 0.45)',
+    stripeColor: 'rgba(12, 74, 110, 0.4)',
+    textColor: '#0f172a',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #fecaca 0%, #ef4444 50%, #7f1d1d 100%)', // Ruby / Red
+    borderColor: '#fee2e2',
+    glowColor: 'rgba(239, 68, 68, 0.45)',
+    stripeColor: 'rgba(127, 29, 29, 0.4)',
+    textColor: '#450a0a',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #bbf7d0 0%, #10b981 50%, #064e3b 100%)', // Emerald / Green
+    borderColor: '#dcfce7',
+    glowColor: 'rgba(16, 185, 129, 0.45)',
+    stripeColor: 'rgba(6, 78, 59, 0.4)',
+    textColor: '#022c22',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #e9d5ff 0%, #8b5cf6 50%, #4c1d95 100%)', // Violet / Purple
+    borderColor: '#f3e8ff',
+    glowColor: 'rgba(139, 92, 246, 0.45)',
+    stripeColor: 'rgba(76, 29, 149, 0.4)',
+    textColor: '#2e1065',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #fed7aa 0%, #f97316 50%, #7c2d12 100%)', // Orange / Tangerine
+    borderColor: '#ffedd5',
+    glowColor: 'rgba(249, 115, 22, 0.45)',
+    stripeColor: 'rgba(124, 45, 18, 0.4)',
+    textColor: '#431407',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #fbcfe8 0%, #ec4899 50%, #831843 100%)', // Pink / Rose
+    borderColor: '#fce7f3',
+    glowColor: 'rgba(236, 72, 153, 0.45)',
+    stripeColor: 'rgba(131, 24, 67, 0.4)',
+    textColor: '#500724',
+  },
+  {
+    bgGradient: 'radial-gradient(circle at 35% 30%, #c7d2fe 0%, #4f46e5 50%, #1e1b4b 100%)', // Indigo / Deep Blue
+    borderColor: '#e0e7ff',
+    glowColor: 'rgba(79, 70, 229, 0.45)',
+    stripeColor: 'rgba(30, 27, 75, 0.4)',
+    textColor: '#0f172a',
+  },
 ];
 
-export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
+export const BoatRaceVisual: React.FC<LotteryBallsVisualProps> = ({
   students,
   isSpinning,
   hasCompleted,
@@ -44,368 +111,545 @@ export const BoatRaceVisual: React.FC<BoatRaceProps> = ({
   duration = 3800,
   allClassStudents,
 }) => {
-  // Resolve active winners (single or multiple)
+  // 1. Resolve up-to-date active winners strictly from allClassStudents || students by id
   const activeWinners = useMemo(() => {
-    if (selectedStudents && selectedStudents.length > 0) return selectedStudents;
-    if (winner) return [winner];
-    return [];
-  }, [selectedStudents, winner]);
+    const raw =
+      selectedStudents && selectedStudents.length > 0
+        ? selectedStudents
+        : winner
+        ? [winner]
+        : [];
+    const pool = allClassStudents || students;
+    return raw.map((w) => pool.find((s) => s.id === w.id) || w);
+  }, [selectedStudents, winner, allClassStudents, students]);
 
-  // Select 5-6 boat racers, strictly including all active winners
-  const racers = useMemo<BoatRacer[]>(() => {
-    const winnerIds = new Set(activeWinners.map((w) => w.id));
-    const nonWinners = students.filter((s) => !winnerIds.has(s.id));
-    const targetSize = Math.max(5, Math.min(6, Math.max(students.length, activeWinners.length)));
+  // 2. Initialize lottery balls with deterministic orbit & bounce properties
+  const initialBalls = useMemo<LotteryBall[]>(() => {
+    if (!students || students.length === 0) return [];
+    const count = students.length;
+    // Ball radius scales nicely: smaller if many students, bigger if few
+    const radius = count > 35 ? 18 : count > 20 ? 21 : 25;
 
-    const pool = [...activeWinners];
-    for (const nw of nonWinners) {
-      if (pool.length >= targetSize) break;
-      pool.push(nw);
-    }
+    return students.map((st, idx) => {
+      const theme = LOTTERY_BALL_THEMES[idx % LOTTERY_BALL_THEMES.length];
+      const stt = getStudentSTT(st, allClassStudents || students);
 
-    return pool.map((student, idx) => {
-      const stt = getStudentSTT(student, allClassStudents || students);
+      // Assign one of 3 orbit patterns:
+      // Pattern 0: Tròn (Circle)
+      // Pattern 1: Elip ngang (Horizontal Ellipse)
+      // Pattern 2: Elip nghiêng (Tilted Ellipse)
+      const patternMode = idx % 3;
+      let orbitType: 'circle' | 'ellipse_horizontal' | 'ellipse_tilted' = 'circle';
+      let radiusX = 22;
+      let radiusY = 22;
+      let tiltAngle = 0;
+
+      if (patternMode === 0) {
+        orbitType = 'circle';
+        const ring = 15 + (idx % 3) * 6; // 15%, 21%, 27%
+        radiusX = ring;
+        radiusY = ring * 0.85; // Slight perspective squish to fit drum glass
+        tiltAngle = 0;
+      } else if (patternMode === 1) {
+        orbitType = 'ellipse_horizontal';
+        radiusX = 24 + (idx % 4) * 2.2; // 24% to 30.6%
+        radiusY = 13 + (idx % 3) * 2.5; // 13% to 18%
+        tiltAngle = 0;
+      } else {
+        orbitType = 'ellipse_tilted';
+        radiusX = 22 + (idx % 3) * 2.8;
+        radiusY = 14 + (idx % 3) * 2.2;
+        // Tilt between -14 deg and +14 deg
+        tiltAngle = (((idx % 5) - 2) * 0.12);
+      }
+
+      // Phase distributed evenly around 2*PI with offset so no two overlap
+      const phase = (idx / count) * Math.PI * 2 + ((idx * 1.618) % 1) * 0.4;
+      // Varied speed factor: 0.88 to 1.22
+      const speedFactor = 0.88 + (idx % 7) * 0.055;
+      // Bounce oscillations per revolution: 2.0 to 4.0
+      const bounceFreq = 2.2 + (idx % 4) * 0.55;
+      // Subtle vertical bounce: 1.2% to 2.8% (not too high or erratic)
+      const bounceAmp = 1.2 + (idx % 3) * 0.7;
+      const bouncePhase = (idx * 2.1) % (Math.PI * 2);
+
+      // Initial resting position
+      const initialAngle = phase;
+      const rx = radiusX * Math.cos(initialAngle);
+      const ry = radiusY * Math.sin(initialAngle);
+      const tiltedX = rx * Math.cos(tiltAngle) - ry * Math.sin(tiltAngle);
+      const tiltedY = rx * Math.sin(tiltAngle) + ry * Math.cos(tiltAngle);
+
       return {
-        id: student.id,
-        student,
+        id: st.id,
+        student: st,
         stt,
-        ...BOAT_THEMES[idx % BOAT_THEMES.length],
-        yLanePercent: 14 + idx * 16, // Staggered vertical water lanes
-        strokeFreq: 1.6 + idx * 0.35,
-        strokePhase: idx * 1.5,
+        ...theme,
+        orbitType,
+        radiusX,
+        radiusY,
+        phase,
+        speedFactor,
+        tiltAngle,
+        bounceFreq,
+        bounceAmp,
+        bouncePhase,
+        x: 50 + tiltedX,
+        y: 50 + tiltedY,
+        radius,
+        rot: ((idx % 7) - 3) * 4, // gentle resting angle
       };
     });
-  }, [students, activeWinners, allClassStudents]);
+  }, [students, allClassStudents]);
 
-  const [animProgress, setAnimProgress] = useState(0);
-  const [rowStroke, setRowStroke] = useState(0); // Rowing cycle (0 or 1)
+  // Balls state
+  const [renderedBalls, setRenderedBalls] = useState<LotteryBall[]>([]);
+  const [drumRotation, setDrumRotation] = useState<number>(0);
+  const [animProgress, setAnimProgress] = useState<number>(0);
+
+  // Sync initial balls
+  useEffect(() => {
+    setRenderedBalls(initialBalls.map((b) => ({ ...b })));
+  }, [initialBalls]);
+
+  // Continuous angle & animation loop
   const animRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
+  const globalAngleRef = useRef<number>(0);
 
   useEffect(() => {
+    const winnerIdSet = new Set(activeWinners.map((w) => w.id));
+    const chamberCx = 50;
+    const chamberCy = 50;
+    const chuteX = 50;
+    const chuteY = 16;
+
     if (isSpinning) {
       setAnimProgress(0);
       startTimeRef.current = performance.now();
+      lastTimeRef.current = performance.now();
 
-      const loop = (now: number) => {
+      const updateLoop = (now: number) => {
+        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.04); // clamp dt in seconds
+        lastTimeRef.current = now;
+
         const elapsed = now - startTimeRef.current;
         const p = Math.min(1, elapsed / duration);
         setAnimProgress(p);
-        setRowStroke(Math.floor((elapsed / 160) % 2));
+
+        // 3-Stage Speed Profile as requested:
+        // 1. Đầu animation (p <= 0.25): chuyển động nhanh hơn
+        // 2. Giữa animation (0.25 < p <= 0.70): chuyển động ổn định
+        // 3. Gần cuối (0.70 < p <= 0.88): giảm tốc dần
+        // 4. Kết thúc (p >= 0.88): winner tiến vào ống chọn, bi khác trôi êm dịu
+        let currentAngularVelocity = 5.2; // rad/s
+        let drumSpeed = 8.5;
+
+        if (p <= 0.25) {
+          // Đầu: nhanh hơn
+          currentAngularVelocity = 5.8;
+          drumSpeed = 9.0;
+        } else if (p <= 0.70) {
+          // Giữa: ổn định
+          currentAngularVelocity = 4.2;
+          drumSpeed = 6.5;
+        } else if (p <= 0.88) {
+          // Gần cuối: giảm tốc dần mượt mà
+          const decelT = (p - 0.70) / 0.18; // 0 -> 1
+          currentAngularVelocity = 4.2 * (1 - decelT * 0.8); // 4.2 -> 0.84
+          drumSpeed = 6.5 * (1 - decelT * 0.8);
+        } else {
+          // Giai đoạn chốt winner: trôi chậm nhẹ nhàng
+          const endT = (p - 0.88) / 0.12; // 0 -> 1
+          currentAngularVelocity = Math.max(0.2, 0.84 * (1 - endT));
+          drumSpeed = Math.max(0.3, 1.3 * (1 - endT));
+        }
+
+        // Integrate angle smoothly (guarantees NO jitter, NO teleport, pure mathematical continuity)
+        globalAngleRef.current += currentAngularVelocity * dt;
+        setDrumRotation((prev) => (prev + drumSpeed) % 360);
+
+        const currentAngle = globalAngleRef.current;
+        const speedScale = currentAngularVelocity / 4.2;
+
+        // Compute updated ball positions
+        const nextBalls = initialBalls.map((b) => {
+          const isWinningBall = winnerIdSet.has(b.id);
+
+          // Ball's individual angle along orbit
+          const ballAngle = currentAngle * b.speedFactor + b.phase;
+
+          // Ellipse base coords
+          const rawX = b.radiusX * Math.cos(ballAngle);
+          const rawY = b.radiusY * Math.sin(ballAngle);
+
+          // Tilted rotation transform
+          const cosTilt = Math.cos(b.tiltAngle);
+          const sinTilt = Math.sin(b.tiltAngle);
+          const tiltedX = rawX * cosTilt - rawY * sinTilt;
+          const tiltedY = rawX * sinTilt + rawY * cosTilt;
+
+          // Natural vertical bounce (scaled by speed so it settles down when slowing)
+          const bounce = Math.sin(ballAngle * b.bounceFreq + b.bouncePhase) * b.bounceAmp * Math.min(1.4, speedScale);
+
+          let x = chamberCx + tiltedX;
+          let y = chamberCy + tiltedY + bounce;
+
+          // Subtle wobble that keeps STT easily readable: ±8 degrees maximum
+          const rot = Math.sin(ballAngle * 1.5) * 8;
+
+          // If winner and in landing phase (p >= 0.85):
+          // Winner smoothly glides into the selection chute (chuteX, chuteY)
+          if (p >= 0.85 && isWinningBall) {
+            const guideT = Math.min(1, (p - 0.85) / 0.15);
+            // Cubic ease-out
+            const ease = 1 - Math.pow(1 - guideT, 3);
+            x = x * (1 - ease) + chuteX * ease;
+            y = y * (1 - ease) + chuteY * ease;
+          }
+
+          return {
+            ...b,
+            x,
+            y,
+            rot,
+          };
+        });
+
+        setRenderedBalls(nextBalls);
 
         if (p < 1) {
-          animRef.current = requestAnimationFrame(loop);
+          animRef.current = requestAnimationFrame(updateLoop);
         }
       };
 
-      animRef.current = requestAnimationFrame(loop);
+      animRef.current = requestAnimationFrame(updateLoop);
     } else if (hasCompleted) {
       setAnimProgress(1);
     } else {
+      // Idle state: slow, ambient, relaxing drift inside chamber
       setAnimProgress(0);
-      if (animRef.current) cancelAnimationFrame(animRef.current);
+      lastTimeRef.current = performance.now();
+
+      const idleLoop = (now: number) => {
+        const dt = Math.min((now - lastTimeRef.current) / 1000, 0.04);
+        lastTimeRef.current = now;
+
+        globalAngleRef.current += 0.35 * dt; // slow idle spin
+        const currentAngle = globalAngleRef.current;
+
+        const nextBalls = initialBalls.map((b) => {
+          const ballAngle = currentAngle * b.speedFactor + b.phase;
+          const rawX = b.radiusX * Math.cos(ballAngle);
+          const rawY = b.radiusY * Math.sin(ballAngle);
+          const cosTilt = Math.cos(b.tiltAngle);
+          const sinTilt = Math.sin(b.tiltAngle);
+          const tiltedX = rawX * cosTilt - rawY * sinTilt;
+          const tiltedY = rawX * sinTilt + rawY * cosTilt;
+          const bounce = Math.sin(ballAngle * b.bounceFreq + b.bouncePhase) * (b.bounceAmp * 0.4);
+
+          return {
+            ...b,
+            x: chamberCx + tiltedX,
+            y: chamberCy + tiltedY + bounce,
+            rot: Math.sin(ballAngle * 1.2) * 5,
+          };
+        });
+
+        setRenderedBalls(nextBalls);
+        animRef.current = requestAnimationFrame(idleLoop);
+      };
+
+      animRef.current = requestAnimationFrame(idleLoop);
     }
 
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [isSpinning, hasCompleted, duration]);
+  }, [isSpinning, hasCompleted, duration, activeWinners, initialBalls]);
+
+  const isEndingOrCompleted = hasCompleted || animProgress >= 0.90;
 
   return (
     <div className="w-full max-w-4xl py-2 px-2 select-none flex flex-col items-center">
-      {/* Open Water Regatta Arena */}
-      <div className="relative w-full rounded-3xl overflow-hidden border border-slate-800 bg-gradient-to-b from-slate-950 via-[#07192f] to-[#091b33] p-3 sm:p-5 shadow-2xl h-[420px] sm:h-[460px] flex flex-col justify-between">
-        {/* Animated Water Surface & Ripples */}
+      {/* Main Lottery Arena Drum */}
+      <div className="relative w-full rounded-3xl overflow-hidden border border-amber-500/30 bg-gradient-to-b from-slate-950 via-[#101426] to-[#0b0e1b] p-3 sm:p-5 shadow-2xl h-[440px] sm:h-[480px] flex flex-col justify-between">
+        
+        {/* Subtle Luxury Background Lighting / Glows */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {/* Water gradient glows */}
-          <div className="absolute top-1/4 left-1/3 w-80 h-80 rounded-full bg-cyan-950/25 blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-indigo-950/25 blur-3xl" />
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl" />
+          <div className="absolute bottom-1/4 left-1/4 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="absolute top-1/3 right-1/4 w-72 h-72 rounded-full bg-sky-500/10 blur-3xl" />
 
-          {/* Flowing river wave lines */}
-          <div className="absolute inset-0 opacity-20">
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="boat-river-waves" width="90" height="24" patternUnits="userSpaceOnUse">
-                  <path d="M 0 12 Q 22.5 6, 45 12 T 90 12" fill="none" stroke="#38bdf8" strokeWidth="1.2" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#boat-river-waves)" />
-            </svg>
-          </div>
-
-          {/* Water lane dividers (subtle dashed buoy lanes) */}
-          {[27, 44, 61, 78].map((topPercent) => (
-            <div
-              key={topPercent}
-              style={{ top: `${topPercent}%` }}
-              className="absolute left-6 right-16 border-b border-dashed border-sky-500/15"
-            />
-          ))}
+          {/* Golden studio radial spotlight */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/15 via-transparent to-transparent pointer-events-none" />
         </div>
 
         {/* Top Header Information */}
-        <div className="relative z-10 flex items-center justify-between border-b border-slate-800/80 pb-2 mb-2">
+        <div className="relative z-20 flex items-center justify-between border-b border-slate-800/80 pb-2.5 mb-1">
           <div className="flex items-center gap-2">
-            <Waves className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-black tracking-widest uppercase text-indigo-400">
-              GIẢI ĐUA THUYỀN SÔNG NƯỚC
+            <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-400 flex items-center justify-center text-xs shadow-sm shadow-amber-500/30">
+              🎱
+            </div>
+            <span className="text-xs font-black tracking-widest uppercase text-amber-400">
+              LỒNG QUAY BI XỔ SỐ
             </span>
           </div>
-          <span className="text-xs font-medium text-slate-300">
-            {isSpinning ? (
-              <span className="text-sky-300 font-bold animate-pulse">
-                🚣 Các đội thuyền đang rẽ sóng so kè từng nhịp chèo...
-              </span>
-            ) : hasCompleted ? (
-              <span className="text-amber-300 font-bold flex items-center gap-1">
-                <Trophy className="w-3.5 h-3.5 text-amber-400" /> Chiếc thuyền về đích đầu tiên đã chiến thắng!
-              </span>
-            ) : (
-              <span className="text-slate-400">Nhấn QUAY TÊN để bắt đầu cuộc đua thuyền</span>
-            )}
-          </span>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-300">
+              {isSpinning ? (
+                <span className="text-amber-300 font-bold animate-pulse flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  Các viên bi đang nhào lộn cuồng nhiệt trong lồng quay...
+                </span>
+              ) : hasCompleted ? (
+                <span className="text-amber-300 font-bold flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  {activeWinners.length > 1
+                    ? `Đã rút ra ${activeWinners.length} viên bi trúng thưởng!`
+                    : 'Đã rút ra viên bi trúng thưởng may mắn!'}
+                </span>
+              ) : (
+                <span className="text-slate-400">
+                  {students.length > 0
+                    ? `Hiện có ${students.length} viên bi trong lồng • Nhấn QUAY TÊN để bắt đầu`
+                    : 'Chưa có học sinh phù hợp bộ lọc'}
+                </span>
+              )}
+            </span>
+          </div>
         </div>
 
-        {/* Arena: Open Water Surface where boats race */}
-        <div className="relative z-10 flex-1 w-full h-full overflow-hidden">
-          {/* Starting line on left bank */}
-          <div className="absolute left-4 top-2 bottom-2 w-1 border-r-2 border-dashed border-sky-400/30" />
-
-          {/* Floating Checkered Finish Buoy Line at 86% */}
-          <div className="absolute right-8 sm:right-10 top-2 bottom-2 w-3 flex flex-col justify-around items-center opacity-85 pointer-events-none">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className={`w-3 h-3 rounded-full border border-white/60 shadow-md ${
-                  i % 2 === 0 ? 'bg-amber-400' : 'bg-red-500'
-                }`}
-              />
-            ))}
+        {/* Center Arena: 3D Transparent Lottery Drum Chamber */}
+        <div className="relative z-10 flex-1 w-full h-full flex items-center justify-center overflow-hidden">
+          
+          {/* Top Selection Chute Tube */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 sm:w-20 h-14 z-25 pointer-events-none flex flex-col items-center">
+            {/* Glass Tube Funnel */}
+            <div className="w-14 sm:w-16 h-10 border-2 border-amber-400/60 rounded-b-2xl bg-gradient-to-b from-slate-900/40 via-sky-500/10 to-amber-400/20 shadow-lg backdrop-blur-xs flex items-center justify-center">
+              <span className="text-[9px] font-black uppercase text-amber-300 tracking-wider">
+                ỐNG RÚT BI
+              </span>
+            </div>
+            {/* Tube neck */}
+            <div className="w-6 h-4 border-x-2 border-amber-400/40 bg-slate-900/60" />
           </div>
 
-          {/* Racing Boats with Water Spray Wake & Names */}
-          {racers.map((racer, idx) => {
-            const isWinner = activeWinners.some((w) => w.id === racer.id);
-            const isEndingPhase = animProgress >= 0.85;
+          {/* Spherical Transparent Glass Lottery Chamber */}
+          <div className="relative w-[340px] sm:w-[420px] md:w-[460px] h-[270px] sm:h-[310px] md:h-[330px] rounded-[48%] border-4 border-amber-400/50 shadow-[0_0_50px_rgba(245,158,11,0.25)] bg-radial from-transparent via-slate-950/40 to-slate-900/80 backdrop-blur-xs flex items-center justify-center overflow-hidden">
+            
+            {/* Outer golden metallic drum rim ring */}
+            <div className="absolute inset-1 rounded-[47%] border-2 border-amber-300/30 pointer-events-none" />
+            <div className="absolute inset-3 rounded-[46%] border border-sky-400/20 pointer-events-none" />
 
-            // X-position (percentage across river, 6% to 88%)
-            let xPos = 6; // Start near left bank
+            {/* Rotating drum cage ribs / spokes (Mechanical feel) */}
+            <div
+              style={{
+                transform: `rotate(${drumRotation}deg)`,
+                transition: isSpinning ? 'none' : 'transform 0.5s ease-out',
+              }}
+              className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-30"
+            >
+              <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent" />
+              <div className="w-0.5 h-full bg-gradient-to-b from-transparent via-amber-300 to-transparent absolute" />
+              <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent rotate-45 absolute" />
+              <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-amber-300 to-transparent -rotate-45 absolute" />
+            </div>
 
-            if (animProgress > 0) {
-              const baseSwim = animProgress * 68;
+            {/* Center Drum Axle Hub with golden gear */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border-2 border-amber-400 bg-slate-950/90 shadow-xl flex items-center justify-center z-12 pointer-events-none">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-600 to-amber-300 flex items-center justify-center shadow-inner">
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-950" />
+              </div>
+            </div>
 
-              // During race (0 to 0.85): Dynamic surges & rank shifts
-              const surge =
-                Math.sin(animProgress * Math.PI * 4 * racer.strokeFreq + racer.strokePhase) * 12 +
-                Math.cos(animProgress * Math.PI * 6 + idx) * 8;
+            {/* Glass Curvature Specular Highlights */}
+            <div className="absolute top-2 left-6 right-6 h-10 rounded-[50%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+            <div className="absolute bottom-3 left-12 right-12 h-6 rounded-[50%] bg-gradient-to-t from-white/10 to-transparent pointer-events-none" />
 
-              if (!isEndingPhase) {
-                // Anyone can lead in the first 85% of time!
-                xPos = Math.max(6, Math.min(73, baseSwim + surge));
-              } else {
-                // Final 15%: Winner boat powers ahead across finish buoys!
-                const endLerp = (animProgress - 0.85) / 0.15;
-                if (isWinner) {
-                  xPos = 72 + endLerp * 16; // Crosses finish line at 88%!
-                } else {
-                  // Other boats stay behind between 60% and 72%
-                  xPos = 62 + Math.sin(idx * 2) * 8;
-                }
+            {/* LOTTERY BALLS INSIDE THE CHAMBER */}
+            {renderedBalls.map((b) => {
+              const isWinner = activeWinners.some((w) => w.id === b.id);
+              const isEndingAndWinner = isEndingOrCompleted && isWinner;
+
+              // If completed, winning balls will be displayed in the featured extraction area
+              if (hasCompleted && isWinner) {
+                return null;
               }
-            } else if (hasCompleted) {
-              xPos = isWinner ? 88 : 62 + Math.sin(idx * 2) * 8;
-            }
 
-            // Natural wave bobbing
-            const yBob = Math.sin((animProgress * 12 + idx) * Math.PI) * 2.5;
-
-            return (
-              <div
-                key={racer.id}
-                style={{
-                  left: `${xPos}%`,
-                  top: `calc(${racer.yLanePercent}% + ${yBob}px)`,
-                  transform: 'translate(-50%, -50%)',
-                  transition: isEndingPhase ? 'left 0.25s ease-out' : 'none',
-                  zIndex: isWinner && isEndingPhase ? 30 : 10 + idx,
-                }}
-                className={`absolute flex items-center gap-1.5 pointer-events-none ${
-                  isWinner && isEndingPhase ? 'scale-110' : 'scale-100'
-                }`}
-              >
-                {/* Water spray & Wake foam trail behind boat */}
-                {(animProgress > 0 || hasCompleted) && (
-                  <div className="flex items-center gap-1 opacity-80 -mr-1 pointer-events-none">
-                    <div className="w-3.5 h-1.5 rounded-full bg-cyan-200/90 animate-ping" />
-                    <div className="w-5 h-1 rounded-full bg-white/80 animate-pulse" />
-                    <div className="w-2.5 h-1 rounded-full bg-sky-300/60" />
-                  </div>
-                )}
-
-                {/* Sleek Racing Boat SVG */}
+              return (
                 <div
-                  className={`relative w-18 h-12 sm:w-22 sm:h-14 drop-shadow-xl transition-transform ${
-                    isSpinning && rowStroke === 1
-                      ? '-translate-y-0.5 rotate-[-1.5deg]'
-                      : 'translate-y-0.5 rotate-[1.5deg]'
-                  }`}
-                >
-                  <svg viewBox="0 0 130 70" className="w-full h-full overflow-visible">
-                    <defs>
-                      <linearGradient id={`hull-grad-${racer.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor={racer.hullColor} />
-                        <stop offset="60%" stopColor={racer.hullAccent} />
-                        <stop offset="100%" stopColor="#ffffff" stopOpacity="0.95" />
-                      </linearGradient>
-
-                      <linearGradient id={`deck-grad-${racer.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#0f172a" />
-                        <stop offset="100%" stopColor="#1e293b" />
-                      </linearGradient>
-                    </defs>
-
-                    {/* Dual Rowing Oars (Animated pulling motion) */}
-                    <g
-                      transform={
-                        isSpinning && rowStroke === 1
-                          ? 'rotate(-14 62 35)'
-                          : 'rotate(14 62 35)'
-                      }
-                      className="transition-transform duration-150"
-                    >
-                      {/* Top Port Oar */}
-                      <line x1="30" y1="10" x2="68" y2="35" stroke={racer.oarColor} strokeWidth="3" strokeLinecap="round" />
-                      <ellipse cx="28" cy="9" rx="9" ry="4.5" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="1" transform="rotate(-30 28 9)" />
-                      {/* Top Oar Splash Ripple */}
-                      {isSpinning && (
-                        <circle cx="28" cy="9" r="4" fill="none" stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
-                      )}
-
-                      {/* Bottom Starboard Oar */}
-                      <line x1="30" y1="60" x2="68" y2="35" stroke={racer.oarColor} strokeWidth="3" strokeLinecap="round" />
-                      <ellipse cx="28" cy="61" rx="9" ry="4.5" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="1" transform="rotate(30 28 61)" />
-                      {/* Bottom Oar Splash Ripple */}
-                      {isSpinning && (
-                        <circle cx="28" cy="61" r="4" fill="none" stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
-                      )}
-                    </g>
-
-                    {/* Aerodynamic Racing Hull */}
-                    {/* Stern on left (10, 35) -> Sharp pointed Bow on right (124, 35) */}
-                    <path
-                      d="M 10 35 C 16 22, 65 20, 124 35 C 65 50, 16 48, 10 35 Z"
-                      fill={`url(#hull-grad-${racer.id})`}
-                      stroke="#0f172a"
-                      strokeWidth="2"
-                    />
-
-                    {/* Cockpit / Rowing Deck Recess */}
-                    <ellipse cx="62" cy="35" rx="38" ry="7.5" fill={`url(#deck-grad-${racer.id})`} />
-
-                    {/* High-speed Racing Stripe */}
-                    <path
-                      d="M 28 35 L 112 35"
-                      stroke="#ffffff"
-                      strokeWidth="2"
-                      strokeDasharray="5 2.5"
-                      opacity="0.95"
-                    />
-
-                    {/* Stern Flag / Fin */}
-                    <polygon points="12,35 6,24 18,28" fill={racer.hullAccent} stroke="#ffffff" strokeWidth="0.8" />
-
-                    {/* Rower Athlete Silhouette in Rowing Action */}
-                    {/* Head / Visor */}
-                    <circle cx="62" cy="35" r="6" fill="#f8fafc" stroke={racer.hullColor} strokeWidth="1.8" />
-                    {/* Athletic Torso / Shoulders */}
-                    <path d="M 58 35 Q 63 30, 70 35" stroke="#f8fafc" strokeWidth="3" strokeLinecap="round" />
-
-                    {/* Bow Wave Slicing Splash at pointed front */}
-                    <path
-                      d="M 120 35 Q 128 28, 124 22 M 120 35 Q 128 42, 124 48"
-                      stroke="#e0f2fe"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      fill="none"
-                      opacity="0.85"
-                    />
-                  </svg>
-
-                  {/* Winner Crown directly on top of champion boat */}
-                  {isWinner && hasCompleted && (
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 animate-bounce">
-                      <span className="text-2xl filter drop-shadow">👑</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Clean STT Badge ONLY (No student name during the race) */}
-                <div
+                  key={b.id}
                   style={{
-                    borderColor: isWinner && isEndingPhase ? '#f59e0b' : racer.hullAccent,
+                    left: `${b.x}%`,
+                    top: `${b.y}%`,
+                    transform: `translate(-50%, -50%) rotate(${b.rot}deg) ${
+                      isEndingAndWinner ? 'scale(1.35)' : 'scale(1)'
+                    }`,
+                    zIndex: isEndingAndWinner ? 28 : 15,
+                    transition: isEndingAndWinner ? 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
                   }}
-                  className={`px-2.5 py-1 rounded-full text-center border shadow-lg font-black text-xs sm:text-sm tracking-wider whitespace-nowrap transition-transform ${
-                    isWinner && isEndingPhase
-                      ? 'bg-amber-400 text-slate-950 scale-110 shadow-amber-400/50 ring-2 ring-amber-300'
-                      : 'bg-slate-950/95 text-white border-2'
-                  }`}
+                  className="absolute pointer-events-none cursor-default"
                 >
-                  #{racer.stt}
-                </div>
-              </div>
-            );
-          })}
+                  {/* 3D Spherical Lottery Ball */}
+                  <div
+                    style={{
+                      width: `${b.radius * 2}px`,
+                      height: `${b.radius * 2}px`,
+                      background: b.bgGradient,
+                      boxShadow: `inset -3px -4px 6px rgba(0, 0, 0, 0.6), inset 3px 4px 6px rgba(255, 255, 255, 0.6), 0 4px 10px ${b.glowColor}`,
+                      borderColor: b.borderColor,
+                    }}
+                    className={`relative rounded-full border flex items-center justify-center transition-transform ${
+                      isEndingAndWinner ? 'ring-4 ring-amber-300 ring-offset-2 ring-offset-slate-950 animate-pulse' : ''
+                    }`}
+                  >
+                    {/* Equatorial Characteristic Lottery Stripe */}
+                    <div
+                      style={{ backgroundColor: b.stripeColor }}
+                      className="absolute inset-y-[38%] inset-x-0 pointer-events-none opacity-60"
+                    />
 
-          {/* Grand Regatta Champion Announcement inside arena when completed */}
-          {hasCompleted && activeWinners.length > 0 && (
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 animate-scale-in text-center px-4 py-2.5 rounded-2xl bg-slate-900/95 border-2 border-amber-400 shadow-2xl shadow-amber-500/20 max-w-lg w-[94%]">
-              <div className="text-[10px] font-black tracking-widest uppercase text-amber-400 flex items-center justify-center gap-1.5">
-                <Trophy className="w-4 h-4 text-amber-400" />
-                {activeWinners.length === 1
-                  ? 'QUÁN QUÂN ĐƯỜNG ĐUA THUYỀN VỀ ĐÍCH ĐẦU TIÊN!'
-                  : `${activeWinners.length} HỌC SINH ĐƯỢC GỌI LÊN BẢNG!`}
-              </div>
+                    {/* Specular 3D Glass Light Glint */}
+                    <div className="absolute top-1 left-1.5 w-2 sm:w-2.5 h-1 sm:h-1.5 rounded-full bg-white/80 blur-[0.5px] pointer-events-none" />
 
-              {activeWinners.length === 1 ? (
-                <>
-                  <h2 className="text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-1 truncate">
-                    👑 {activeWinners[0].name}
-                  </h2>
-                  <div className="text-xs font-bold text-slate-300 mt-1 flex items-center justify-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[11px]">
-                      STT #{getStudentSTT(activeWinners[0], allClassStudents || students)}
-                    </span>
-                    <span>Lần thứ {activeWinners[0].callCount} lên bảng</span>
-                  </div>
-                </>
-              ) : (
-                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 max-h-48 overflow-y-auto">
-                  {activeWinners.map((w) => {
-                    const stt = getStudentSTT(w, allClassStudents || students);
-                    return (
-                      <div
-                        key={w.id}
-                        className="px-3.5 py-1.5 rounded-xl bg-slate-800/95 border border-amber-400/80 text-amber-300 font-black text-sm sm:text-base shadow-md flex items-center gap-2"
+                    {/* Center White Number Badge: always right-side-up and easily readable */}
+                    <div
+                      style={{
+                        transform: `rotate(${-b.rot}deg)`,
+                      }}
+                      className="w-[58%] h-[58%] rounded-full bg-white shadow-inner flex items-center justify-center z-10 border border-slate-300/80"
+                    >
+                      <span
+                        style={{ color: b.textColor }}
+                        className="font-black text-[11px] sm:text-xs leading-none tracking-tighter"
                       >
-                        <span className="text-amber-400">👑</span>
-                        <span>#{stt}</span>
-                        <span>{w.name}</span>
-                        <span className="text-[11px] font-medium text-slate-300">
-                          ({w.callCount} lần)
+                        {b.stt}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Mechanical Drum Stand / Base */}
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-48 sm:w-64 h-6 border-t-2 border-amber-400/50 bg-gradient-to-b from-slate-800 to-slate-950 rounded-t-xl z-5 shadow-2xl flex items-center justify-center">
+            <div className="w-16 h-1.5 bg-amber-400/70 rounded-full" />
+          </div>
+
+          {/* GRAND WINNER PRESENTATION AREA (Extracted Lottery Balls with Full Names) */}
+          {hasCompleted && activeWinners.length > 0 && (
+            <div className="absolute inset-0 z-35 bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center p-3 animate-fade-in">
+              <div className="text-center max-w-xl w-full px-4 py-4 rounded-3xl bg-slate-900/95 border-2 border-amber-400 shadow-[0_0_50px_rgba(245,158,11,0.35)] space-y-3 animate-scale-in">
+                
+                {/* Winner Header Banner */}
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-2xl animate-bounce">🎱</span>
+                  <div className="text-xs sm:text-sm font-black tracking-widest uppercase text-amber-400 flex items-center gap-1.5">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    {activeWinners.length === 1
+                      ? 'KẾT QUẢ VIÊN BI MAY MẮN ĐƯỢC CHỌN!'
+                      : `KẾT QUẢ ${activeWinners.length} VIÊN BI TRÚNG THƯỞNG!`}
+                  </div>
+                  <span className="text-2xl animate-bounce">🎱</span>
+                </div>
+
+                {/* Single Winner Display: Massive 3D Ball + Full Student Name */}
+                {activeWinners.length === 1 ? (
+                  <div className="flex flex-col items-center gap-2.5 py-1">
+                    {/* Big 3D Extracted Ball */}
+                    <div className="relative">
+                      <div
+                        style={{
+                          background: 'radial-gradient(circle at 35% 30%, #fef08a 0%, #eab308 50%, #854d0e 100%)',
+                          boxShadow: 'inset -6px -8px 14px rgba(0, 0, 0, 0.7), inset 6px 8px 14px rgba(255, 255, 255, 0.8), 0 10px 25px rgba(234, 179, 8, 0.6)',
+                        }}
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-amber-200 flex items-center justify-center ring-4 ring-amber-400/50"
+                      >
+                        {/* Specular Glint */}
+                        <div className="absolute top-2 left-3 w-5 h-2.5 rounded-full bg-white/90 blur-[0.5px]" />
+                        {/* Center STT Badge */}
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white shadow-xl flex items-center justify-center border-2 border-slate-300">
+                          <span className="font-black text-xl sm:text-2xl text-slate-950">
+                            #{getStudentSTT(activeWinners[0], allClassStudents || students)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="absolute -top-3 -right-2 text-2xl animate-pulse">
+                        👑
+                      </div>
+                    </div>
+
+                    {/* Full Name of Student */}
+                    <div className="text-center">
+                      <h2 className="text-2xl sm:text-4xl font-black text-amber-300 tracking-tight leading-tight mt-1">
+                        {activeWinners[0].name}
+                      </h2>
+                      <div className="text-xs sm:text-sm font-bold text-slate-300 mt-1.5 flex items-center justify-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-xs">
+                          STT #{getStudentSTT(activeWinners[0], allClassStudents || students)}
+                        </span>
+                        <span className="text-slate-300">
+                          Lần thứ {Math.max(1, activeWinners[0].callCount ?? 1)} lên bảng
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Multiple Winners Display: Grid of Extracted Balls + Names */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto px-1 py-1">
+                    {activeWinners.map((w, idx) => {
+                      const stt = getStudentSTT(w, allClassStudents || students);
+                      const theme = LOTTERY_BALL_THEMES[idx % LOTTERY_BALL_THEMES.length];
+                      return (
+                        <div
+                          key={w.id}
+                          className="px-3.5 py-2 rounded-2xl bg-slate-800/90 border border-amber-400/70 text-amber-300 font-black text-sm sm:text-base shadow-lg flex items-center gap-3 transition-transform hover:scale-[1.02]"
+                        >
+                          {/* Mini 3D Ball */}
+                          <div
+                            style={{
+                              background: theme.bgGradient,
+                              boxShadow: `inset -2px -3px 5px rgba(0,0,0,0.6), inset 2px 3px 5px rgba(255,255,255,0.7), 0 2px 6px ${theme.glowColor}`,
+                              borderColor: theme.borderColor,
+                            }}
+                            className="w-10 h-10 rounded-full border flex items-center justify-center shrink-0"
+                          >
+                            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shadow-xs">
+                              <span style={{ color: theme.textColor }} className="font-black text-[11px] leading-none">
+                                {stt}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Student Details */}
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="text-amber-200 font-black text-sm truncate">
+                              {w.name}
+                            </div>
+                            <div className="text-[11px] font-medium text-slate-300">
+                              STT #{stt} • {Math.max(1, w.callCount ?? 1)} lần lên bảng
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Footer info */}
-        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400 pt-2.5 mt-2 border-t border-slate-800/80">
-          <span>🚩 Xuất phát từ bờ trái → Lướt sóng qua hàng phao cờ bên phải</span>
-          <span>Các thuyền rẽ sóng so kè nhịp chèo — chiếc thuyền về đích đầu tiên sẽ chiến thắng!</span>
+        {/* Footer info bar */}
+        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400 pt-2.5 mt-1 border-t border-slate-800/80">
+          <span className="flex items-center gap-1">
+            <span>🎱 Mỗi viên bi mang một STT học sinh trong lồng quay</span>
+          </span>
+          <span>Khi lồng quay dừng, viên bi may mắn sẽ được rút ra và hiển thị đầy đủ họ tên</span>
         </div>
       </div>
     </div>

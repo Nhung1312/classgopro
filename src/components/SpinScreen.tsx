@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Sliders,
   Filter,
+  Wand2,
 } from 'lucide-react';
 import {
   ClassRoom,
@@ -54,6 +55,11 @@ import {
   filterStudentsByTarget,
   getSpeechAnnouncementText,
 } from '../utils/studentDisplay';
+import {
+  applyQuickScoreToStudent,
+  getScoreFeedbackMessage,
+  TxColumn,
+} from '../utils/quickScoreHelper';
 import { soundEngine } from '../utils/audio';
 import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
 import { speechEngine } from '../utils/speech';
@@ -68,6 +74,7 @@ import { BalloonVisual } from './visuals/BalloonVisual';
 import { HorseRaceVisual } from './visuals/HorseRaceVisual';
 import { BoatRaceVisual } from './visuals/BoatRaceVisual';
 import { RocketVisual } from './visuals/RocketVisual';
+import { MagicCardVisual } from './visuals/MagicCardVisual';
 
 const BalloonIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg
@@ -109,6 +116,12 @@ interface SpinScreenProps {
   settings: SpinSettings;
   onStudentSelected: (student: Student, mode: SelectionMode, score?: string, note?: string) => void;
   onBatchStudentsSelected?: (students: Student[], mode: SelectionMode) => void;
+  onSaveScoreAndNote?: (
+    students: Student[],
+    mode: SelectionMode,
+    score?: string,
+    note?: string
+  ) => void;
   onUndoLastSelection?: (recordId: string) => void;
   lastHistoryRecord?: HistoryRecord | null;
   onOpenPresentation: () => void;
@@ -137,6 +150,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   settings,
   onStudentSelected,
   onBatchStudentsSelected,
+  onSaveScoreAndNote,
   onUndoLastSelection,
   lastHistoryRecord,
   onOpenPresentation,
@@ -181,6 +195,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const [quickScore, setQuickScore] = useState<string>('');
   const [quickNote, setQuickNote] = useState<string>('');
   const [feedbackSaved, setFeedbackSaved] = useState(false);
+  const [scoreFeedbackMessage, setScoreFeedbackMessage] = useState<string | null>(null);
+  const [assignedTurnSlots, setAssignedTurnSlots] = useState<Record<string, TxColumn | null>>({});
   const [awardedStarsMap, setAwardedStarsMap] = useState<{ [id: string]: number }>({});
   const [selectedDisciplineChoice, setSelectedDisciplineChoice] = useState<string | null>(null);
   const [lastDisciplineRecordId, setLastDisciplineRecordId] = useState<string | null>(null);
@@ -246,9 +262,38 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     });
   }, [settings]);
 
-  // Calculate current fair group stats among eligible students
-  const minCall = eligibleStudents.length > 0 ? Math.min(...eligibleStudents.map((s) => s.callCount || 0)) : 0;
-  const minCandidates = eligibleStudents.filter((s) => (s.callCount || 0) === minCall);
+  // Calculate current fair group stats according to active targetFilter (fairPool)
+  const fairPool = targetFilter === 'ALL' ? eligibleStudents : targetCandidates;
+  const minCall = fairPool.length > 0 ? Math.min(...fairPool.map((s) => s.callCount || 0)) : 0;
+  const minCandidates = fairPool.length > 0 ? fairPool.filter((s) => (s.callCount || 0) === minCall) : [];
+
+  // Resolve current up-to-date students for winner(s) directly from activeClass.students
+  const resolvedSelectedStudents = useMemo(() => {
+    if (!selectedResult) return [];
+    return selectedResult.selectedStudents.map(
+      (oldStudent) => students.find((s) => s.id === oldStudent.id) || oldStudent
+    );
+  }, [selectedResult, students]);
+
+  const resolvedWinner = useMemo(() => {
+    if (resolvedSelectedStudents.length > 0) {
+      return resolvedSelectedStudents[0];
+    }
+    if (targetWinner) {
+      return students.find((s) => s.id === targetWinner.id) || targetWinner;
+    }
+    return null;
+  }, [resolvedSelectedStudents, targetWinner, students]);
+
+  const resolvedTargetWinners = useMemo(() => {
+    return targetWinners.map(
+      (oldStudent) => students.find((s) => s.id === oldStudent.id) || oldStudent
+    );
+  }, [targetWinners, students]);
+
+  const resolvedVisualSelectedStudents = useMemo(() => {
+    return resolvedSelectedStudents.length > 0 ? resolvedSelectedStudents : resolvedTargetWinners;
+  }, [resolvedSelectedStudents, resolvedTargetWinners]);
 
   // Trigger realistic confetti
   const triggerConfetti = useCallback(() => {
@@ -296,6 +341,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     setFeedbackSaved(false);
     setQuickScore('');
     setQuickNote('');
+    setScoreFeedbackMessage(null);
+    setAssignedTurnSlots({});
     setSelectedDisciplineChoice(null);
     setLastDisciplineRecordId(null);
     setDisciplineFeedback('');
@@ -511,19 +558,49 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   ]);
 
   const handleSaveScoreAndNote = (scoreVal?: string, noteVal?: string) => {
-    if (!selectedResult || selectedResult.selectedStudents.length === 0) return;
+    const targetStudents =
+      resolvedSelectedStudents.length > 0
+        ? resolvedSelectedStudents
+        : (selectedResult?.selectedStudents || []);
+    if (targetStudents.length === 0) return;
     const finalScore = scoreVal !== undefined ? scoreVal : quickScore;
     const finalNote = noteVal !== undefined ? noteVal : quickNote;
 
-    selectedResult.selectedStudents.forEach((st) => {
-      onStudentSelected(st, selectionMode, finalScore, finalNote);
+    const feedbackMsgs: string[] = [];
+    const newAssignedTurnSlots = { ...assignedTurnSlots };
+
+    targetStudents.forEach((st) => {
+      const currentSt = activeClass.students.find((s) => s.id === st.id) || st;
+      const prevSlot = assignedTurnSlots[st.id];
+      const res = applyQuickScoreToStudent(currentSt, finalScore, finalNote, prevSlot);
+      if (res.targetSlot) {
+        newAssignedTurnSlots[st.id] = res.targetSlot;
+      }
+      feedbackMsgs.push(getScoreFeedbackMessage(st.name, res.targetSlot, res.isFull, finalScore));
     });
+
+    setAssignedTurnSlots(newAssignedTurnSlots);
+    if (feedbackMsgs.length > 0) {
+      setScoreFeedbackMessage(feedbackMsgs.join(' | '));
+    }
+
+    if (onSaveScoreAndNote) {
+      onSaveScoreAndNote(targetStudents, selectionMode, finalScore, finalNote);
+    } else {
+      targetStudents.forEach((st) => {
+        onStudentSelected(st, selectionMode, finalScore, finalNote);
+      });
+    }
     setFeedbackSaved(true);
   };
 
   const handleAwardStarBonus = (count: number) => {
-    if (!selectedResult || selectedResult.selectedStudents.length === 0 || !onAwardStars) return;
-    selectedResult.selectedStudents.forEach((st) => {
+    const targetStudents =
+      resolvedSelectedStudents.length > 0
+        ? resolvedSelectedStudents
+        : (selectedResult?.selectedStudents || []);
+    if (targetStudents.length === 0 || !onAwardStars) return;
+    targetStudents.forEach((st) => {
       onAwardStars(st.id, count);
       setAwardedStarsMap((prev) => ({
         ...prev,
@@ -549,12 +626,18 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       setHasCompleted(false);
       setSelectedResult(null);
       setDisplayName('???');
+      setScoreFeedbackMessage(null);
+      setAssignedTurnSlots({});
     }
   };
 
   const handleDisciplineChoice = (choiceId: string) => {
-    if (!selectedResult || selectedResult.selectedStudents.length === 0) return;
-    const targetStudent = selectedResult.selectedStudents[0];
+    const targetStudents =
+      resolvedSelectedStudents.length > 0
+        ? resolvedSelectedStudents
+        : (selectedResult?.selectedStudents || []);
+    if (targetStudents.length === 0) return;
+    const targetStudent = targetStudents[0];
 
     setSelectedDisciplineChoice(choiceId);
 
@@ -593,9 +676,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
 
   const handleReplayVoice = useCallback(() => {
     speechEngine.unlock();
-    if (selectedResult && selectedResult.selectedStudents.length > 0) {
-      if (selectedResult.selectedStudents.length === 1) {
-        const winnerStudent = selectedResult.selectedStudents[0];
+    if (resolvedSelectedStudents && resolvedSelectedStudents.length > 0) {
+      if (resolvedSelectedStudents.length === 1) {
+        const winnerStudent = resolvedSelectedStudents[0];
         const speechAnnouncement = getSpeechAnnouncementText(
           winnerStudent,
           students,
@@ -604,27 +687,28 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
         );
         speechEngine.speakStudent(
           winnerStudent.name,
-          winnerStudent.callCount,
+          Math.max(1, winnerStudent.callCount ?? 1),
           speechAnnouncement
         );
       } else {
         speechEngine.speakMultipleStudents(
-          selectedResult.selectedStudents.map((s) =>
+          resolvedSelectedStudents.map((s) =>
             formatStudentDisplayName(s, students, nameStyle, false)
           )
         );
       }
     }
-  }, [selectedResult, students, nameStyle, settings.ttsTemplate]);
+  }, [resolvedSelectedStudents, students, nameStyle, settings.ttsTemplate]);
 
   const VISUAL_MODES: { id: SpinVisualType; label: string; icon: React.ReactNode }[] = [
     { id: 'WHEEL', label: 'Vòng Quay', icon: <Disc className="w-4 h-4" /> },
     { id: 'SLOT', label: 'Dải Cuộn', icon: <Layers className="w-4 h-4" /> },
     { id: 'CARDS', label: 'Lật Thẻ Bài', icon: <LayoutGrid className="w-4 h-4" /> },
+    { id: 'MAGIC_CARD', label: 'Lá bài ma thuật', icon: <Wand2 className="w-4 h-4 text-purple-400" /> },
     { id: 'CHEST', label: 'Hộp May Mắn', icon: <Gift className="w-4 h-4" /> },
     { id: 'BALLOON', label: 'Bong Bóng', icon: <BalloonIcon className="w-4 h-4" /> },
     { id: 'HORSE_RACE', label: 'Đua Ngựa', icon: <HorseIcon className="w-4 h-4" /> },
-    { id: 'BOAT_RACE', label: 'Đua Thuyền', icon: <Sailboat className="w-4 h-4" /> },
+    { id: 'BOAT_RACE', label: 'Quay bi xổ số', icon: <span className="text-sm">🎱</span> },
     { id: 'ROCKET', label: 'Tên Lửa', icon: <Rocket className="w-4 h-4" /> },
   ];
 
@@ -1087,16 +1171,16 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                 students={targetCandidates.length > 0 ? targetCandidates : eligibleStudents}
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
-                winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
+                winner={resolvedWinner}
                 currentAngle={wheelAngle}
                 size={WHEEL_SIZES[wheelSizeOption].size}
                 nameStyle={nameStyle}
                 allClassStudents={students}
               />
               {/* Winner Display below wheel */}
-              {hasCompleted && selectedResult && (
+              {hasCompleted && resolvedSelectedStudents.length > 0 && (
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5 animate-scale-in">
-                  {selectedResult.selectedStudents.map((winner, idx) => {
+                  {resolvedSelectedStudents.map((winner, idx) => {
                     const stt = getStudentSTT(winner, students);
                     const displayWinnerName = formatStudentDisplayName(winner, students, nameStyle, false);
                     return (
@@ -1125,7 +1209,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                         <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono">
                           STT {stt}
                         </span>
-                        {selectedResult.selectedStudents.length > 1 && (
+                        {resolvedSelectedStudents.length > 1 && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-500/40 font-mono">
                             #{idx + 1}
                           </span>
@@ -1144,14 +1228,14 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                 displayName={displayName}
                 isSpinning={isSpinning}
                 hasCompleted={hasCompleted}
-                winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+                winner={resolvedWinner}
                 reelNames={(targetCandidates.length > 0 ? targetCandidates : eligibleStudents).map((s) =>
                   formatStudentDisplayName(s, students, nameStyle, false)
                 )}
               />
-              {hasCompleted && selectedResult && (
+              {hasCompleted && resolvedSelectedStudents.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2 animate-scale-in">
-                  {selectedResult.selectedStudents.map((winner, idx) => (
+                  {resolvedSelectedStudents.map((winner, idx) => (
                     <button
                       key={winner.id}
                       type="button"
@@ -1176,7 +1260,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               displayName={displayName}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : null}
+              winner={resolvedWinner}
             />
           )}
 
@@ -1185,7 +1269,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               displayName={displayName}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
+              winner={resolvedWinner}
             />
           )}
           {visualType === 'BALLOON' && (
@@ -1193,8 +1277,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents || targetWinners}
+              winner={resolvedWinner}
+              selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />
@@ -1204,8 +1288,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents || targetWinners}
+              winner={resolvedWinner}
+              selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />
@@ -1215,8 +1299,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents || targetWinners}
+              winner={resolvedWinner}
+              selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />
@@ -1226,8 +1310,19 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
               isSpinning={isSpinning}
               hasCompleted={hasCompleted}
-              winner={selectedResult ? selectedResult.selectedStudents[0] : targetWinner}
-              selectedStudents={selectedResult?.selectedStudents || targetWinners}
+              winner={resolvedWinner}
+              selectedStudents={resolvedVisualSelectedStudents}
+              duration={settings.spinDuration || 3800}
+              allClassStudents={students}
+            />
+          )}
+          {visualType === 'MAGIC_CARD' && (
+            <MagicCardVisual
+              students={targetFilter === 'ALL' ? eligibleStudents : targetCandidates}
+              isSpinning={isSpinning}
+              hasCompleted={hasCompleted}
+              winner={resolvedWinner}
+              selectedStudents={resolvedVisualSelectedStudents}
               duration={settings.spinDuration || 3800}
               allClassStudents={students}
             />
@@ -1303,7 +1398,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-emerald-400 font-bold text-sm">📝 Đánh giá nhanh kết quả:</span>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {selectedResult.selectedStudents.map((s, idx) => (
+                {(resolvedSelectedStudents.length > 0 ? resolvedSelectedStudents : selectedResult.selectedStudents).map((s, idx, arr) => (
                   <button
                     key={s.id}
                     type="button"
@@ -1312,7 +1407,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                     title="Bấm để xem Thẻ học sinh (Hồ sơ, điểm số, nề nếp)"
                   >
                     <span className="group-hover/btn:underline underline-offset-2">{s.name}</span>
-                    {idx < selectedResult.selectedStudents.length - 1 && (
+                    {idx < arr.length - 1 && (
                       <span className="text-slate-600 font-normal">,</span>
                     )}
                   </button>
@@ -1352,6 +1447,29 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                   {val}
                 </button>
               ))}
+
+              {/* Custom score input */}
+              <input
+                type="text"
+                placeholder="Khác..."
+                value={!['10', '9', '8', '7', '6', '5', 'Đạt', 'Chưa đạt'].includes(quickScore) ? quickScore : ''}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9.,]/g, '').slice(0, 4);
+                  setQuickScore(val);
+                }}
+                onBlur={() => {
+                  if (quickScore && !['10', '9', '8', '7', '6', '5', 'Đạt', 'Chưa đạt'].includes(quickScore)) {
+                    handleSaveScoreAndNote(quickScore, quickNote);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && quickScore) {
+                    handleSaveScoreAndNote(quickScore, quickNote);
+                  }
+                }}
+                className="w-16 bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-lg px-2 py-1 text-xs text-amber-200 placeholder-slate-500 text-center font-bold outline-none"
+                title="Nhập điểm số tùy chọn (vd: 8.5)"
+              />
             </div>
 
             {/* Gamification: Bonus Stars / Badges */}
@@ -1484,6 +1602,17 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               <span>{feedbackSaved ? 'Đã lưu' : 'Lưu ghi chú'}</span>
             </button>
           </div>
+
+          {/* Status feedback message when score or note is saved */}
+          {scoreFeedbackMessage && (
+            <div className={`text-xs px-3 py-2 rounded-lg border flex items-center gap-1.5 ${
+              scoreFeedbackMessage.includes('⚠️')
+                ? 'bg-amber-950/70 text-amber-200 border-amber-500/40'
+                : 'bg-emerald-950/70 text-emerald-200 border-emerald-500/40'
+            }`}>
+              <span>{scoreFeedbackMessage}</span>
+            </div>
+          )}
         </div>
       )}
 

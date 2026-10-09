@@ -54,6 +54,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentCode, setNewStudentCode] = useState('');
+  const [newStudentPhone, setNewStudentPhone] = useState('');
   const [newStudentGender, setNewStudentGender] = useState<'nam' | 'nu' | 'khac'>('nam');
 
   // Quick batch paste student modal
@@ -64,6 +65,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editCode, setEditCode] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editCount, setEditCount] = useState<number>(0);
 
   // Class rename state
@@ -102,6 +104,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
       id: `std-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       name: newStudentName.trim(),
       studentCode: newStudentCode.trim() || undefined,
+      parentPhone: newStudentPhone.trim() || undefined,
       gender: newStudentGender,
       callCount: 0,
     };
@@ -113,6 +116,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
     onUpdateClass(updated);
     setNewStudentName('');
     setNewStudentCode('');
+    setNewStudentPhone('');
     setShowAddStudentModal(false);
     soundEngine.playTick(1.2);
   };
@@ -150,6 +154,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
           ...s,
           name: editName.trim() || s.name,
           studentCode: editCode.trim() || undefined,
+          parentPhone: editPhone.trim() || undefined,
           callCount: Math.max(0, editCount),
         };
       }
@@ -572,7 +577,15 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
                         </td>
 
                         <td className="py-2.5 px-3 hidden md:table-cell text-slate-300 text-xs font-mono">
-                          {student.parentPhone ? (
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editPhone}
+                              onChange={(e) => setEditPhone(e.target.value)}
+                              placeholder="SĐT PH"
+                              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white w-28"
+                            />
+                          ) : student.parentPhone ? (
                             <span className="text-emerald-400 flex items-center gap-1">
                               <Phone className="w-3 h-3 text-emerald-400/70" />
                               {student.parentPhone}
@@ -687,6 +700,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
                                   setEditingStudentId(student.id);
                                   setEditName(student.name);
                                   setEditCode(student.studentCode || '');
+                                  setEditPhone(student.parentPhone || '');
                                   setEditCount(student.callCount || 0);
                                 }}
                                 className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
@@ -840,6 +854,19 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
                   value={newStudentCode}
                   onChange={(e) => setNewStudentCode(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  SĐT phụ huynh (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: 0912345678..."
+                  value={newStudentPhone}
+                  onChange={(e) => setNewStudentPhone(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
                 />
               </div>
 

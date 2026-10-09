@@ -89,7 +89,7 @@ export const ChestVisual: React.FC<ChestVisualProps> = ({
           {hasCompleted && winner && (
             <div className="mt-3 flex items-center justify-center gap-2 text-xs sm:text-sm font-black text-amber-300">
               <Award className="w-4 h-4 text-amber-400" />
-              <span>LẦN THỨ {winner.callCount} LÊN BẢNG</span>
+              <span>LẦN THỨ {Math.max(1, winner.callCount ?? 1)} LÊN BẢNG</span>
             </div>
           )}
         </div>

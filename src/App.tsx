@@ -63,6 +63,7 @@ import { PresentationOverlay } from './components/PresentationOverlay';
 import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
 import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
+import { applyQuickScoreToStudent, TxColumn } from './utils/quickScoreHelper';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -493,30 +494,39 @@ export default function App() {
     createdAt: new Date().toISOString(),
   };
 
-  // Called when single student is chosen in spin
+  // Called when single student is chosen in spin or scored
   const handleStudentSelected = useCallback(
     (selectedStudent: Student, mode: SelectionMode, score?: string, note?: string) => {
       const now = new Date();
       const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
       const formattedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-      // Update student's call count in class
+      const isScoringUpdate = score !== undefined || note !== undefined;
       let updatedCallCount = selectedStudent.callCount || 0;
+      let assignedSlotForRecord: TxColumn | null = null;
 
       const updatedClasses = classes.map((cls) => {
         if (cls.id === activeClass.id) {
           const updatedStudents = cls.students.map((s) => {
             if (s.id === selectedStudent.id) {
-              // If this is an update to existing record score/note
-              if (lastHistoryRecord && lastHistoryRecord.studentId === s.id && (score !== undefined || note !== undefined)) {
-                return { ...s, notes: note || s.notes };
+              if (isScoringUpdate) {
+                // If updating score/note for current spin result:
+                const existingTurnSlot =
+                  lastHistoryRecord && lastHistoryRecord.studentId === s.id
+                    ? lastHistoryRecord.assignedTxSlot
+                    : undefined;
+
+                const scoreResult = applyQuickScoreToStudent(s, score, note, existingTurnSlot);
+                assignedSlotForRecord = scoreResult.targetSlot;
+                return scoreResult.updatedStudent;
               }
+
+              // Normal spin selection -> increment call count
               updatedCallCount = (s.callCount || 0) + 1;
               return {
                 ...s,
                 callCount: updatedCallCount,
                 lastCalledAt: now.toISOString(),
-                notes: note || s.notes,
               };
             }
             return s;
@@ -529,14 +539,42 @@ export default function App() {
       handleUpdateClasses(updatedClasses);
 
       // Create or update history record
-      if (lastHistoryRecord && lastHistoryRecord.studentId === selectedStudent.id && (score !== undefined || note !== undefined)) {
-        const updatedHistory = history.map((h) => {
-          if (h.id === lastHistoryRecord.id) {
-            return { ...h, score: score || h.score, note: note || h.note };
-          }
-          return h;
-        });
-        handleUpdateHistory(updatedHistory);
+      if (isScoringUpdate) {
+        if (lastHistoryRecord && lastHistoryRecord.studentId === selectedStudent.id) {
+          const updatedHistory = history.map((h) => {
+            if (h.id === lastHistoryRecord.id) {
+              const updatedRec: HistoryRecord = {
+                ...h,
+                score: score !== undefined ? score : h.score,
+                note: note !== undefined ? note : h.note,
+                assignedTxSlot: assignedSlotForRecord ?? h.assignedTxSlot,
+              };
+              setLastHistoryRecord(updatedRec);
+              return updatedRec;
+            }
+            return h;
+          });
+          handleUpdateHistory(updatedHistory);
+        } else {
+          const newRecord: HistoryRecord = {
+            id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            timestamp: now.toISOString(),
+            formattedDate,
+            formattedTime,
+            classId: activeClass.id,
+            className: activeClass.name,
+            studentId: selectedStudent.id,
+            studentName: selectedStudent.name,
+            callCountAfter: selectedStudent.callCount || 0,
+            mode,
+            score,
+            note,
+            assignedTxSlot: assignedSlotForRecord,
+          };
+          const newHistory = [newRecord, ...history];
+          handleUpdateHistory(newHistory);
+          setLastHistoryRecord(newRecord);
+        }
       } else {
         const newRecord: HistoryRecord = {
           id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -611,20 +649,104 @@ export default function App() {
     [activeClass, classes, history, handleUpdateClasses, handleUpdateHistory]
   );
 
+  // Called when teacher saves score & note for selected students (single or batch)
+  const handleSaveScoreAndNote = useCallback(
+    (targetStudents: Student[], mode: SelectionMode, score?: string, note?: string) => {
+      if (!targetStudents || targetStudents.length === 0) return;
+      const targetIds = new Set(targetStudents.map((s) => s.id));
+      const now = new Date();
+      const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+      const formattedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const assignedSlotsMap = new Map<string, TxColumn | null>();
+
+      const updatedClasses = classes.map((cls) => {
+        if (cls.id === activeClass.id) {
+          const updatedStudents = cls.students.map((s) => {
+            if (targetIds.has(s.id)) {
+              // Find if this student has an existing turn slot in recent history
+              const matchingHist = history.find(
+                (h) => h.studentId === s.id && h.classId === activeClass.id
+              );
+              const existingSlot = matchingHist?.assignedTxSlot;
+
+              const scoreResult = applyQuickScoreToStudent(s, score, note, existingSlot);
+              assignedSlotsMap.set(s.id, scoreResult.targetSlot);
+              return scoreResult.updatedStudent;
+            }
+            return s;
+          });
+          return { ...cls, students: updatedStudents };
+        }
+        return cls;
+      });
+
+      handleUpdateClasses(updatedClasses);
+
+      // Update history records
+      const updatedHistory = [...history];
+      const newlyCreatedRecords: HistoryRecord[] = [];
+
+      targetStudents.forEach((st) => {
+        const histIndex = updatedHistory.findIndex(
+          (h) => h.studentId === st.id && h.classId === activeClass.id
+        );
+        const assignedSlot = assignedSlotsMap.get(st.id) ?? null;
+
+        if (histIndex !== -1) {
+          updatedHistory[histIndex] = {
+            ...updatedHistory[histIndex],
+            score: score !== undefined ? score : updatedHistory[histIndex].score,
+            note: note !== undefined ? note : updatedHistory[histIndex].note,
+            assignedTxSlot: assignedSlot ?? updatedHistory[histIndex].assignedTxSlot,
+          };
+        } else {
+          newlyCreatedRecords.push({
+            id: `hist-${Date.now()}-${st.id}-${Math.random().toString(36).substr(2, 4)}`,
+            timestamp: now.toISOString(),
+            formattedDate,
+            formattedTime,
+            classId: activeClass.id,
+            className: activeClass.name,
+            studentId: st.id,
+            studentName: st.name,
+            callCountAfter: st.callCount || 0,
+            mode,
+            score,
+            note,
+            assignedTxSlot: assignedSlot,
+          });
+        }
+      });
+
+      const finalHistory = [...newlyCreatedRecords, ...updatedHistory];
+      handleUpdateHistory(finalHistory);
+      if (finalHistory.length > 0) {
+        setLastHistoryRecord(finalHistory[0]);
+      }
+    },
+    [activeClass, classes, history, handleUpdateClasses, handleUpdateHistory]
+  );
+
   // Undo student selection (e.g. if absent)
   const handleUndoLastSelection = useCallback(
     (recordId: string) => {
       const targetRecord = history.find((h) => h.id === recordId);
       if (!targetRecord) return;
 
-      // Decrement student count
+      // Decrement student count and revert assignedTxSlot if any
       const updatedClasses = classes.map((cls) => {
         if (cls.id === targetRecord.classId) {
           const updatedStudents = cls.students.map((s) => {
             if (s.id === targetRecord.studentId) {
+              const currentScores = s.scores ? { ...s.scores } : {};
+              if (targetRecord.assignedTxSlot && currentScores[targetRecord.assignedTxSlot] !== undefined) {
+                currentScores[targetRecord.assignedTxSlot] = null;
+              }
               return {
                 ...s,
                 callCount: Math.max(0, (s.callCount || 1) - 1),
+                scores: currentScores,
               };
             }
             return s;
@@ -982,6 +1104,7 @@ export default function App() {
             settings={settings}
             onStudentSelected={handleStudentSelected}
             onBatchStudentsSelected={handleBatchStudentsSelected}
+            onSaveScoreAndNote={handleSaveScoreAndNote}
             onUndoLastSelection={handleUndoLastSelection}
             lastHistoryRecord={lastHistoryRecord}
             onOpenPresentation={() => setIsPresentationOpen(true)}

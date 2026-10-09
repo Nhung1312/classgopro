@@ -401,7 +401,21 @@ export const StudentInfoModal: React.FC<StudentInfoModalProps> = ({
                               )}
                             </td>
                             <td className="py-2 px-3 text-center">
-                              {row.matched ? (
+                              {row.isDuplicateInFile ? (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 cursor-help"
+                                  title={row.warning}
+                                >
+                                  ⚠️ Trùng mã HS trong file
+                                </span>
+                              ) : row.isDuplicateInClass ? (
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 cursor-help"
+                                  title={row.warning}
+                                >
+                                  ⚠️ Trùng mã HS trong lớp
+                                </span>
+                              ) : row.matched ? (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                                   ✓ Tìm thấy
                                 </span>
@@ -410,7 +424,7 @@ export const StudentInfoModal: React.FC<StudentInfoModalProps> = ({
                                   className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 cursor-help"
                                   title={row.warning || 'Không tìm thấy'}
                                 >
-                                  ✕ Không khớp
+                                  ✕ Không tìm thấy
                                 </span>
                               )}
                             </td>
@@ -419,6 +433,19 @@ export const StudentInfoModal: React.FC<StudentInfoModalProps> = ({
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Duplicate Alert Banner if any */}
+                  {parseResult.hasDuplicatesInFile && (
+                    <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/50 text-xs text-rose-200 flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-rose-100">Đã chặn nút cập nhật do trùng mã học sinh:</div>
+                        <div className="text-[11px] text-rose-300 mt-0.5">
+                          File import có mã học sinh xuất hiện từ 2 dòng trở lên. Vui lòng mở file Excel, xóa hoặc sửa lại mã học sinh bị trùng lặp để đảm bảo an toàn tuyệt đối cho dữ liệu.
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Safety Assurance Note */}
                   <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-700/40 text-[11px] text-indigo-300 flex items-start gap-2">
@@ -438,8 +465,13 @@ export const StudentInfoModal: React.FC<StudentInfoModalProps> = ({
                     </button>
                     <button
                       onClick={handleConfirmUpdate}
-                      disabled={parseResult.matchedCount === 0}
+                      disabled={parseResult.matchedCount === 0 || parseResult.hasDuplicatesInFile}
                       className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5"
+                      title={
+                        parseResult.hasDuplicatesInFile
+                          ? 'Đang có mã học sinh bị trùng lặp trong file import'
+                          : undefined
+                      }
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       <span>Xác nhận cập nhật ({parseResult.matchedCount} học sinh)</span>
