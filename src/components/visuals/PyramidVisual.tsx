@@ -105,7 +105,7 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
   // Layout NEVER depends on winner identity. The apex is no longer guaranteed to win.
   // Choosing winners stays in SpinScreen/fairAlgorithm; this component only animates.
   const { tiers, blocks } = useMemo(() => {
-    const winnerIds = new Set(activeWinners.map(w => w.id));
+    const winnerIds = new Set<string>(activeWinners.map((w: Student) => w.id));
     const layout = buildPyramidLayout(students || [], winnerIds);
     return {
       tiers: layout.tiers,
