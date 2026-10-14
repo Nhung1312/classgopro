@@ -1,0 +1,36 @@
+name: Verify ClassGo spin count and pyramid
+
+on:
+  push:
+    branches:
+      - fix/shared-call-count-and-pyramid-20261015
+  pull_request:
+    paths:
+      - 'src/components/SpinScreen.tsx'
+      - 'src/components/visuals/PyramidVisual.tsx'
+      - 'src/utils/spinCount.ts'
+      - 'src/utils/pyramidLayout.ts'
+      - 'scripts/check-spin-consistency.ts'
+      - 'package.json'
+      - '.github/workflows/verify-spin-consistency.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Production build
+        run: npm run build
+      - name: Count and pyramid regression
+        run: npm run check:spin-consistency
