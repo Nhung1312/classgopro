@@ -49,6 +49,7 @@ import {
   DisciplineViolationType,
 } from '../types';
 import { chooseMultipleStudents, getEligibleStudents, MultiSelectionResult } from '../utils/fairAlgorithm';
+import { resolveCompletedSpinStudents } from '../utils/spinCount';
 import {
   formatStudentDisplayName,
   getStudentSTT,
@@ -209,6 +210,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const [wheelAngle, setWheelAngle] = useState(0);
 
   const animationFrameRef = useRef<number | null>(null);
+  const spinInProgressRef = useRef(false);
+  const previousClassIdRef = useRef(activeClass?.id);
   const startTimeRef = useRef<number>(0);
 
   const students = activeClass?.students || [];
@@ -268,12 +271,11 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const minCall = fairPool.length > 0 ? Math.min(...fairPool.map((s) => s.callCount || 0)) : 0;
   const minCandidates = fairPool.length > 0 ? fairPool.filter((s) => (s.callCount || 0) === minCall) : [];
 
-  // Resolve current up-to-date students for winner(s) directly from activeClass.students
+  // Every visual mode shows the same completed call count, including while
+  // the App's shared class roster is being persisted/refreshed.
   const resolvedSelectedStudents = useMemo(() => {
     if (!selectedResult) return [];
-    return selectedResult.selectedStudents.map(
-      (oldStudent) => students.find((s) => s.id === oldStudent.id) || oldStudent
-    );
+    return resolveCompletedSpinStudents(selectedResult.selectedStudents, students);
   }, [selectedResult, students]);
 
   const resolvedWinner = useMemo(() => {
@@ -323,7 +325,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       return;
     }
 
-    if (isSpinning || eligibleStudents.length === 0) return;
+    if (isSpinning || spinInProgressRef.current || eligibleStudents.length === 0) return;
 
     // 1. Filter candidates according to selected targetFilter
     const candidatePool = targetFilter === 'ALL' ? eligibleStudents : targetCandidates;
@@ -334,6 +336,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     const result = chooseMultipleStudents(candidatePool, effectiveCount, selectionMode);
     if (!result || result.selectedStudents.length === 0) return;
 
+    // Synchronous lock: double click / Enter+Space must not start two rounds.
+    spinInProgressRef.current = true;
     setTargetWinner(result.selectedStudents[0]);
     setTargetWinners(result.selectedStudents);
     setIsSpinning(true);
@@ -461,7 +465,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           }, 350);
         }
 
-        // Increment count and notify parent
+        // Increment count and notify parent once per completed round.
         if (result.selectedStudents.length === 1) {
           onStudentSelected(result.selectedStudents[0], selectionMode);
         } else if (onBatchStudentsSelected) {
@@ -469,6 +473,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
         } else {
           result.selectedStudents.forEach((s) => onStudentSelected(s, selectionMode));
         }
+        spinInProgressRef.current = false;
       }
     };
 
@@ -501,10 +506,29 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      spinInProgressRef.current = false;
       soundEngine.stopBGM();
       speechEngine.stop();
     };
   }, []);
+
+  // A completed result belongs to its original class. Changing classes
+  // must never show (or count) that winner in a different class.
+  useEffect(() => {
+    if (previousClassIdRef.current === activeClass?.id) return;
+    previousClassIdRef.current = activeClass?.id;
+    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    spinInProgressRef.current = false;
+    soundEngine.stopBGM();
+    speechEngine.stop();
+    setIsSpinning(false);
+    setHasCompleted(false);
+    setSelectedResult(null);
+    setTargetWinner(null);
+    setTargetWinners([]);
+    setDisplayName('???');
+  }, [activeClass?.id]);
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -907,14 +931,25 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               <button
                 key={mode.id}
                 onClick={() => {
+                  if (spinInProgressRef.current) return;
+                  if (visualType !== mode.id) {
+                    // Changing the animation style must not preview the previous
+                    // round as if it were the next winner. Keep class call counts.
+                    setHasCompleted(false);
+                    setSelectedResult(null);
+                    setTargetWinner(null);
+                    setTargetWinners([]);
+                    setDisplayName('???');
+                  }
                   setVisualType(mode.id);
                   soundEngine.playTick(1.2);
                 }}
+                disabled={isSpinning}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
                   visualType === mode.id
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                     : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700/80'
-                }`}
+                } disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 {mode.icon}
                 <span>{mode.label}</span>
