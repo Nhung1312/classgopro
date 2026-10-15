@@ -14,6 +14,7 @@ import {
 import { ClassRoom, HistoryRecord } from '../types';
 import * as XLSX from 'xlsx';
 import { soundEngine } from '../utils/audio';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 interface HistoryScreenProps {
   history: HistoryRecord[];
@@ -31,10 +32,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   const filteredHistory = history.filter((item) => {
     const matchClass = selectedClassId === 'ALL' || item.classId === selectedClassId;
-    const matchSearch =
-      item.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.className.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.note && item.note.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchSearch = matchesVietnameseSearch(
+      searchTerm, item.studentName, item.className, item.note
+    );
     return matchClass && matchSearch;
   });
 
