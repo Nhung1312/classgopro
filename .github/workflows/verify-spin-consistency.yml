@@ -7,6 +7,14 @@ on:
   pull_request:
     paths:
       - 'src/components/SpinScreen.tsx'
+      - 'src/App.tsx'
+      - 'src/components/ClassManager.tsx'
+      - 'src/components/GradebookScreen.tsx'
+      - 'src/components/QuickAttendanceModal.tsx'
+      - 'src/components/HistoryScreen.tsx'
+      - 'src/utils/vietnameseSearch.ts'
+      - 'src/utils/undoCompletedSpin.ts'
+      - 'scripts/check-vietnamese-search.ts'
       - 'src/components/visuals/PyramidVisual.tsx'
       - 'src/utils/spinCount.ts'
       - 'src/utils/pyramidLayout.ts'
@@ -34,3 +42,5 @@ jobs:
         run: npm run build
       - name: Count and pyramid regression
         run: npm run check:spin-consistency
+      - name: Vietnamese search and undo regression
+        run: npx tsx scripts/check-vietnamese-search.ts
