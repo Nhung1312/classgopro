@@ -124,7 +124,7 @@ interface SpinScreenProps {
     score?: string,
     note?: string
   ) => void;
-  onUndoLastSelection?: (recordId: string) => void;
+  onUndoLastSelection?: (recordId: string, studentIds?: string[]) => void;
   lastHistoryRecord?: HistoryRecord | null;
   onOpenPresentation: () => void;
   onOpenTimer: () => void;
@@ -646,8 +646,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   };
 
   const handleUndo = () => {
-    if (lastHistoryRecord && onUndoLastSelection) {
-      onUndoLastSelection(lastHistoryRecord.id);
+    if (lastHistoryRecord && onUndoLastSelection && hasCompleted && selectedResult) {
+      // Undo the whole completed selection, including multi-pick rounds.
+      onUndoLastSelection(lastHistoryRecord.id, selectedResult.selectedStudents.map((s) => s.id));
       setHasCompleted(false);
       setSelectedResult(null);
       setDisplayName('???');

@@ -64,6 +64,7 @@ import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
 import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
 import { applyQuickScoreToStudent, TxColumn } from './utils/quickScoreHelper';
+import { undoCompletedSpin } from './utils/undoCompletedSpin';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -728,39 +729,13 @@ export default function App() {
     [activeClass, classes, history, handleUpdateClasses, handleUpdateHistory]
   );
 
-  // Undo student selection (e.g. if absent)
+  // Undo one completed spin, or all students in a multi-pick round.
   const handleUndoLastSelection = useCallback(
-    (recordId: string) => {
-      const targetRecord = history.find((h) => h.id === recordId);
-      if (!targetRecord) return;
-
-      // Decrement student count and revert assignedTxSlot if any
-      const updatedClasses = classes.map((cls) => {
-        if (cls.id === targetRecord.classId) {
-          const updatedStudents = cls.students.map((s) => {
-            if (s.id === targetRecord.studentId) {
-              const currentScores = s.scores ? { ...s.scores } : {};
-              if (targetRecord.assignedTxSlot && currentScores[targetRecord.assignedTxSlot] !== undefined) {
-                currentScores[targetRecord.assignedTxSlot] = null;
-              }
-              return {
-                ...s,
-                callCount: Math.max(0, (s.callCount || 1) - 1),
-                scores: currentScores,
-              };
-            }
-            return s;
-          });
-          return { ...cls, students: updatedStudents };
-        }
-        return cls;
-      });
-
-      handleUpdateClasses(updatedClasses);
-
-      // Remove from history
-      const updatedHistory = history.filter((h) => h.id !== recordId);
-      handleUpdateHistory(updatedHistory);
+    (recordId: string, selectedStudentIds?: string[]) => {
+      const restored = undoCompletedSpin(classes, history, recordId, selectedStudentIds);
+      if (!restored) return;
+      handleUpdateClasses(restored.classes);
+      handleUpdateHistory(restored.history);
       setLastHistoryRecord(null);
     },
     [classes, history, handleUpdateClasses, handleUpdateHistory]
