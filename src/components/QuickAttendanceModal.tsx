@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { soundEngine } from '../utils/audio';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 interface QuickAttendanceModalProps {
   isOpen: boolean;
@@ -58,9 +59,7 @@ export const QuickAttendanceModal: React.FC<QuickAttendanceModalProps> = ({
 
   // Filter list
   const filteredStudents = students.filter((s) => {
-    const matchSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.studentCode && s.studentCode.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchSearch = matchesVietnameseSearch(searchTerm, s.name, s.studentCode);
     if (!matchSearch) return false;
 
     if (filterMode === 'PRESENT') return !s.isAbsent;
