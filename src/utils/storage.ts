@@ -287,7 +287,8 @@ export function exportBackupJSON(): string {
     timetable: loadTimetable(),
     teachingPlan: loadTeachingPlan(),
     disciplineRecords: loadDisciplineRecords(),
-    disciplineDeletedRecordIds: loadDeletedDisciplineIds(),    disciplineViolationTypes: loadViolationTypes(),
+    disciplineDeletedRecordIds: loadDeletedDisciplineIds(),
+    disciplineViolationTypes: loadViolationTypes(),
   };
   return JSON.stringify(data, null, 2);
 }
@@ -428,7 +429,8 @@ export function createSafetyBackup(): void {
       timetable: loadTimetable(),
       teachingPlan: loadTeachingPlan(),
       disciplineRecords: loadDisciplineRecords(),
-      disciplineDeletedRecordIds: loadDeletedDisciplineIds(),      disciplineViolationTypes: loadViolationTypes(),
+      disciplineDeletedRecordIds: loadDeletedDisciplineIds(),
+      disciplineViolationTypes: loadViolationTypes(),
     };
     localStorage.setItem(STORAGE_KEYS.SAFETY_BACKUP, JSON.stringify(backup));
   } catch (err) {
