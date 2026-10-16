@@ -3,6 +3,7 @@ import { DisciplineRecord, DisciplineViolationType, Student } from '../types';
 
 const STORAGE_KEYS = {
   RECORDS: 'classgo_discipline_records_v1',
+  DELETED_IDS: 'classgo_discipline_deleted_record_ids_v1',
   VIOLATION_TYPES: 'classgo_discipline_violation_types_v1',
 };
 
@@ -130,6 +131,28 @@ export function saveDisciplineRecords(records: DisciplineRecord[]): void {
   }
 }
 
+/** Locally persisted tombstones prevent an old device from restoring deleted violations. */
+export function loadDeletedDisciplineIds(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_IDS);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter((id): id is string => typeof id === 'string' && !!id))]
+      : [];
+  } catch (error) {
+    console.error('Failed to read discipline deletions:', error);
+    return [];
+  }
+}
+
+export function saveDeletedDisciplineIds(ids: string[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DELETED_IDS, JSON.stringify([...new Set(ids)]));
+  } catch (error) {
+    console.error('Failed to save discipline deletions:', error);
+  }
+}
+
 export interface CreateRecordParams {
   studentId: string;
   classId: string;
@@ -175,6 +198,7 @@ export function createDisciplineRecord(params: CreateRecordParams): DisciplineRe
 export function deleteDisciplineRecord(recordId: string): DisciplineRecord[] {
   const records = loadDisciplineRecords();
   const updated = records.filter((r) => r.id !== recordId);
+  saveDeletedDisciplineIds([...loadDeletedDisciplineIds(), recordId]);
   saveDisciplineRecords(updated);
   return updated;
 }
