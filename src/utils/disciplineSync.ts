@@ -9,13 +9,14 @@ export interface DisciplineSyncState {
 export function mergeDisciplineSyncStates(
   local: DisciplineSyncState, cloud: DisciplineSyncState,
 ): DisciplineSyncState {
-  const deletedIds = [...new Set([...local.deletedIds, ...cloud.deletedIds].filter(Boolean))];
+  const deletedIds = [...new Set([...local.deletedIds, ...cloud.deletedIds].filter(Boolean))].sort();
   const deleted = new Set(deletedIds);
   const byId = new Map<string, DisciplineRecord>();
   for (const record of [...cloud.records, ...local.records]) {
     if (record?.id && !deleted.has(record.id)) byId.set(record.id, record);
   }
   const records = [...byId.values()].sort((a,b) =>
-    (b.createdAt || `${b.date}T${b.time}`).localeCompare(a.createdAt || `${a.date}T${a.time}`));
+    (b.createdAt || `${b.date}T${b.time}`).localeCompare(a.createdAt || `${a.date}T${a.time}`) ||
+    a.id.localeCompare(b.id));
   return { records, deletedIds };
 }
