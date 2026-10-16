@@ -8,6 +8,12 @@ on:
     paths:
       - 'src/components/SpinScreen.tsx'
       - 'src/App.tsx'
+      - 'src/utils/firestoreService.ts'
+      - 'src/utils/disciplineSync.ts'
+      - 'src/services/disciplineService.ts'
+      - 'src/components/DisciplineScreen.tsx'
+      - 'src/utils/storage.ts'
+      - 'scripts/check-discipline-sync.ts'
       - 'src/components/ClassManager.tsx'
       - 'src/components/GradebookScreen.tsx'
       - 'src/components/QuickAttendanceModal.tsx'
@@ -44,3 +50,5 @@ jobs:
         run: npm run check:spin-consistency
       - name: Vietnamese search and undo regression
         run: npx tsx scripts/check-vietnamese-search.ts
+      - name: Discipline cloud sync regression
+        run: npx tsx scripts/check-discipline-sync.ts
