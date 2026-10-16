@@ -43,7 +43,10 @@ import {
   saveViolationTypes,
   createDisciplineRecord,
   deleteDisciplineRecord,
+  loadDeletedDisciplineIds,
+  saveDeletedDisciplineIds,
 } from './services/disciplineService';
+import { mergeDisciplineSyncStates } from './utils/disciplineSync';
 import { INITIAL_CLASSES } from './utils/sampleData';
 import { soundEngine } from './utils/audio';
 import { auth } from './lib/firebase';
@@ -54,6 +57,7 @@ import {
   subscribeToUserData,
   getEffectiveSubscription,
   ensureUserSubscription,
+  reconcileDisciplineRecordsWithFirestore,
 } from './utils/firestoreService';
 import { ENABLE_TRIAL_LIMIT } from './config/subscriptionConfig';
 
@@ -135,6 +139,23 @@ export default function App() {
     }
   }, [classes]);
 
+  // Reconcile the nề nếp journal independently from class data timestamps.
+  const handleSyncDisciplineRecords = useCallback(async (userId: string) => {
+    const fromCloud = await reconcileDisciplineRecordsWithFirestore(userId, {
+      records: loadDisciplineRecords(),
+      deletedIds: loadDeletedDisciplineIds(),
+    });
+    if (auth.currentUser?.uid !== userId) return;
+    // Merge again in case another violation was recorded during the network request.
+    const merged = mergeDisciplineSyncStates({
+      records: loadDisciplineRecords(),
+      deletedIds: loadDeletedDisciplineIds(),
+    }, fromCloud);
+    saveDeletedDisciplineIds(merged.deletedIds);
+    saveDisciplineRecords(merged.records);
+    setDisciplineRecords(merged.records);
+  }, []);
+
   // Listen to Firebase Auth state change & real-time Firestore sync
   useEffect(() => {
     let unsubFirestoreUser: (() => void) | null = null;
@@ -201,7 +222,6 @@ export default function App() {
               selectionMode: loadSelectionMode(),
               timetableSlots: loadTimetable(),
               teachingPlan: loadTeachingPlan(),
-              disciplineRecords: loadDisciplineRecords(),
               disciplineViolationTypes: loadViolationTypes(),
             });
             setClasses(currentLocalClasses);
@@ -237,10 +257,6 @@ export default function App() {
             if (cloudData.teachingPlan) {
               setTeachingPlan(cloudData.teachingPlan);
               saveTeachingPlan(cloudData.teachingPlan);
-            }
-            if (cloudData.disciplineRecords) {
-              setDisciplineRecords(cloudData.disciplineRecords);
-              saveDisciplineRecords(cloudData.disciplineRecords);
             }
             if (cloudData.disciplineViolationTypes) {
               setViolationTypes(cloudData.disciplineViolationTypes);
@@ -284,10 +300,6 @@ export default function App() {
                 setTeachingPlan(cloudData.teachingPlan);
                 saveTeachingPlan(cloudData.teachingPlan);
               }
-              if (cloudData.disciplineRecords) {
-                setDisciplineRecords(cloudData.disciplineRecords);
-                saveDisciplineRecords(cloudData.disciplineRecords);
-              }
               if (cloudData.disciplineViolationTypes) {
                 setViolationTypes(cloudData.disciplineViolationTypes);
                 saveViolationTypes(cloudData.disciplineViolationTypes);
@@ -302,7 +314,6 @@ export default function App() {
                 selectionMode: loadSelectionMode(),
                 timetableSlots: loadTimetable(),
                 teachingPlan: loadTeachingPlan(),
-                disciplineRecords: loadDisciplineRecords(),
                 disciplineViolationTypes: loadViolationTypes(),
               });
               setClasses(currentLocalClasses);
@@ -315,6 +326,7 @@ export default function App() {
               saveClasses(cloudData.classes);
             }
           }
+          await handleSyncDisciplineRecords(user.uid);
         } catch (error) {
           console.error('Failed to sync data with Firestore on auth change:', error);
         } finally {
@@ -329,7 +341,7 @@ export default function App() {
       unsubscribe();
       if (unsubFirestoreUser) unsubFirestoreUser();
     };
-  }, []);
+  }, [handleSyncDisciplineRecords]);
 
   // Helper to sync changes to Firestore in the background if user is logged in
   const syncToCloudIfLoggedIn = useCallback((partialData: any) => {
@@ -356,9 +368,9 @@ export default function App() {
         selectionMode,
         timetableSlots: timetable,
         teachingPlan,
-        disciplineRecords,
         disciplineViolationTypes: violationTypes,
       });
+      await handleSyncDisciplineRecords(currentUser.uid);
       soundEngine.playVictoryFanfare();
       alert('Đồng bộ Cloud thành công! Toàn bộ dữ liệu của Thầy/Cô đã được lưu trữ an toàn trên tài khoản.');
     } catch (err) {
@@ -367,7 +379,7 @@ export default function App() {
     } finally {
       setIsSyncingCloud(false);
     }
-  }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan, disciplineRecords, violationTypes]);
+  }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan, violationTypes, handleSyncDisciplineRecords]);
 
   // One-click recovery handler from persistent safety vault
   const handleTriggerRecovery = useCallback(() => {
@@ -397,8 +409,12 @@ export default function App() {
   const handleUpdateDisciplineRecords = useCallback((newRecords: DisciplineRecord[]) => {
     setDisciplineRecords(newRecords);
     saveDisciplineRecords(newRecords);
-    syncToCloudIfLoggedIn({ disciplineRecords: newRecords });
-  }, [syncToCloudIfLoggedIn]);
+    if (auth.currentUser) {
+      handleSyncDisciplineRecords(auth.currentUser.uid).catch((error) => {
+        console.warn('Nề nếp saved on device; database sync can retry at login/manual sync:',error);
+      });
+    }
+  }, [handleSyncDisciplineRecords]);
 
   const handleUpdateViolationTypes = useCallback((newTypes: DisciplineViolationType[]) => {
     setViolationTypes(newTypes);
@@ -414,10 +430,9 @@ export default function App() {
       source: 'random_picker',
       note: note || 'Ghi nhận sau khi quay trúng học sinh',
     });
-    const updated = [newRec, ...disciplineRecords];
-    handleUpdateDisciplineRecords(updated);
+    handleUpdateDisciplineRecords(loadDisciplineRecords());
     return newRec.id;
-  }, [activeClassId, disciplineRecords, handleUpdateDisciplineRecords]);
+  }, [activeClassId, handleUpdateDisciplineRecords]);
 
   const handleUndoDisciplineRecord = useCallback((recordId: string) => {
     const updated = deleteDisciplineRecord(recordId);
@@ -981,7 +996,13 @@ export default function App() {
     setActiveClassId(loadActiveClassId(freshClasses));
     setHistory(loadHistory());
     setSettings(loadSettings());
-  }, []);
+    setDisciplineRecords(loadDisciplineRecords());
+    setViolationTypes(loadViolationTypes());
+    if (auth.currentUser) {
+      handleSyncDisciplineRecords(auth.currentUser.uid).catch((error) =>
+        console.warn('Imported nề nếp saved locally; cloud sync failed:',error));
+    }
+  }, [handleSyncDisciplineRecords]);
 
   // Restore safety backup
   const handleRestoreSafetyBackup = useCallback(() => {
@@ -1004,14 +1025,15 @@ export default function App() {
           settings: loadSettings(),
           timetableSlots: loadTimetable(),
           teachingPlan: loadTeachingPlan(),
-          disciplineRecords: loadDisciplineRecords(),
           disciplineViolationTypes: loadViolationTypes(),
-        });
+        }).catch((error) => console.warn('Backup cloud sync failed:', error));
+        handleSyncDisciplineRecords(auth.currentUser.uid).catch((error) =>
+          console.warn('Restored nề nếp saved locally; cloud sync failed:', error));
       }
       return true;
     }
     return false;
-  }, []);
+  }, [handleSyncDisciplineRecords]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
