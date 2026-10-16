@@ -4,6 +4,8 @@ import { INITIAL_TIMETABLE_SLOTS, INITIAL_TEACHING_PLAN } from './sampleTimetabl
 import {
   loadDisciplineRecords,
   saveDisciplineRecords,
+  loadDeletedDisciplineIds,
+  saveDeletedDisciplineIds,
   loadViolationTypes,
   saveViolationTypes,
 } from '../services/disciplineService';
@@ -285,6 +287,7 @@ export function exportBackupJSON(): string {
     timetable: loadTimetable(),
     teachingPlan: loadTeachingPlan(),
     disciplineRecords: loadDisciplineRecords(),
+    disciplineDeletedRecordIds: loadDeletedDisciplineIds(),
     disciplineViolationTypes: loadViolationTypes(),
   };
   return JSON.stringify(data, null, 2);
@@ -309,6 +312,9 @@ export function importBackupJSON(jsonStr: string): boolean {
       }
       if (data.disciplineRecords && Array.isArray(data.disciplineRecords)) {
         saveDisciplineRecords(data.disciplineRecords);
+      }
+      if (data.disciplineDeletedRecordIds && Array.isArray(data.disciplineDeletedRecordIds)) {
+        saveDeletedDisciplineIds([...loadDeletedDisciplineIds(), ...data.disciplineDeletedRecordIds]);
       }
       if (data.disciplineViolationTypes && Array.isArray(data.disciplineViolationTypes)) {
         saveViolationTypes(data.disciplineViolationTypes);
@@ -423,6 +429,7 @@ export function createSafetyBackup(): void {
       timetable: loadTimetable(),
       teachingPlan: loadTeachingPlan(),
       disciplineRecords: loadDisciplineRecords(),
+      disciplineDeletedRecordIds: loadDeletedDisciplineIds(),
       disciplineViolationTypes: loadViolationTypes(),
     };
     localStorage.setItem(STORAGE_KEYS.SAFETY_BACKUP, JSON.stringify(backup));
@@ -455,6 +462,9 @@ export function restoreSafetyBackup(): boolean {
       if (backup.timetable) saveTimetable(backup.timetable);
       if (backup.teachingPlan) saveTeachingPlan(backup.teachingPlan);
       if (backup.disciplineRecords) saveDisciplineRecords(backup.disciplineRecords);
+      if (backup.disciplineDeletedRecordIds) {
+        saveDeletedDisciplineIds([...loadDeletedDisciplineIds(), ...backup.disciplineDeletedRecordIds]);
+      }
       if (backup.disciplineViolationTypes) saveViolationTypes(backup.disciplineViolationTypes);
       return true;
     }

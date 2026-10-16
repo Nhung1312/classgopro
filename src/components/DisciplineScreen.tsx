@@ -24,6 +24,7 @@ import { ClassRoom, DisciplineRecord, DisciplineViolationType, Student } from '.
 import {
   createDisciplineRecord,
   deleteDisciplineRecord,
+  loadDisciplineRecords,
   addCustomViolationType,
   updateViolationType,
   filterRecordsByPeriod,
@@ -186,8 +187,7 @@ export const DisciplineScreen: React.FC<DisciplineScreenProps> = ({
       note: noteStr,
     });
 
-    const updated = [newRec, ...records];
-    onUpdateRecords(updated);
+    onUpdateRecords(loadDisciplineRecords());
 
     soundEngine.playTick(1.2);
     setLastActionMessage({
