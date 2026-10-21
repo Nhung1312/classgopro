@@ -19,3 +19,9 @@
   và AI hàng loạt từ ZIP, vì đường API backend/chứng thực chưa được xác nhận.
 - Không tự động đồng bộ data AI Studio; cần tự xuất từng kho JSON để chuyển.
 - Không merge main cho đến khi giao diện và dữ liệu lớp thật được người dùng thử.
+
+## Giao diện trắc nghiệm (22/10/2026)
+- Khi mở một ô có đủ đáp án A–D, hiển thị câu hỏi lớn trên nền trắng và 4 thẻ đáp án 2 cột × 2 hàng trên màn hình rộng, 1 cột trên điện thoại.
+- Các thẻ viền xám sáng, chữ màu đậm; nhãn A tím, B xanh, C xanh lá, D vàng; ô được chọn có viền tím; sau khi kiểm tra tô xanh/đỏ.
+- Nội dung và đáp án đều dùng KaTeX; thẻ có chiều cao tối thiểu để phân số không đè lên nhau, có cuộn ngang nếu công thức quá dài.
+- Giữ thao tác giáo viên hiện đáp án, đánh giá và thưởng sao, và hỗ trợ bài tự luận như trước.

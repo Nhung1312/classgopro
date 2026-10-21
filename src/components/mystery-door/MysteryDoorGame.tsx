@@ -160,40 +160,48 @@ export const MysteryDoorGame: React.FC<Props> = ({
             </div>
           </section>
         ) : (
-          <section className="rounded-2xl border-2 border-amber-500/60 bg-slate-900 p-5 sm:p-8 space-y-5">
-            <h3 className="text-lg text-amber-300 font-black">Ô CỬA SỐ {current.number}</h3>
+          <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-8 shadow-2xl space-y-6 text-slate-900">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm sm:text-base tracking-wider text-indigo-700 font-black uppercase">🚪 Ô cửa số {current.number}</h3>
+              {quiz && <span className="text-xs sm:text-sm text-slate-500">Chọn đáp án đúng</span>}
+            </div>
             {/* Keep the mathematical stem separate from answer choices, so fractions
                 have proper spacing and A-D are actual touch targets. */}
-            <div className="text-xl sm:text-3xl font-bold leading-relaxed bg-slate-950 p-5 rounded-xl">
+            <div className="px-0 sm:px-1 py-1 text-[clamp(1.5rem,2.5vw,2rem)] leading-relaxed font-semibold text-slate-950 [&_.katex]:leading-normal">
               <MathRenderer text={quiz ? quiz.stem : current.question.content} />
             </div>
             {quiz && (
-              <div className="space-y-4">
-                <p className="text-sm text-slate-300">Chọn một đáp án A, B, C hoặc D, sau đó bấm Kiểm tra.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="Chọn đáp án trắc nghiệm">
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5" role="group" aria-label="Chọn đáp án trắc nghiệm">
                   {quiz.options.map(option => {
                     const selected = chosenAnswer === option.letter;
                     const correct = answerChecked && quiz.correctLetter === option.letter;
                     const incorrect = answerChecked && selected && quiz.correctLetter !== option.letter;
                     const classes = correct
-                      ? 'bg-emerald-900/60 border-emerald-400 text-emerald-100'
-                      : incorrect ? 'bg-rose-900/60 border-rose-400 text-rose-100'
-                      : selected ? 'bg-indigo-900/80 border-indigo-300 text-white ring-2 ring-indigo-400/30'
-                      : 'bg-slate-800 border-slate-600 text-slate-100 hover:border-indigo-400 hover:bg-slate-700';
+                      ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-200'
+                      : incorrect ? 'bg-rose-50 border-rose-500 ring-2 ring-rose-200'
+                      : selected ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-200'
+                      : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40';
+                    const badge = {
+                      A: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+                      B: 'bg-blue-100 text-blue-700 border-blue-200',
+                      C: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                      D: 'bg-amber-100 text-amber-800 border-amber-200',
+                    }[option.letter];
                     return (
                       <button key={option.letter} type="button" aria-pressed={selected}
                         aria-label={`Chọn đáp án ${option.letter}`}
                         disabled={answerChecked}
                         onClick={() => setChosenAnswer(option.letter)}
-                        className={`min-h-[88px] flex items-center gap-4 rounded-2xl border-2 px-4 py-4 text-left transition-colors disabled:cursor-default ${classes}`}>
-                        <span className="flex shrink-0 h-12 w-12 items-center justify-center rounded-xl bg-slate-950/60 text-2xl font-black">
+                        className={`group min-h-[110px] flex items-center gap-4 sm:gap-5 rounded-[19px] border-[3px] px-4 sm:px-6 py-4 text-left shadow-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300 disabled:cursor-default ${classes}`}>
+                        <span aria-hidden="true" className={`flex shrink-0 h-[54px] w-[54px] items-center justify-center rounded-xl border text-[22px] font-black ${badge}`}>
                           {option.letter}
                         </span>
-                        <span className="min-w-0 flex-1 overflow-x-auto text-lg sm:text-2xl leading-relaxed font-semibold py-2">
+                        <span className="min-w-0 flex-1 overflow-x-auto py-2 text-[22px] sm:text-2xl leading-loose font-semibold text-slate-950 [&_.katex]:leading-normal">
                           <MathRenderer text={option.content} />
                         </span>
-                        {correct && <span className="text-2xl" aria-hidden="true">✓</span>}
-                        {incorrect && <span className="text-2xl" aria-hidden="true">✕</span>}
+                        {correct && <span className="shrink-0 text-2xl font-black text-emerald-700" aria-hidden="true">✓</span>}
+                        {incorrect && <span className="shrink-0 text-2xl font-black text-rose-700" aria-hidden="true">✕</span>}
                       </button>
                     );
                   })}
@@ -202,11 +210,11 @@ export const MysteryDoorGame: React.FC<Props> = ({
                   <button type="button"
                     disabled={!chosenAnswer || answerChecked || !quiz.correctLetter}
                     onClick={() => setAnswerChecked(true)}
-                    className="rounded-xl bg-amber-500 px-5 py-3 font-bold text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed">
+                    className="rounded-xl bg-indigo-600 hover:bg-indigo-700 px-6 py-3 font-bold text-white shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed">
                     Kiểm tra đáp án
                   </button>
                   {!quiz.correctLetter && (
-                    <span className="text-sm text-amber-300">
+                    <span className="text-sm text-amber-800">
                       Chưa có đáp án A–D chuẩn để chấm tự động. Giáo viên có thể hiện đáp án tham khảo bên dưới.
                     </span>
                   )}
@@ -214,8 +222,8 @@ export const MysteryDoorGame: React.FC<Props> = ({
                 {answerChecked && quiz.correctLetter && chosenAnswer && (
                   <p role="status" aria-live="polite"
                     className={`rounded-xl p-4 font-bold text-lg border ${chosenAnswer === quiz.correctLetter
-                      ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
-                      : 'bg-rose-950/60 border-rose-500/50 text-rose-200'}`}>
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                      : 'bg-rose-50 border-rose-300 text-rose-800'}`}>
                     {chosenAnswer === quiz.correctLetter
                       ? '✓ Chính xác! Em đã chọn đáp án đúng.'
                       : `✕ Chưa đúng. Đáp án đúng là ${quiz.correctLetter}.`}
@@ -226,14 +234,14 @@ export const MysteryDoorGame: React.FC<Props> = ({
             {current.question.imageUrl && <img src={current.question.imageUrl} alt="Hình minh họa câu hỏi"
               className="max-h-80 mx-auto rounded-lg object-contain" />}
             <button onClick={() => setShowAnswer(!showAnswer)}
-              className="rounded-xl px-4 py-2 border border-sky-500 text-sky-200">
+              className="rounded-xl px-4 py-2 border border-sky-300 text-sky-800 hover:bg-sky-50 font-semibold">
               {showAnswer ? 'Ẩn đáp án' : 'Hiện đáp án'}
             </button>
-            {showAnswer && <div className="rounded-xl p-4 border border-emerald-500/40 bg-emerald-950/30 text-lg">
+            {showAnswer && <div className="rounded-xl p-4 border border-emerald-200 bg-emerald-50 text-lg text-slate-900">
               <MathRenderer text={current.question.suggestedAnswer || 'Chưa có đáp án tham khảo.'} />
             </div>}
-            {student && <div className="space-y-3 border-t border-slate-700 pt-4">
-              <p className="text-sm text-slate-300">Giáo viên quyết định kết quả; không tự động ghi điểm vào sổ điểm.</p>
+            {student && <div className="space-y-3 border-t border-slate-200 pt-4">
+              <p className="text-sm text-slate-600">Giáo viên quyết định kết quả; không tự động ghi điểm vào sổ điểm.</p>
               <div className="flex flex-wrap gap-2">
                 <button disabled={Boolean(outcome)} onClick={() => evaluate('Đạt')}
                   className="bg-emerald-700 px-4 py-2 rounded-lg font-bold disabled:opacity-50">✓ Đạt</button>
@@ -242,9 +250,9 @@ export const MysteryDoorGame: React.FC<Props> = ({
                 <button disabled={rewarded} onClick={() => { if (rewardedRef.current) return; rewardedRef.current = true; onAwardStars(student.id, 1); setRewarded(true); }}
                   className="bg-amber-600 px-4 py-2 rounded-lg font-bold disabled:opacity-50">⭐ +1 sao</button>
               </div>
-              {outcome && <p className="text-emerald-300" role="status">Đã ghi nhận: {outcome}</p>}
+              {outcome && <p className="text-emerald-800 font-semibold" role="status">Đã ghi nhận: {outcome}</p>}
             </div>}
-            <button onClick={next} className="bg-indigo-600 hover:bg-indigo-500 px-5 py-3 rounded-xl font-bold">
+            <button onClick={next} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300">
               {remainingDoors ? `Về bảng cửa (còn ${remainingDoors} ô)` : 'Kết thúc ván • Tạo ván tiếp'}
             </button>
           </section>
