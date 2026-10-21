@@ -197,7 +197,7 @@ export const MysteryDoorGame: React.FC<Props> = ({
                         <span aria-hidden="true" className={`flex shrink-0 h-[54px] w-[54px] items-center justify-center rounded-xl border text-[22px] font-black ${badge}`}>
                           {option.letter}
                         </span>
-                        <span className="min-w-0 flex-1 overflow-x-auto py-2 text-[22px] sm:text-2xl leading-loose font-semibold text-slate-950 [&_.katex]:leading-normal">
+                        <span className="min-w-0 flex-1 py-3 break-words text-[22px] sm:text-2xl leading-relaxed font-semibold text-slate-950 [&_.katex]:leading-normal">
                           <MathRenderer text={option.content} />
                         </span>
                         {correct && <span className="shrink-0 text-2xl font-black text-emerald-700" aria-hidden="true">✓</span>}
