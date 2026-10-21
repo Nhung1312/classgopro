@@ -5,6 +5,8 @@ on:
       - 'src/**'
       - 'scripts/check-mystery-door.ts'
       - 'scripts/check-review-import.ts'
+      - 'scripts/check-review-exchange.ts'
+      - 'src/utils/reviewBankExchange.ts'
       - 'package.json'
       - '.github/workflows/verify-review-game.yml'
   workflow_dispatch:
@@ -20,4 +22,5 @@ jobs:
       - run: npm run lint
       - run: npm run test:mystery
       - run: npx tsx scripts/check-review-import.ts
+      - run: npx tsx scripts/check-review-exchange.ts
       - run: npm run build
