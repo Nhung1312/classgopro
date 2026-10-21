@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import type { ClassRoom, QuestionItem, Student } from '../../types';
 import { MathRenderer } from '../MathRenderer';
 import { DOOR_COUNTS, markDoorOpened, prepareDoors, type Door } from '../../utils/mysteryDoorSession';
+import { parseMultipleChoice, type ChoiceLetter } from '../../utils/reviewQuestionChoices';
 
 interface Props {
   activeClass: ClassRoom;
@@ -23,6 +24,8 @@ export const MysteryDoorGame: React.FC<Props> = ({
   const [activeDoor, setActiveDoor] = useState<number | null>(null);
   const [usedIds, setUsedIds] = useState<string[]>([]);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [chosenAnswer, setChosenAnswer] = useState<ChoiceLetter | null>(null);
+  const [answerChecked, setAnswerChecked] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [rewarded, setRewarded] = useState(false);
   const recordedRef = useRef(false);
@@ -31,6 +34,7 @@ export const MysteryDoorGame: React.FC<Props> = ({
   // The lesson and classroom are part of the identity of a game session.
   useEffect(() => {
     setDoors([]); setActiveDoor(null); setUsedIds([]); setShowAnswer(false);
+    setChosenAnswer(null); setAnswerChecked(false);
     setOutcome(null); setRewarded(false);
     recordedRef.current = false; rewardedRef.current = false;
   }, [activeClass.id, chapter, lesson, difficulty]);
@@ -54,11 +58,15 @@ export const MysteryDoorGame: React.FC<Props> = ({
   const unused = new Set(questions.filter(q => !usedIds.includes(q.id)).map(q => q.id)).size;
   const current = doors.find(d => d.number === activeDoor);
   const remainingDoors = doors.filter(d => !d.opened).length;
+  const quiz = useMemo(() => current
+    ? parseMultipleChoice(current.question.content, current.question.suggestedAnswer)
+    : null, [current?.question.content, current?.question.suggestedAnswer]);
 
   const startRound = () => {
     const newDoors = prepareDoors(questions, doorCount, usedIds);
     if (!newDoors.length) return;
     setDoors(newDoors); setActiveDoor(null); setShowAnswer(false);
+    setChosenAnswer(null); setAnswerChecked(false);
     setOutcome(null); setRewarded(false);
     recordedRef.current = false; rewardedRef.current = false;
   };
@@ -67,11 +75,13 @@ export const MysteryDoorGame: React.FC<Props> = ({
     setDoors(before => markDoorOpened(before, door.number));
     setUsedIds(before => before.includes(door.question.id) ? before : [...before, door.question.id]);
     setActiveDoor(door.number); setShowAnswer(false);
+    setChosenAnswer(null); setAnswerChecked(false);
     setOutcome(null); setRewarded(false);
     recordedRef.current = false; rewardedRef.current = false;
   };
   const next = () => {
     setActiveDoor(null); setShowAnswer(false); setOutcome(null); setRewarded(false);
+    setChosenAnswer(null); setAnswerChecked(false);
     recordedRef.current = false; rewardedRef.current = false;
     if (!remainingDoors) setDoors([]);
   };
@@ -152,9 +162,67 @@ export const MysteryDoorGame: React.FC<Props> = ({
         ) : (
           <section className="rounded-2xl border-2 border-amber-500/60 bg-slate-900 p-5 sm:p-8 space-y-5">
             <h3 className="text-lg text-amber-300 font-black">Ô CỬA SỐ {current.number}</h3>
+            {/* Keep the mathematical stem separate from answer choices, so fractions
+                have proper spacing and A-D are actual touch targets. */}
             <div className="text-xl sm:text-3xl font-bold leading-relaxed bg-slate-950 p-5 rounded-xl">
-              <MathRenderer text={current.question.content} />
+              <MathRenderer text={quiz ? quiz.stem : current.question.content} />
             </div>
+            {quiz && (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-300">Chọn một đáp án A, B, C hoặc D, sau đó bấm Kiểm tra.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="Chọn đáp án trắc nghiệm">
+                  {quiz.options.map(option => {
+                    const selected = chosenAnswer === option.letter;
+                    const correct = answerChecked && quiz.correctLetter === option.letter;
+                    const incorrect = answerChecked && selected && quiz.correctLetter !== option.letter;
+                    const classes = correct
+                      ? 'bg-emerald-900/60 border-emerald-400 text-emerald-100'
+                      : incorrect ? 'bg-rose-900/60 border-rose-400 text-rose-100'
+                      : selected ? 'bg-indigo-900/80 border-indigo-300 text-white ring-2 ring-indigo-400/30'
+                      : 'bg-slate-800 border-slate-600 text-slate-100 hover:border-indigo-400 hover:bg-slate-700';
+                    return (
+                      <button key={option.letter} type="button" aria-pressed={selected}
+                        aria-label={`Chọn đáp án ${option.letter}`}
+                        disabled={answerChecked}
+                        onClick={() => setChosenAnswer(option.letter)}
+                        className={`min-h-[88px] flex items-center gap-4 rounded-2xl border-2 px-4 py-4 text-left transition-colors disabled:cursor-default ${classes}`}>
+                        <span className="flex shrink-0 h-12 w-12 items-center justify-center rounded-xl bg-slate-950/60 text-2xl font-black">
+                          {option.letter}
+                        </span>
+                        <span className="min-w-0 flex-1 overflow-x-auto text-lg sm:text-2xl leading-relaxed font-semibold py-2">
+                          <MathRenderer text={option.content} />
+                        </span>
+                        {correct && <span className="text-2xl" aria-hidden="true">✓</span>}
+                        {incorrect && <span className="text-2xl" aria-hidden="true">✕</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button"
+                    disabled={!chosenAnswer || answerChecked || !quiz.correctLetter}
+                    onClick={() => setAnswerChecked(true)}
+                    className="rounded-xl bg-amber-500 px-5 py-3 font-bold text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed">
+                    Kiểm tra đáp án
+                  </button>
+                  {!quiz.correctLetter && (
+                    <span className="text-sm text-amber-300">
+                      Chưa có đáp án A–D chuẩn để chấm tự động. Giáo viên có thể hiện đáp án tham khảo bên dưới.
+                    </span>
+                  )}
+                </div>
+                {answerChecked && quiz.correctLetter && chosenAnswer && (
+                  <p role="status" aria-live="polite"
+                    className={`rounded-xl p-4 font-bold text-lg border ${chosenAnswer === quiz.correctLetter
+                      ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                      : 'bg-rose-950/60 border-rose-500/50 text-rose-200'}`}>
+                    {chosenAnswer === quiz.correctLetter
+                      ? '✓ Chính xác! Em đã chọn đáp án đúng.'
+                      : `✕ Chưa đúng. Đáp án đúng là ${quiz.correctLetter}.`}
+                  </p>
+                )}
+              </div>
+            )}
             {current.question.imageUrl && <img src={current.question.imageUrl} alt="Hình minh họa câu hỏi"
               className="max-h-80 mx-auto rounded-lg object-contain" />}
             <button onClick={() => setShowAnswer(!showAnswer)}
