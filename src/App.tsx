@@ -68,6 +68,7 @@ import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
 import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
 import { applyQuickScoreToStudent, TxColumn } from './utils/quickScoreHelper';
+import { applyMysteryDoorAssessment } from './utils/mysteryDoorAssessment';
 import { undoCompletedSpin } from './utils/undoCompletedSpin';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
@@ -1275,23 +1276,15 @@ export default function App() {
           onClose={() => { setIsMysteryDoorOpen(false); setMysteryStudent(null); }}
           onEditQuestions={() => { setIsMysteryDoorOpen(false); setMysteryStudent(null); setIsQuestionBankOpen(true); }}
           onAwardStars={handleAwardStars}
-          onRecordOutcome={(student, question, outcome) => {
-            const now = new Date();
-            const record: HistoryRecord = {
-              id: `review-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
-              timestamp: now.toISOString(),
-              formattedDate: now.toLocaleDateString('vi-VN'),
-              formattedTime: now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-              classId: activeClass.id, className: activeClass.name,
-              studentId: student.id, studentName: student.name,
-              callCountAfter: activeClass.students.find(s => s.id === student.id)?.callCount ?? 0,
-              mode: selectionMode,
-              note: `Ô cửa bí mật: ${outcome}`,
-              recordType: 'MYSTERY_DOOR',
-              questionContent: question.content,
-            };
-            // New assessment record only: no new call, no gradebook score.
-            handleUpdateHistory([record, ...history]);
+          onRecordOutcome={(student, question, attemptId, change) => {
+            const result = applyMysteryDoorAssessment({
+              classes, history, classId: activeClass.id,
+              studentId: student.id, question, attemptId, mode: selectionMode, change,
+            });
+            if (!result.saved) return { saved: false, message: result.message };
+            if (result.classes !== classes) handleUpdateClasses(result.classes);
+            handleUpdateHistory(result.history);
+            return { saved: true, message: result.message };
           }}
         />
       )}

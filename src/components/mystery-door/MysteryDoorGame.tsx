@@ -3,6 +3,7 @@ import type { ClassRoom, QuestionItem, Student } from '../../types';
 import { MathRenderer } from '../MathRenderer';
 import { DOOR_COUNTS, markDoorOpened, prepareDoors, type Door } from '../../utils/mysteryDoorSession';
 import { parseMultipleChoice, type ChoiceLetter } from '../../utils/reviewQuestionChoices';
+import type { MysteryAssessmentUpdate } from '../../utils/mysteryDoorAssessment';
 
 interface Props {
   activeClass: ClassRoom;
@@ -10,7 +11,8 @@ interface Props {
   onClose: () => void;
   onEditQuestions: () => void;
   onAwardStars: (studentId: string, count: number) => void;
-  onRecordOutcome: (student: Student, question: QuestionItem, outcome: 'Đạt' | 'Chưa đạt') => void;
+  onRecordOutcome: (student: Student, question: QuestionItem, attemptId: string, change: MysteryAssessmentUpdate) =>
+    { saved: boolean; message: string };
 }
 
 export const MysteryDoorGame: React.FC<Props> = ({
@@ -28,6 +30,12 @@ export const MysteryDoorGame: React.FC<Props> = ({
   const [answerChecked, setAnswerChecked] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [rewarded, setRewarded] = useState(false);
+  const [attemptId, setAttemptId] = useState('');
+  const [scoreInput, setScoreInput] = useState('');
+  const [saveToGradebook, setSaveToGradebook] = useState(false);
+  const [scoreSaved, setScoreSaved] = useState(false);
+  const [scoreFeedback, setScoreFeedback] = useState('');
+  const scoreSavedRef = useRef(false);
   const recordedRef = useRef(false);
   const rewardedRef = useRef(false);
 
@@ -36,7 +44,9 @@ export const MysteryDoorGame: React.FC<Props> = ({
     setDoors([]); setActiveDoor(null); setUsedIds([]); setShowAnswer(false);
     setChosenAnswer(null); setAnswerChecked(false);
     setOutcome(null); setRewarded(false);
-    recordedRef.current = false; rewardedRef.current = false;
+    recordedRef.current = false; rewardedRef.current = false; scoreSavedRef.current = false;
+    setAttemptId(''); setScoreInput(''); setSaveToGradebook(false);
+    setScoreSaved(false); setScoreFeedback('');
   }, [activeClass.id, chapter, lesson, difficulty]);
 
   const questions = useMemo(() => (activeClass.questions || []).filter(q => {
@@ -68,7 +78,9 @@ export const MysteryDoorGame: React.FC<Props> = ({
     setDoors(newDoors); setActiveDoor(null); setShowAnswer(false);
     setChosenAnswer(null); setAnswerChecked(false);
     setOutcome(null); setRewarded(false);
-    recordedRef.current = false; rewardedRef.current = false;
+    recordedRef.current = false; rewardedRef.current = false; scoreSavedRef.current = false;
+    setAttemptId(''); setScoreInput(''); setSaveToGradebook(false);
+    setScoreSaved(false); setScoreFeedback('');
   };
   const openDoor = (door: Door) => {
     if (door.opened || activeDoor !== null) return;
@@ -77,19 +89,54 @@ export const MysteryDoorGame: React.FC<Props> = ({
     setActiveDoor(door.number); setShowAnswer(false);
     setChosenAnswer(null); setAnswerChecked(false);
     setOutcome(null); setRewarded(false);
-    recordedRef.current = false; rewardedRef.current = false;
+    recordedRef.current = false; rewardedRef.current = false; scoreSavedRef.current = false;
+    setAttemptId(`review-${Date.now()}-${door.question.id}-${Math.random().toString(36).slice(2, 8)}`);
+    setScoreInput(''); setSaveToGradebook(false);
+    setScoreSaved(false); setScoreFeedback('');
   };
   const next = () => {
     setActiveDoor(null); setShowAnswer(false); setOutcome(null); setRewarded(false);
     setChosenAnswer(null); setAnswerChecked(false);
-    recordedRef.current = false; rewardedRef.current = false;
+    recordedRef.current = false; rewardedRef.current = false; scoreSavedRef.current = false;
+    setAttemptId(''); setScoreInput(''); setSaveToGradebook(false);
+    setScoreSaved(false); setScoreFeedback('');
     if (!remainingDoors) setDoors([]);
   };
   const evaluate = (decision: 'Đạt' | 'Chưa đạt') => {
-    if (!student || !current || outcome || recordedRef.current) return;
+    if (!student || !current || !attemptId || outcome || recordedRef.current) return;
     recordedRef.current = true;
-    onRecordOutcome(student, current.question, decision);
+    const result = onRecordOutcome(student, current.question, attemptId, { outcome: decision });
+    if (!result.saved) {
+      recordedRef.current = false;
+      setScoreFeedback(result.message);
+      return;
+    }
     setOutcome(decision);
+    setScoreFeedback(result.message);
+  };
+
+  const saveManualScore = () => {
+    if (!student || !current || !attemptId || scoreSavedRef.current) return;
+    const input = scoreInput.trim().replace(',', '.');
+    if (!/^(?:10(?:\.0)?|[0-9](?:\.[0-9])?)$/.test(input)) {
+      setScoreFeedback('Hãy nhập điểm hợp lệ từ 0 đến 10, tối đa một chữ số thập phân.');
+      return;
+    }
+    const numericScore = Number(input);
+    if (saveToGradebook && !window.confirm(
+      `Xác nhận ghi ${numericScore} điểm vào ô TX còn trống của ${student.name}? Không ghi đè điểm đã có.`
+    )) return;
+    scoreSavedRef.current = true;
+    const result = onRecordOutcome(student, current.question, attemptId, {
+      score: numericScore, saveToGradebook,
+    });
+    if (!result.saved) {
+      scoreSavedRef.current = false;
+      setScoreFeedback(result.message);
+      return;
+    }
+    setScoreSaved(true);
+    setScoreFeedback(result.message);
   };
   return (
     <div role="dialog" aria-modal="true" aria-label="Ô cửa bí mật kiểm tra bài cũ"
@@ -250,7 +297,48 @@ export const MysteryDoorGame: React.FC<Props> = ({
                 <button disabled={rewarded} onClick={() => { if (rewardedRef.current) return; rewardedRef.current = true; onAwardStars(student.id, 1); setRewarded(true); }}
                   className="bg-amber-600 px-4 py-2 rounded-lg font-bold disabled:opacity-50">⭐ +1 sao</button>
               </div>
-              {outcome && <p className="text-emerald-800 font-semibold" role="status">Đã ghi nhận: {outcome}</p>}
+              {outcome && <p className="text-emerald-800 font-semibold">Đã ghi nhận: {outcome}</p>}
+              <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+                <div>
+                  <h4 className="font-bold text-indigo-900">📝 Giáo viên cho điểm (0–10)</h4>
+                  <p className="text-xs text-slate-600 mt-1">Chỉ lưu khi giáo viên nhấn nút. Trả lời trắc nghiệm đúng không tự ghi điểm.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[10, 9, 8, 7, 6, 5].map(value => (
+                    <button type="button" key={value} disabled={scoreSaved}
+                      onClick={() => setScoreInput(String(value))}
+                      aria-pressed={scoreInput === String(value)}
+                      className={`px-4 py-2 font-bold rounded-xl border text-sm disabled:opacity-50 ${
+                        scoreInput === String(value)
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
+                          : 'bg-white border-slate-300 text-slate-900 hover:border-indigo-400'
+                      }`}>
+                      {value}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="text-sm font-semibold text-slate-700" htmlFor="mystery-score-input">
+                    Điểm khác:
+                  </label>
+                  <input id="mystery-score-input" type="number" min="0" max="10" step="0.1"
+                    inputMode="decimal" value={scoreInput} disabled={scoreSaved}
+                    onChange={e => { setScoreInput(e.target.value); setScoreFeedback(''); }}
+                    placeholder="0–10" className="w-28 rounded-lg border border-slate-300 p-2 text-slate-950 bg-white font-semibold disabled:opacity-50" />
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700 font-medium">
+                    <input type="checkbox" checked={saveToGradebook} disabled={scoreSaved}
+                      onChange={e => setSaveToGradebook(e.target.checked)}
+                      className="h-4 w-4 accent-indigo-600" />
+                    Ghi điểm vào Sổ điểm TX (ô còn trống)
+                  </label>
+                </div>
+                <button type="button" onClick={saveManualScore}
+                  disabled={scoreSaved || !scoreInput.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold disabled:opacity-40">
+                  {scoreSaved ? '✓ Đã lưu điểm' : 'Lưu điểm'}
+                </button>
+                {scoreFeedback && <p className="text-sm font-semibold text-indigo-900" role="status">{scoreFeedback}</p>}
+              </div>
             </div>}
             <button onClick={next} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300">
               {remainingDoors ? `Về bảng cửa (còn ${remainingDoors} ô)` : 'Kết thúc ván • Tạo ván tiếp'}
