@@ -33,41 +33,6 @@ export interface QuestionBankModalProps {
   onOpenSpotlight?: (question: QuestionItem) => void;
 }
 
-const DEFAULT_MATH_SAMPLE_QUESTIONS: QuestionItem[] = [
-  {
-    id: 'q-math-1',
-    content: 'Tính đạo hàm của hàm số $y = \\frac{2x - 1}{x + 1}$ tại điểm $x_0 = 1$.',
-    level: 'Trung bình',
-    suggestedAnswer: 'Áp dụng công thức $(u/v)\' = \\frac{u\'v - uv\'}{v^2}$, ta có $y\' = \\frac{3}{(x+1)^2} \\Rightarrow y\'(1) = \\frac{3}{4}$.',
-    hint: 'Nhớ lại công thức tính đạo hàm của phân thức bậc nhất trên bậc nhất.',
-  },
-  {
-    id: 'q-math-2',
-    content: 'Nêu công thức nghiệm của phương trình bậc hai $ax^2 + bx + c = 0$ ($a \\neq 0$) khi $\\Delta = b^2 - 4ac > 0$.',
-    level: 'Dễ',
-    suggestedAnswer: 'Phương trình có 2 nghiệm phân biệt: $x_{1,2} = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}$.',
-  },
-  {
-    id: 'q-math-3',
-    content: 'Tính tích phân: $I = \\int_{0}^{\\frac{\\pi}{2}} \\sin(x) \\cos(x) dx$.',
-    level: 'Trung bình',
-    suggestedAnswer: '$I = \\int_{0}^{\\frac{\\pi}{2}} \\frac{1}{2}\\sin(2x)dx = [-\\frac{1}{4}\\cos(2x)]_0^{\\frac{\\pi}{2}} = \\frac{1}{2}$. Hoặc đổi biến $t = \\sin(x) \\Rightarrow I = \\frac{1}{2}$.',
-  },
-  {
-    id: 'q-math-4',
-    content: 'Trong không gian $Oxyz$, cho mặt phẳng $(P): 2x - y + 2z - 5 = 0$. Tìm khoảng cách từ điểm $M(1; -2; 3)$ đến $(P)$.',
-    level: 'Khó',
-    suggestedAnswer: '$d(M, (P)) = \\frac{|2(1) - (-2) + 2(3) - 5|}{\\sqrt{2^2 + (-1)^2 + 2^2}} = \\frac{|2 + 2 + 6 - 5|}{\\sqrt{9}} = \\frac{5}{3}$.',
-    hint: 'Áp dụng công thức $d(M, (P)) = \\frac{|Ax_0 + By_0 + Cz_0 + D|}{\\sqrt{A^2 + B^2 + C^2}}$.',
-  },
-  {
-    id: 'q-math-5',
-    content: 'Giải phương trình lượng giác cơ bản: $2\\sin(x) - \\sqrt{3} = 0$.',
-    level: 'Dễ',
-    suggestedAnswer: '$\\sin(x) = \\frac{\\sqrt{3}}{2} \\Leftrightarrow x = \\frac{\\pi}{3} + k2\\pi$ hoặc $x = \\frac{2\\pi}{3} + k2\\pi$ ($k \\in \\mathbb{Z}$).',
-  },
-];
-
 export function QuestionBankModal({
   isOpen,
   onClose,
@@ -88,6 +53,8 @@ export function QuestionBankModal({
   const [newLevel, setNewLevel] = useState<'Dễ' | 'Trung bình' | 'Khó'>('Trung bình');
   const [newAnswer, setNewAnswer] = useState('');
   const [newHint, setNewHint] = useState('');
+  const [newChapter, setNewChapter] = useState('');
+  const [newLesson, setNewLesson] = useState('');
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
   const [showMathToolbar, setShowMathToolbar] = useState(false);
 
@@ -101,7 +68,7 @@ export function QuestionBankModal({
 
   if (!isOpen) return null;
 
-  const currentList = questions && questions.length > 0 ? questions : DEFAULT_MATH_SAMPLE_QUESTIONS;
+  const currentList = questions || [];
 
   const handlePickRandom = () => {
     if (currentList.length === 0) return;
@@ -196,6 +163,25 @@ export function QuestionBankModal({
     }
   };
 
+  // Teacher-authorized import from AI Studio's exported single-lesson JSON.
+  const handleGoogleAiJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const { importReviewBankJson } = await import('../utils/reviewBankImport');
+      const { items, skipped } = importReviewBankJson(JSON.parse(await file.text()), questions || []);
+      if (!items.length) {
+        alert('Không có câu hỏi hợp lệ mới để nhập. Hãy kiểm tra tệp JSON Kho bài cũ.');
+        return;
+      }
+      if (!window.confirm(`Nhập ${items.length} câu vào lớp đang chọn? Bỏ qua ${skipped} câu trùng/không hợp lệ.`)) return;
+      onUpdateQuestions?.([...(questions || []), ...items]);
+      setActiveTab('MANAGE');
+    } catch {
+      alert('Tệp JSON không đúng định dạng Kho kiểm tra bài cũ.');
+    } finally { event.target.value = ''; }
+  };
+
   // Process text batch import (splits by "Câu 1:", "Câu 2:", etc. or double line break)
   const handleProcessBatchImport = () => {
     if (!importText.trim()) return;
@@ -245,6 +231,9 @@ export function QuestionBankModal({
       id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       content: newContent.trim() || 'Xem hình vẽ đính kèm bên dưới:',
       level: newLevel,
+      chapter: newChapter.trim() || undefined,
+      lesson: newLesson.trim() || undefined,
+      reviewLevel: newLevel === 'Khó' ? 'advanced' : 'basic',
       suggestedAnswer: newAnswer.trim() || undefined,
       hint: newHint.trim() || undefined,
       imageUrl: newImageUrl || undefined,
@@ -257,6 +246,8 @@ export function QuestionBankModal({
     setNewContent('');
     setNewAnswer('');
     setNewHint('');
+    setNewChapter('');
+    setNewLesson('');
     setNewImageUrl(null);
   };
 
@@ -558,6 +549,16 @@ export function QuestionBankModal({
                   </div>
                 )}
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-xs text-slate-300">Chương
+                    <input value={newChapter} onChange={e => setNewChapter(e.target.value)}
+                      placeholder="Ví dụ: Chương I" className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2" />
+                  </label>
+                  <label className="text-xs text-slate-300">Bài học
+                    <input value={newLesson} onChange={e => setNewLesson(e.target.value)}
+                      placeholder="Ví dụ: Bài 2" className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2" />
+                  </label>
+                </div>
                 {/* Difficulty & Hint */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                   <div>
@@ -683,6 +684,12 @@ export function QuestionBankModal({
 
           {activeTab === 'IMPORT' && (
             <div className="space-y-4">
+              <div className="border border-amber-500/40 bg-amber-950/20 rounded-xl p-4 space-y-2">
+                <strong className="text-amber-300 text-sm block">Nhập JSON từ Google AI Studio</strong>
+                <p className="text-slate-300 text-xs">Xuất kho bài cũ của từng bài trên AI Studio, chọn đúng lớp trong ClassGo rồi nhập JSON. Không xóa câu hỏi cũ, có lọc trùng.</p>
+                <input type="file" accept=".json,application/json" onChange={handleGoogleAiJson}
+                  className="text-xs text-slate-200 file:bg-amber-500 file:text-slate-950 file:px-3 file:py-2 file:rounded-lg file:border-0" />
+              </div>
               <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-4 text-xs text-indigo-200 space-y-2">
                 <div className="font-bold text-sm text-indigo-300 flex items-center gap-1.5">
                   <FileText className="w-4 h-4" /> Hướng dẫn nhập câu hỏi từ Word (.docx) hoặc Văn bản:
@@ -691,7 +698,7 @@ export function QuestionBankModal({
                   Thầy cô có thể tải trực tiếp file <strong>.docx</strong> từ máy tính, hoặc copy và dán danh sách câu hỏi theo định dạng:
                 </p>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800">
-                  Câu 1: Tính đạo hàm $y = 3x^2 - 5x + 1$<br />
+                  Câu 1: Tính $2x-5$ tại $x=3$<br />
                   Câu 2: Cho tam giác $ABC$ vuông tại $A$...<br />
                   Câu 3: Giải phương trình $\sin(2x) = 1$...
                 </div>

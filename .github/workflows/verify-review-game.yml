@@ -1,0 +1,23 @@
+name: Verify mystery door
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/check-mystery-door.ts'
+      - 'scripts/check-review-import.ts'
+      - 'package.json'
+      - '.github/workflows/verify-review-game.yml'
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run test:mystery
+      - run: npx tsx scripts/check-review-import.ts
+      - run: npm run build

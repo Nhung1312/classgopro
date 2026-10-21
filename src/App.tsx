@@ -74,6 +74,7 @@ import { HistoryScreen } from './components/HistoryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { TimerWidget } from './components/TimerWidget';
 import { QuestionBankModal } from './components/QuestionBankModal';
+import { MysteryDoorGame } from './components/mystery-door/MysteryDoorGame';
 import { QuickAttendanceModal } from './components/QuickAttendanceModal';
 import { GroupGeneratorModal } from './components/GroupGeneratorModal';
 import { MathQuestionSpotlightModal } from './components/MathQuestionSpotlightModal';
@@ -104,6 +105,8 @@ export default function App() {
   // Classroom Tool States
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [isQuestionBankOpen, setIsQuestionBankOpen] = useState(false);
+  const [isMysteryDoorOpen, setIsMysteryDoorOpen] = useState(false);
+  const [mysteryStudent, setMysteryStudent] = useState<Student | null>(null);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<QuestionItem | null>(null);
@@ -1107,6 +1110,7 @@ export default function App() {
             onOpenPresentation={() => setIsPresentationOpen(true)}
             onOpenTimer={() => setIsTimerOpen(true)}
             onOpenQuestions={() => setIsQuestionBankOpen(true)}
+            onOpenMysteryDoor={(student) => { setMysteryStudent(student || null); setIsMysteryDoorOpen(true); }}
             onOpenAttendance={() => setIsAttendanceOpen(true)}
             onOpenGroups={() => setIsGroupsOpen(true)}
             onAwardStars={handleAwardStars}
@@ -1250,6 +1254,10 @@ export default function App() {
         isOpen={isQuestionBankOpen}
         onClose={() => setIsQuestionBankOpen(false)}
         activeSubject={activeClass.subject}
+        questions={activeClass.questions || []}
+        onUpdateQuestions={(questions) => {
+          handleUpdateClasses(classes.map((cls) => cls.id === activeClass.id ? { ...cls, questions } : cls));
+        }}
         onOpenSpotlight={(q) => {
           setSpotlightQuestion(q);
         }}
@@ -1258,6 +1266,33 @@ export default function App() {
           setIsQuestionBankOpen(false);
         }}
       />
+
+      {isMysteryDoorOpen && (
+        <MysteryDoorGame
+          activeClass={activeClass}
+          student={mysteryStudent ? activeClass.students.find(s => s.id === mysteryStudent.id) || null : null}
+          onClose={() => { setIsMysteryDoorOpen(false); setMysteryStudent(null); }}
+          onEditQuestions={() => { setIsMysteryDoorOpen(false); setMysteryStudent(null); setIsQuestionBankOpen(true); }}
+          onAwardStars={handleAwardStars}
+          onRecordOutcome={(student, question, outcome) => {
+            const now = new Date();
+            const record: HistoryRecord = {
+              id: `review-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`,
+              timestamp: now.toISOString(),
+              formattedDate: now.toLocaleDateString('vi-VN'),
+              formattedTime: now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+              classId: activeClass.id, className: activeClass.name,
+              studentId: student.id, studentName: student.name,
+              callCountAfter: activeClass.students.find(s => s.id === student.id)?.callCount ?? 0,
+              mode: selectionMode,
+              note: `Ô cửa bí mật: ${outcome}`,
+              questionContent: question.content,
+            };
+            // New assessment record only: no new call, no gradebook score.
+            handleUpdateHistory([record, ...history]);
+          }}
+        />
+      )}
 
       {/* Math Spotlight Fullscreen Modal */}
       <MathQuestionSpotlightModal

@@ -27,6 +27,10 @@ export interface QuestionItem {
   suggestedAnswer?: string;
   imageUrl?: string; // Optional image URL or base64 screenshot
   hint?: string; // Optional hint for students
+  semester?: string; // Semester of review question
+  chapter?: string; // Chapter of review question
+  lesson?: string; // Lesson of review question
+  reviewLevel?: 'basic' | 'advanced'; // Distinguishes review difficulty
 }
 
 export interface TimetableSlot {

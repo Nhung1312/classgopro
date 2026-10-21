@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "test:mystery": "tsx scripts/check-mystery-door.ts",
     "check:spin-consistency": "tsx scripts/check-spin-consistency.ts"
   },
   "dependencies": {
