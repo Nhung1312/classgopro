@@ -1254,6 +1254,7 @@ export default function App() {
         isOpen={isQuestionBankOpen}
         onClose={() => setIsQuestionBankOpen(false)}
         activeSubject={activeClass.subject}
+        activeClassName={activeClass.name}
         questions={activeClass.questions || []}
         onUpdateQuestions={(questions) => {
           handleUpdateClasses(classes.map((cls) => cls.id === activeClass.id ? { ...cls, questions } : cls));

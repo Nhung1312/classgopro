@@ -30,6 +30,7 @@ export interface QuestionBankModalProps {
   onSelectQuestion?: (question: QuestionItem) => void;
   selectedStudentName?: string;
   activeSubject?: string;
+  activeClassName?: string;
   onOpenSpotlight?: (question: QuestionItem) => void;
 }
 
@@ -41,6 +42,8 @@ export function QuestionBankModal({
   onSelectQuestionForStudent,
   onSelectQuestion,
   selectedStudentName,
+  activeSubject,
+  activeClassName,
   onOpenSpotlight,
 }: QuestionBankModalProps) {
   const [activeTab, setActiveTab] = useState<'RANDOM' | 'MANAGE' | 'IMPORT'>('RANDOM');
@@ -169,12 +172,15 @@ export function QuestionBankModal({
     if (!file) return;
     try {
       const { importReviewBankJson } = await import('../utils/reviewBankImport');
-      const { items, skipped } = importReviewBankJson(JSON.parse(await file.text()), questions || []);
+      if (file.size > 800_000) { alert('Tệp quá lớn để lưu an toàn trên ClassGo.'); return; }
+      const { items, skipped, error, label } = importReviewBankJson(JSON.parse(await file.text()), questions || [],
+        { className: activeClassName || '', subject: activeSubject });
+      if (error) { alert(error); return; }
       if (!items.length) {
         alert('Không có câu hỏi hợp lệ mới để nhập. Hãy kiểm tra tệp JSON Kho bài cũ.');
         return;
       }
-      if (!window.confirm(`Nhập ${items.length} câu vào lớp đang chọn? Bỏ qua ${skipped} câu trùng/không hợp lệ.`)) return;
+      if (!window.confirm(`Nhập ${items.length} câu [${label}] vào lớp ${activeClassName || 'đang chọn'}? Bỏ qua ${skipped} câu trùng/không hợp lệ. Dữ liệu cũ được giữ nguyên.`)) return;
       onUpdateQuestions?.([...(questions || []), ...items]);
       setActiveTab('MANAGE');
     } catch {
