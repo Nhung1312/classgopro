@@ -1,17 +1,21 @@
-# Ô cửa bí mật — Nhánh kiểm thử ClassGo
+# ClassGo — ô cửa bí mật & Kho kiểm tra bài cũ (PR nháp)
 
-Bản ZIP Google AI Studio có các file rỗng nên **không đè ZIP lên main**.
-Đây là bước tích hợp an toàn trên mã `main` mới nhất (đã có sửa bộ đếm gọi tên).
+Được làm trên nhánh riêng từ main (đã sửa bộ đếm, tìm kiếm, nề nếp).
+**Không sao chép toàn bộ ZIP Google AI Studio** vì có 7 tệp TSX rỗng.
 
-## Thử nghiệm
-1. Chọn lớp rồi vào Câu hỏi, thêm ít nhất 4 câu, chọn Chương/Bài nếu muốn.
-2. Nhấn Ô cửa bí mật để chơi độc lập hoặc quay ra 1 học sinh và dùng nút Ô cửa ở khu đánh giá.
-3. Cấu hình số ô, mức độ, bài học, mở từng ô, về bảng cửa để mở ô tiếp theo.
-4. Chấm Đạt/Chưa đạt để ghi lịch sử, không tự cộng lượt gọi hoặc nhập điểm vào sổ.
-5. Thưởng sao theo xác nhận; không thưởng trùng trên cùng ô.
-6. Xuất kho JSON của một bài ở Google AI Studio, nhập trong Câu hỏi > Nhập vào đúng lớp.
+## Chức năng đã kiểm thử
+- Câu hỏi theo Chương/Bài, mức cơ bản/nâng cao trong lớp đang chọn.
+- 2,4,6,8,10 ô; nội dung ô cố định lúc bắt đầu; không lặp câu trong phiên.
+- Chơi độc lập hoặc gắn học sinh sau một lượt quay; giáo viên đánh giá Đạt/Chưa đạt,
+  thưởng sao; không thêm lần gọi hoặc ghi điểm TX tự động.
+- Lịch sử phân biệt lượt gọi và đánh giá; chống bấm kép tạo hai bản ghi.
+- Nhập JSON kho bài cũ từ AI Studio theo schema v1 và đối chiếu môn/khối/lớp.
+- Nhập Excel từ 3 cột **Mức độ, Câu hỏi, Đáp án**; tự lọc câu trùng, yêu cầu giáo viên xác nhận.
+- Xuất JSON theo một bài học (chỉ câu có đáp án), đọc lại được bằng AI Studio.
+- Lưu trong ClassRoom.questions (dữ liệu lớp); không tự chuyển localStorage của domain AI Studio.
 
-## Giới hạn của PR
-Chưa chuyển nguyên trạng toàn bộ màn quản lý kho bài cũ/AI tạo hàng loạt/nhập Excel
-từ ZIP; kho câu hỏi trong domain Google AI Studio phải xuất JSON và nhập có xác nhận.
-Hãy kiểm thử trên nhánh trước khi merge.
+## Chưa có
+- Không port nguyên vẹn màn quản trị 170KB, mô-đun tạo câu hỏi Gemini server
+  và AI hàng loạt từ ZIP, vì đường API backend/chứng thực chưa được xác nhận.
+- Không tự động đồng bộ data AI Studio; cần tự xuất từng kho JSON để chuyển.
+- Không merge main cho đến khi giao diện và dữ liệu lớp thật được người dùng thử.

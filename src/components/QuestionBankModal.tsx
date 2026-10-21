@@ -59,6 +59,7 @@ export function QuestionBankModal({
   const [newChapter, setNewChapter] = useState('');
   const [newLesson, setNewLesson] = useState('');
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
+  const [exportGroup, setExportGroup] = useState('');
   const [showMathToolbar, setShowMathToolbar] = useState(false);
 
   // Batch import text state
@@ -72,6 +73,49 @@ export function QuestionBankModal({
   if (!isOpen) return null;
 
   const currentList = questions || [];
+  const groupOptions = [...new Map(currentList.filter(q => q.lesson)
+    .map(q => [JSON.stringify([q.chapter || '', q.lesson || '']), {chapter:q.chapter||'',lesson:q.lesson||''}])).entries()];
+  const grade = activeClassName?.match(/[6789]/)?.[0] || '';
+
+  const exportSelectedLesson = async () => {
+    if (!exportGroup) { alert('Hãy chọn bài học cần xuất.'); return; }
+    try {
+      const { buildReviewBankJson } = await import('../utils/reviewBankExchange');
+      const [chapter, lesson] = JSON.parse(exportGroup) as [string,string];
+      const payload = buildReviewBankJson({
+        questions: currentList, subject: activeSubject || 'Toán', grade, chapter, lesson
+      });
+      const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ClassGo_Kho_bai_cu_' + grade + '_' + Date.now() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+    } catch (err) { alert(err instanceof Error ? err.message : 'Không thể xuất JSON.'); }
+  };
+  const importReviewExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (!newLesson.trim()) { alert('Nhập tên bài học vào ô bên dưới trước khi nhập Excel.'); return; }
+      if (file.size > 800_000) { alert('Excel quá lớn để lưu an toàn; hãy chia thành nhiều bài.'); return; }
+      const XLSX = await import('xlsx');
+      const {convertExcelReviewRows} = await import('../utils/reviewBankExchange');
+      const data = XLSX.read(await file.arrayBuffer(),{type:'array'});
+      const sheet = data.Sheets[data.SheetNames[0]];
+      if (!sheet) { alert('Excel chưa có trang dữ liệu.'); return; }
+      const rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:''});
+      if (rows.length > 500) { alert('Một lần nhập tối đa 500 hàng.'); return; }
+      const {items,skipped} = convertExcelReviewRows(rows,{
+        subject:activeSubject,grade,chapter:newChapter.trim(),lesson:newLesson.trim()
+      },questions || []);
+      if (!items.length) { alert('Không có câu hợp lệ. Cần cột: Mức độ, Câu hỏi, Đáp án.'); return; }
+      if (!window.confirm(`Nhập ${items.length} câu vào lớp ${activeClassName || 'đang chọn'}, bài ${newLesson}? Bỏ qua ${skipped} hàng không hợp lệ/trùng.`)) return;
+      onUpdateQuestions?.([...(questions || []),...items]);
+      setActiveTab('MANAGE');
+    } catch { alert('Không đọc được Excel này. Vui lòng kiểm tra mẫu và thử lại.'); }
+    finally { event.target.value = ''; }
+  };
 
   const handlePickRandom = () => {
     if (currentList.length === 0) return;
@@ -695,6 +739,29 @@ export function QuestionBankModal({
                 <p className="text-slate-300 text-xs">Xuất kho bài cũ của từng bài trên AI Studio, chọn đúng lớp trong ClassGo rồi nhập JSON. Không xóa câu hỏi cũ, có lọc trùng.</p>
                 <input type="file" accept=".json,application/json" onChange={handleGoogleAiJson}
                   className="text-xs text-slate-200 file:bg-amber-500 file:text-slate-950 file:px-3 file:py-2 file:rounded-lg file:border-0" />
+              </div>
+              <div className="rounded-xl border border-sky-500/40 p-4 bg-sky-950/20 space-y-3">
+                <h3 className="font-bold text-sm text-sky-200">Xuất kho câu hỏi JSON theo bài học</h3>
+                <select value={exportGroup} onChange={e => setExportGroup(e.target.value)}
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 p-2 text-sm text-slate-100">
+                  <option value="">-- Chọn bài học để xuất --</option>
+                  {groupOptions.map(([value,group]) =>
+                    <option key={value} value={value}>{group.chapter ? group.chapter + ' / ' : ''}{group.lesson}</option>)}
+                </select>
+                <button type="button" onClick={exportSelectedLesson} disabled={!exportGroup}
+                  className="rounded-lg bg-sky-600 px-3 py-2 text-white font-bold text-xs disabled:opacity-40">
+                  Xuất JSON (có thể nhập lại Google AI Studio)
+                </button>
+              </div>
+              <div className="border border-emerald-500/40 bg-emerald-950/20 rounded-xl p-4 space-y-2">
+                <h3 className="font-bold text-emerald-300 text-sm">Nhập Excel Kho bài cũ</h3>
+                <p className="text-xs text-slate-200">Excel có cột Mức độ (Cơ bản/Nâng cao), Câu hỏi, Đáp án. Điền chương và bài học trước khi chọn Excel.</p>
+                <input value={newChapter} onChange={e=>setNewChapter(e.target.value)}
+                  placeholder="Chương" className="bg-slate-800 rounded-lg border border-slate-700 p-2 text-sm w-full" />
+                <input value={newLesson} onChange={e=>setNewLesson(e.target.value)}
+                  placeholder="Bài học (bắt buộc)" className="bg-slate-800 rounded-lg border border-slate-700 p-2 text-sm w-full" />
+                <input type="file" accept=".xlsx,.xls" onChange={importReviewExcel}
+                  className="text-xs text-slate-200 file:bg-emerald-600 file:px-3 file:py-2 file:rounded-lg file:border-0" />
               </div>
               <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-4 text-xs text-indigo-200 space-y-2">
                 <div className="font-bold text-sm text-indigo-300 flex items-center gap-1.5">

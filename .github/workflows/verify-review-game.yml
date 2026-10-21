@@ -20,4 +20,5 @@ jobs:
       - run: npm run lint
       - run: npm run test:mystery
       - run: npx tsx scripts/check-review-import.ts
+      - run: npx tsx scripts/check-review-exchange.ts
       - run: npm run build
