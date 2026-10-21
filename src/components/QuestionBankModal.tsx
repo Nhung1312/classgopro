@@ -60,6 +60,7 @@ export function QuestionBankModal({
   const [newLesson, setNewLesson] = useState('');
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
   const [exportGroup, setExportGroup] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [showMathToolbar, setShowMathToolbar] = useState(false);
 
   // Batch import text state
@@ -273,13 +274,27 @@ export function QuestionBankModal({
     }
   };
 
+  const handleEditQuestion = (q: QuestionItem) => {
+    setEditingId(q.id);
+    setNewContent(q.content);
+    setNewAnswer(q.suggestedAnswer || '');
+    setNewHint(q.hint || '');
+    setNewChapter(q.chapter || '');
+    setNewLesson(q.lesson || '');
+    setNewLevel(q.level || 'Trung bình');
+    setNewImageUrl(q.imageUrl || null);
+    setActiveTab('MANAGE');
+  };
+
   const handleAddQuestion = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContent.trim() && !newImageUrl) return;
 
     const newQ: QuestionItem = {
-      id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: editingId || `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       content: newContent.trim() || 'Xem hình vẽ đính kèm bên dưới:',
+      subject: activeSubject,
+      grade,
       level: newLevel,
       chapter: newChapter.trim() || undefined,
       lesson: newLesson.trim() || undefined,
@@ -289,7 +304,9 @@ export function QuestionBankModal({
       imageUrl: newImageUrl || undefined,
     };
 
-    const updated = [newQ, ...(questions || [])];
+    const updated = editingId
+      ? (questions || []).map(q => q.id === editingId ? { ...q, ...newQ } : q)
+      : [newQ, ...(questions || [])];
     if (onUpdateQuestions) {
       onUpdateQuestions(updated);
     }
@@ -299,9 +316,12 @@ export function QuestionBankModal({
     setNewChapter('');
     setNewLesson('');
     setNewImageUrl(null);
+    setEditingId(null);
   };
 
   const handleDeleteQuestion = (id: string) => {
+    if (!window.confirm('Xóa câu hỏi này khỏi lớp? Không thể hoàn tác sau khi đã đồng bộ.')) return;
+    if (editingId === id) setEditingId(null);
     const updated = (questions || []).filter((q) => q.id !== id);
     if (onUpdateQuestions) {
       onUpdateQuestions(updated);
@@ -650,7 +670,7 @@ export function QuestionBankModal({
                     type="submit"
                     className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
                   >
-                    <Plus className="w-4 h-4" /> Thêm Vào Kho Câu Hỏi
+                    <Plus className="w-4 h-4" /> {editingId ? 'Lưu thay đổi câu hỏi' : 'Thêm Vào Kho Câu Hỏi'}
                   </button>
                 </div>
               </form>
@@ -718,6 +738,10 @@ export function QuestionBankModal({
                           Chọn
                         </button>
                       )}
+                      <button type="button" onClick={() => handleEditQuestion(q)}
+                        className="px-2.5 py-1 rounded-lg text-xs bg-sky-900/60 text-sky-200 hover:bg-sky-800">
+                        Sửa
+                      </button>
                       <button
                         onClick={() => handleDeleteQuestion(q.id)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
