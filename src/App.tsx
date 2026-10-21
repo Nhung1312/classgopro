@@ -1287,6 +1287,7 @@ export default function App() {
               callCountAfter: activeClass.students.find(s => s.id === student.id)?.callCount ?? 0,
               mode: selectionMode,
               note: `Ô cửa bí mật: ${outcome}`,
+              recordType: 'MYSTERY_DOOR',
               questionContent: question.content,
             };
             // New assessment record only: no new call, no gradebook score.

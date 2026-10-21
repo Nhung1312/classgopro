@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import type { ClassRoom, QuestionItem, Student } from '../../types';
 import { MathRenderer } from '../MathRenderer';
 import { DOOR_COUNTS, markDoorOpened, prepareDoors, type Door } from '../../utils/mysteryDoorSession';
@@ -25,11 +25,14 @@ export const MysteryDoorGame: React.FC<Props> = ({
   const [showAnswer, setShowAnswer] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [rewarded, setRewarded] = useState(false);
+  const recordedRef = useRef(false);
+  const rewardedRef = useRef(false);
 
   // The lesson and classroom are part of the identity of a game session.
   useEffect(() => {
     setDoors([]); setActiveDoor(null); setUsedIds([]); setShowAnswer(false);
     setOutcome(null); setRewarded(false);
+    recordedRef.current = false; rewardedRef.current = false;
   }, [activeClass.id, chapter, lesson, difficulty]);
 
   const questions = useMemo(() => (activeClass.questions || []).filter(q => {
@@ -57,6 +60,7 @@ export const MysteryDoorGame: React.FC<Props> = ({
     if (!newDoors.length) return;
     setDoors(newDoors); setActiveDoor(null); setShowAnswer(false);
     setOutcome(null); setRewarded(false);
+    recordedRef.current = false; rewardedRef.current = false;
   };
   const openDoor = (door: Door) => {
     if (door.opened || activeDoor !== null) return;
@@ -64,13 +68,16 @@ export const MysteryDoorGame: React.FC<Props> = ({
     setUsedIds(before => before.includes(door.question.id) ? before : [...before, door.question.id]);
     setActiveDoor(door.number); setShowAnswer(false);
     setOutcome(null); setRewarded(false);
+    recordedRef.current = false; rewardedRef.current = false;
   };
   const next = () => {
     setActiveDoor(null); setShowAnswer(false); setOutcome(null); setRewarded(false);
+    recordedRef.current = false; rewardedRef.current = false;
     if (!remainingDoors) setDoors([]);
   };
   const evaluate = (decision: 'Đạt' | 'Chưa đạt') => {
-    if (!student || !current || outcome) return;
+    if (!student || !current || outcome || recordedRef.current) return;
+    recordedRef.current = true;
     onRecordOutcome(student, current.question, decision);
     setOutcome(decision);
   };
@@ -125,7 +132,7 @@ export const MysteryDoorGame: React.FC<Props> = ({
               <button disabled={unused < doorCount} onClick={startRound}
                 className="px-5 py-3 rounded-xl bg-amber-500 text-slate-950 font-bold disabled:opacity-40">Bắt đầu</button>
               <button onClick={onEditQuestions} className="px-4 py-3 rounded-xl bg-indigo-700 font-bold">Quản lý câu hỏi</button>
-              {usedIds.length > 0 && <button onClick={() => setUsedIds([])}
+              {usedIds.length > 0 && <button onClick={() => { if (window.confirm('Tạo phiên mới? Câu hỏi đã dùng có thể xuất hiện lại.')) setUsedIds([]); }}
                 className="px-4 py-3 rounded-xl border border-rose-500/60 text-rose-200">Làm mới phiên</button>}
             </div>
           </section>
@@ -164,7 +171,7 @@ export const MysteryDoorGame: React.FC<Props> = ({
                   className="bg-emerald-700 px-4 py-2 rounded-lg font-bold disabled:opacity-50">✓ Đạt</button>
                 <button disabled={Boolean(outcome)} onClick={() => evaluate('Chưa đạt')}
                   className="bg-rose-800 px-4 py-2 rounded-lg font-bold disabled:opacity-50">Chưa đạt</button>
-                <button disabled={rewarded} onClick={() => { onAwardStars(student.id, 1); setRewarded(true); }}
+                <button disabled={rewarded} onClick={() => { if (rewardedRef.current) return; rewardedRef.current = true; onAwardStars(student.id, 1); setRewarded(true); }}
                   className="bg-amber-600 px-4 py-2 rounded-lg font-bold disabled:opacity-50">⭐ +1 sao</button>
               </div>
               {outcome && <p className="text-emerald-300" role="status">Đã ghi nhận: {outcome}</p>}

@@ -82,6 +82,7 @@ export interface HistoryRecord {
   score?: string | number;
   note?: string;
   questionContent?: string;
+  recordType?: 'SPIN' | 'MYSTERY_DOOR';
   starsAwarded?: number;
   assignedTxSlot?: 'tx1' | 'tx2' | 'tx3' | 'tx4' | null;
 }
