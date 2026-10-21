@@ -68,12 +68,14 @@ import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
 import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
 import { applyQuickScoreToStudent, TxColumn } from './utils/quickScoreHelper';
+import { applyMysteryDoorAssessment } from './utils/mysteryDoorAssessment';
 import { undoCompletedSpin } from './utils/undoCompletedSpin';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { TimerWidget } from './components/TimerWidget';
 import { QuestionBankModal } from './components/QuestionBankModal';
+import { MysteryDoorGame } from './components/mystery-door/MysteryDoorGame';
 import { QuickAttendanceModal } from './components/QuickAttendanceModal';
 import { GroupGeneratorModal } from './components/GroupGeneratorModal';
 import { MathQuestionSpotlightModal } from './components/MathQuestionSpotlightModal';
@@ -104,6 +106,8 @@ export default function App() {
   // Classroom Tool States
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [isQuestionBankOpen, setIsQuestionBankOpen] = useState(false);
+  const [isMysteryDoorOpen, setIsMysteryDoorOpen] = useState(false);
+  const [mysteryStudent, setMysteryStudent] = useState<Student | null>(null);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [isGroupsOpen, setIsGroupsOpen] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState<QuestionItem | null>(null);
@@ -1107,6 +1111,7 @@ export default function App() {
             onOpenPresentation={() => setIsPresentationOpen(true)}
             onOpenTimer={() => setIsTimerOpen(true)}
             onOpenQuestions={() => setIsQuestionBankOpen(true)}
+            onOpenMysteryDoor={(student) => { setMysteryStudent(student || null); setIsMysteryDoorOpen(true); }}
             onOpenAttendance={() => setIsAttendanceOpen(true)}
             onOpenGroups={() => setIsGroupsOpen(true)}
             onAwardStars={handleAwardStars}
@@ -1250,6 +1255,11 @@ export default function App() {
         isOpen={isQuestionBankOpen}
         onClose={() => setIsQuestionBankOpen(false)}
         activeSubject={activeClass.subject}
+        activeClassName={activeClass.name}
+        questions={activeClass.questions || []}
+        onUpdateQuestions={(questions) => {
+          handleUpdateClasses(classes.map((cls) => cls.id === activeClass.id ? { ...cls, questions } : cls));
+        }}
         onOpenSpotlight={(q) => {
           setSpotlightQuestion(q);
         }}
@@ -1258,6 +1268,26 @@ export default function App() {
           setIsQuestionBankOpen(false);
         }}
       />
+
+      {isMysteryDoorOpen && (
+        <MysteryDoorGame
+          activeClass={activeClass}
+          student={mysteryStudent ? activeClass.students.find(s => s.id === mysteryStudent.id) || null : null}
+          onClose={() => { setIsMysteryDoorOpen(false); setMysteryStudent(null); }}
+          onEditQuestions={() => { setIsMysteryDoorOpen(false); setMysteryStudent(null); setIsQuestionBankOpen(true); }}
+          onAwardStars={handleAwardStars}
+          onRecordOutcome={(student, question, attemptId, change) => {
+            const result = applyMysteryDoorAssessment({
+              classes, history, classId: activeClass.id,
+              studentId: student.id, question, attemptId, mode: selectionMode, change,
+            });
+            if (!result.saved) return { saved: false, message: result.message };
+            if (result.classes !== classes) handleUpdateClasses(result.classes);
+            handleUpdateHistory(result.history);
+            return { saved: true, message: result.message };
+          }}
+        />
+      )}
 
       {/* Math Spotlight Fullscreen Modal */}
       <MathQuestionSpotlightModal

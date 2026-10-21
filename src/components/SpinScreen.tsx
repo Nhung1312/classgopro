@@ -129,6 +129,7 @@ interface SpinScreenProps {
   onOpenPresentation: () => void;
   onOpenTimer: () => void;
   onOpenQuestions: () => void;
+  onOpenMysteryDoor?: (student?: Student | null) => void;
   onOpenAttendance?: () => void;
   onOpenGroups?: () => void;
   onAwardStars?: (studentId: string, count: number) => void;
@@ -158,6 +159,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   onOpenPresentation,
   onOpenTimer,
   onOpenQuestions,
+  onOpenMysteryDoor,
   onOpenAttendance,
   onOpenGroups,
   onAwardStars,
@@ -824,6 +826,13 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               <span>Câu hỏi (Q)</span>
             </button>
 
+            {onOpenMysteryDoor && (
+              <button type="button" onClick={() => onOpenMysteryDoor(null)} disabled={isSpinning}
+                className="px-3 py-1.5 rounded-xl bg-amber-700/40 text-amber-200 border border-amber-500/40 text-xs font-bold hover:bg-amber-700/70 disabled:opacity-40">
+                🚪 Ô cửa bí mật
+              </button>
+            )}
+
             {/* Algorithm Mode Tag */}
             <div className="flex items-center gap-1.5">
               {selectionMode === 'FAIR' ? (
@@ -1481,6 +1490,13 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               <span>Học sinh vắng mặt (Hủy lượt này)</span>
             </button>
           </div>
+
+          {onOpenMysteryDoor && resolvedSelectedStudents.length === 1 && (
+            <button type="button" onClick={() => onOpenMysteryDoor(resolvedSelectedStudents[0])}
+              className="rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 text-sm font-bold px-4 py-2">
+              🚪 Kiểm tra bài cũ bằng Ô cửa bí mật — {resolvedSelectedStudents[0].name}
+            </button>
+          )}
 
           {/* Quick Score Buttons & Star Rewards */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-700/50">

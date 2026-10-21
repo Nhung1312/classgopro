@@ -8,7 +8,7 @@ export function undoCompletedSpin(
   selectedStudentIds?: string[],
 ): { classes: ClassRoom[]; history: HistoryRecord[] } | null {
   const anchor = history.find((entry) => entry.id === recordId);
-  if (!anchor) return null;
+  if (!anchor || anchor.recordType === 'MYSTERY_DOOR') return null;
 
   const studentIds = new Set(selectedStudentIds?.length ? selectedStudentIds : [anchor.studentId]);
   if (!studentIds.has(anchor.studentId)) return null;
@@ -16,6 +16,7 @@ export function undoCompletedSpin(
   // Every record from one multi-pick shares the same timestamp and class.
   // Never undo another student's older (or newer) call.
   const records = history.filter((entry) =>
+    entry.recordType !== 'MYSTERY_DOOR' &&
     entry.classId === anchor.classId &&
     entry.timestamp === anchor.timestamp &&
     studentIds.has(entry.studentId)

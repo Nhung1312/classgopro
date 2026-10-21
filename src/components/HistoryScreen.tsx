@@ -46,7 +46,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
       'Lớp': h.className,
       'Họ và tên học sinh': h.studentName,
       'Số lần lên bảng': h.callCountAfter,
-      'Chế độ quay': h.mode === 'FAIR' ? 'Công bằng' : 'Hoàn toàn',
+      'Hoạt động': h.recordType === 'MYSTERY_DOOR' ? 'Đánh giá ô cửa' : 'Gọi tên',
+      'Chế độ quay': h.recordType === 'MYSTERY_DOOR' ? '' : h.mode === 'FAIR' ? 'Công bằng' : 'Hoàn toàn',
+      'Câu hỏi': h.questionContent || '',
       'Điểm số': h.score || '',
       'Ghi chú': h.note || '',
     }));
@@ -173,11 +175,13 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/40">
-                        Lần {item.callCountAfter}
+                        {item.recordType === 'MYSTERY_DOOR' ? 'Đánh giá' : `Lần ${item.callCountAfter}`}
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-center">
-                      {item.mode === 'FAIR' ? (
+                      {item.recordType === 'MYSTERY_DOOR' ? (
+                        <span className="text-sky-300 text-xs">🚪 Ô cửa</span>
+                      ) : item.mode === 'FAIR' ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
                           <Scale className="w-3 h-3" /> Công bằng
                         </span>

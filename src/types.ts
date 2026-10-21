@@ -27,6 +27,11 @@ export interface QuestionItem {
   suggestedAnswer?: string;
   imageUrl?: string; // Optional image URL or base64 screenshot
   hint?: string; // Optional hint for students
+  grade?: string; // School grade of review question
+  semester?: string; // Semester of review question
+  chapter?: string; // Chapter of review question
+  lesson?: string; // Lesson of review question
+  reviewLevel?: 'basic' | 'advanced'; // Distinguishes review difficulty
 }
 
 export interface TimetableSlot {
@@ -77,6 +82,7 @@ export interface HistoryRecord {
   score?: string | number;
   note?: string;
   questionContent?: string;
+  recordType?: 'SPIN' | 'MYSTERY_DOOR';
   starsAwarded?: number;
   assignedTxSlot?: 'tx1' | 'tx2' | 'tx3' | 'tx4' | null;
 }
