@@ -94,6 +94,43 @@ try {
   await page.getByRole('button', { name: 'Mẫu PPCT (.xlsx)', exact: true }).click();
   const template = await templateDownload;
   assert.deepEqual(XLSX.read(await readFile(await template.path()), { type: 'buffer' }).SheetNames, ['PPCT', 'VI_DU_KHONG_NHAP', 'HUONG_DAN']);
+  // Regression: preserve imported A/B/C/D keys; unresolved answers need an explicit teacher choice.
+  await page.evaluate(() => {
+    const bank = { id: 'qa-answer-bank', ownerId: 'local_teacher', subject: 'Toán', grade: '7',
+      lessonId: 'qa-answer-lesson', lessonName: 'QA kiểm tra đáp án', sectionName: 'QA',
+      createdAt: '2026-10-26', updatedAt: '2026-10-26' };
+    const answers = ['A', 'Đáp án đúng: B', 'Chọn phương án C', 'D)', 'Chưa rõ', 'A hoặc B'];
+    const questions = answers.map((answer, i) => ({ id: `qa-key-${i}`, bankId: bank.id, level: 'basic', source: 'manual',
+      question: `Câu kiểm tra ${i + 1}?\nA. Một\nB. Hai\nC. Ba\nD. Bốn`, answer }));
+    localStorage.setItem('classgo_review_banks_v1_local_teacher', JSON.stringify([bank]));
+    localStorage.setItem('classgo_review_questions_v1_local_teacher', JSON.stringify(questions));
+  });
+  await page.getByRole('button', { name: 'Thẻ Trả Lời', exact: true }).click();
+  await page.getByRole('button', { name: /2\./ }).click();
+  await page.getByRole('button', { name: 'Tạo Bài Kiểm Tra Mới', exact: true }).click();
+  await page.getByRole('button', { name: 'Chế độ B: Lấy từ Kho KT bài cũ', exact: true }).click();
+  for (let i = 1; i <= 6; i++) await page.getByRole('checkbox', { name: `Chọn câu hỏi ${i} từ kho`, exact: true }).check();
+  await page.getByRole('button', { name: 'Lấy vào phiên (6)', exact: true }).click();
+  for (const [idx, key] of ['A', 'B', 'C', 'D'].entries()) {
+    const group = page.getByRole('group', { name: `Đáp án đúng câu ${idx + 1}`, exact: true });
+    await expect(group.getByRole('button', { name: `Câu ${idx + 1}: chọn đáp án ${key}`, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  }
+  for (const idx of [5, 6]) {
+    const group = page.getByRole('group', { name: `Đáp án đúng câu ${idx}`, exact: true });
+    assert.equal(await group.locator('[aria-pressed="true"]').count(), 0, 'unresolved answer must not default to A');
+  }
+  const startQuiz = page.getByRole('button', { name: 'BẮT ĐẦU BUỔI KIỂM TRA', exact: true });
+  await expect(startQuiz).toBeDisabled();
+  await page.getByRole('button', { name: 'Câu 5: chọn đáp án D', exact: true }).click();
+  await expect(startQuiz).toBeDisabled();
+  await page.getByRole('button', { name: 'Câu 6: chọn đáp án B', exact: true }).click();
+  await expect(startQuiz).toBeEnabled();
+  await startQuiz.click();
+  const importedQuiz = await page.evaluate(() => JSON.parse(localStorage.getItem('classgo_response_card_sessions_v1')).find(s => s.questions.length === 6));
+  assert.ok(importedQuiz);
+  assert.deepEqual(importedQuiz.questions.map(q => q.correctAnswer), ['A', 'B', 'C', 'D', 'D', 'B']);
+  assert.equal(importedQuiz.questions[1].options.B, 'Hai');
+  console.log('PASS: browser bank import preserves A/B/C/D; unknown/ambiguous keys stay unselected and block the quiz until each teacher choice is saved.');
   assert.deepEqual(errors, []);
   console.log('PASS: browser navigation, actual PDF/Excel/template downloads, spin counter, legacy-bank mystery assessment, history-only/TX confirmation, zero protection and star deduplication.');
   console.log(`External requests blocked: ${externalRequests.length}. No Firebase/Gemini request allowed.`);

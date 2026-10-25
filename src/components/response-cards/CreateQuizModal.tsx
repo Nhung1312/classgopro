@@ -18,6 +18,7 @@ import { ClassRoom } from '../../types';
 import { QuizQuestionItem, CardOrientationAnswer, QuizSession } from '../../types/responseCardTypes';
 import { createNewQuizSession } from '../../services/responseCardStorage';
 import { loadQuestionBanks, loadQuestionsForBank } from '../../services/reviewQuestionService';
+import { parseBankQuizQuestion, isReadyQuizQuestion, type QuizQuestionDraft } from './questionBankImport';
 
 interface CreateQuizModalProps {
   isOpen: boolean;
@@ -69,7 +70,9 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
     `Kiểm tra ${currentClass.subject || 'Toán'} - Lớp ${currentClass.name}`
   );
   const [creationMode, setCreationMode] = useState<'quick' | 'bank'>('quick');
-  const [questionsList, setQuestionsList] = useState<QuizQuestionItem[]>([]);
+  const [questionsList, setQuestionsList] = useState<QuizQuestionDraft[]>([]);
+
+  const unresolvedCount = questionsList.filter(q => !isReadyQuizQuestion(q)).length;
 
   // Update sessionTitle when class or subject changes if using default title
   const handleSubjectChange = (newSubject: string) => {
@@ -189,53 +192,29 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
     const matchedBank = questionBanks.find((b) => b.id === selectedBankId);
     const chosen = bankQuestions.filter((q) => selectedBankQuestionIds.has(q.id));
 
-    const converted: QuizQuestionItem[] = chosen.map((q, idx) => {
-      // Intelligently parse A. B. C. D. if present in bank question content
-      const regex = /(?:^|\n|\s)(?:A[\.\)]\s*)([\s\S]*?)(?:B[\.\)]\s*)([\s\S]*?)(?:C[\.\)]\s*)([\s\S]*?)(?:D[\.\)]\s*)([\s\S]*?)$/i;
-      const match = q.question.match(regex);
-
-      let parsedQuestion = q.question;
-      let parsedOptions = {
-        A: q.answer || 'Đáp án chính xác',
-        B: 'Phương án B',
-        C: 'Phương án C',
-        D: 'Phương án D',
-      };
-      let parsedCorrect: CardOrientationAnswer = 'A';
-
-      if (match) {
-        parsedQuestion = q.question.slice(0, match.index).trim() || q.question;
-        parsedOptions = {
-          A: match[1].trim() || 'Phương án A',
-          B: match[2].trim() || 'Phương án B',
-          C: match[3].trim() || 'Phương án C',
-          D: match[4].trim() || 'Phương án D',
-        };
-
-        const ansUpper = (q.answer || '').trim().toUpperCase();
-        if (ansUpper === 'B' || ansUpper.startsWith('B.') || ansUpper.startsWith('B:') || ansUpper === parsedOptions.B.toUpperCase()) {
-          parsedCorrect = 'B';
-        } else if (ansUpper === 'C' || ansUpper.startsWith('C.') || ansUpper.startsWith('C:') || ansUpper === parsedOptions.C.toUpperCase()) {
-          parsedCorrect = 'C';
-        } else if (ansUpper === 'D' || ansUpper.startsWith('D.') || ansUpper.startsWith('D:') || ansUpper === parsedOptions.D.toUpperCase()) {
-          parsedCorrect = 'D';
-        } else {
-          parsedCorrect = 'A';
-        }
+    const converted: QuizQuestionDraft[] = [];
+    const skipped: number[] = [];
+    chosen.forEach((q, idx) => {
+      const parsed = parseBankQuizQuestion(q.question, q.answer || '');
+      if (!parsed) {
+        skipped.push(idx + 1);
+        return;
       }
-
-      return {
+      converted.push({
         id: `bank-q-${Date.now()}-${idx}-${q.id}`,
-        question: parsedQuestion,
-        options: parsedOptions,
-        correctAnswer: parsedCorrect,
+        ...parsed,
+        explanation: q.answer || undefined,
         subject: matchedBank?.subject,
         grade: matchedBank?.grade,
         chapter: matchedBank?.sectionName,
         lesson: matchedBank?.lessonName,
         level: q.level,
-      };
+      });
     });
+    if (skipped.length) {
+      alert(`Chưa nhập câu ${skipped.join(', ')} trong nhóm đã chọn vì chưa đọc đủ 4 phương án A–D. Thầy cô dùng chế độ Soạn câu hỏi nhanh để bổ sung trước khi sử dụng.`);
+    }
+    if (!converted.length) return;
 
     setQuestionsList([...questionsList, ...converted]);
     setSelectedBankQuestionIds(new Set());
@@ -266,8 +245,13 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
       return;
     }
 
+    const readyQuestions = questionsList.filter(isReadyQuizQuestion);
+    if (readyQuestions.length !== questionsList.length) {
+      alert('Thầy cô cần chọn đáp án đúng A, B, C hoặc D cho tất cả câu hỏi trước khi bắt đầu.');
+      return;
+    }
     try {
-      const session = createNewQuizSession(currentClass, sessionTitle, questionsList, selectedSubject);
+      const session = createNewQuizSession(currentClass, sessionTitle, readyQuestions, selectedSubject);
       onSessionCreated(session);
       onClose();
     } catch (error) { alert(error instanceof Error ? error.message : 'Không lưu được phiên kiểm tra.'); }
@@ -564,6 +548,7 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
                       >
                         <input
                           type="checkbox"
+                          aria-label={`Chọn câu hỏi ${idx + 1} từ kho`}
                           checked={isChecked}
                           onChange={() => {}} // handled by parent onClick
                           className="w-4 h-4 rounded text-amber-500 focus:ring-0 bg-slate-800 border-slate-700 mt-0.5"
@@ -640,6 +625,22 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
                           </div>
                         ))}
                       </div>
+                      {q.correctAnswer === null && (
+                        <p role="alert" className="text-xs font-semibold text-amber-300">
+                          Chưa xác định được đáp án đúng. Thầy cô chọn A, B, C hoặc D trước khi sử dụng câu này.
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Đáp án đúng câu ${idx + 1}`}>
+                        <span className="text-xs text-slate-300">Đáp án đúng:</span>
+                        {(['A', 'B', 'C', 'D'] as const).map(opt => (
+                          <button key={opt} type="button" aria-label={`Câu ${idx + 1}: chọn đáp án ${opt}`}
+                            aria-pressed={q.correctAnswer === opt}
+                            onClick={() => setQuestionsList(previous => previous.map(item => item.id === q.id ? { ...item, correctAnswer: opt } : item))}
+                            className={`w-8 h-8 rounded-lg font-bold text-xs ${q.correctAnswer === opt ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -682,6 +683,7 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
           <div className="text-xs text-slate-400">
             Tổng cộng: <strong className="text-amber-300">{questionsList.length} câu hỏi</strong> cho lớp{' '}
             <strong className="text-white">{currentClass.name}</strong>
+            {unresolvedCount > 0 && <p className="mt-1 text-amber-300">Còn {unresolvedCount} câu cần giáo viên chọn đáp án đúng.</p>}
           </div>
 
           <div className="flex items-center gap-2">
@@ -695,7 +697,7 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
             <button
               type="button"
               onClick={handleStartSession}
-              disabled={questionsList.length === 0}
+              disabled={questionsList.length === 0 || unresolvedCount > 0}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-black text-xs sm:text-sm shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all hover:scale-102 cursor-pointer"
             >
               <ArrowRight className="w-4 h-4" />
