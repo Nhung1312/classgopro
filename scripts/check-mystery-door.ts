@@ -1,0 +1,18 @@
+import { strict as assert } from 'node:assert';
+import type { QuestionItem } from '../src/types';
+import { markDoorOpened, prepareDoors } from '../src/utils/mysteryDoorSession';
+const q = (id: string): QuestionItem => ({ id, content: `Câu ${id}` });
+const questions = Array.from({ length: 12 }, (_, i) => q(String(i)));
+const first = prepareDoors(questions, 4, [], () => 0.5);
+assert.equal(first.length, 4);
+assert.equal(new Set(first.map(d => d.question.id)).size, 4);
+assert.deepEqual(first.map(d => d.number), [1, 2, 3, 4]);
+const opened = markDoorOpened(first, 2);
+assert.equal(opened.find(d => d.number === 2)?.opened, true);
+assert.equal(first.find(d => d.number === 2)?.opened, false);
+assert.equal(prepareDoors(questions, 10, first.map(d => d.question.id)).length, 0);
+const second = prepareDoors(questions, 8, first.map(d => d.question.id), () => 0.3);
+assert.equal(second.length, 8);
+assert.equal(second.some(d => first.some(f => f.question.id === d.question.id)), false);
+assert.equal(prepareDoors([q('1'), q('1'), q('2')], 4, []).length, 0);
+console.log('Mystery door session checks passed');

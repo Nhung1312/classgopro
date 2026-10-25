@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   AppTab,
   ClassRoom,
@@ -68,6 +68,12 @@ import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
 import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
 import { applyQuickScoreToStudent, TxColumn } from './utils/quickScoreHelper';
+import { applyMysteryDoorAssessment } from './utils/mysteryDoorAssessment';
+import { transferHistoryScoreToTx } from './utils/safeReviewTx';
+import { ReviewQuestionBankScreen } from './components/ReviewQuestionBankScreen';
+import { setResponseCardOwner } from './services/responseCardStorage';
+import { ResponseCardsBoundary } from './components/response-cards/ResponseCardsBoundary';
+import { ResponseCardsScreen } from './components/response-cards/ResponseCardsScreen';
 import { undoCompletedSpin } from './utils/undoCompletedSpin';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
@@ -682,7 +688,7 @@ export default function App() {
             if (targetIds.has(s.id)) {
               // Find if this student has an existing turn slot in recent history
               const matchingHist = history.find(
-                (h) => h.studentId === s.id && h.classId === activeClass.id
+                (h) => (!h.recordType || h.recordType === 'SPIN') && h.studentId === s.id && h.classId === activeClass.id
               );
               const existingSlot = matchingHist?.assignedTxSlot;
 
@@ -705,7 +711,7 @@ export default function App() {
 
       targetStudents.forEach((st) => {
         const histIndex = updatedHistory.findIndex(
-          (h) => h.studentId === st.id && h.classId === activeClass.id
+          (h) => (!h.recordType || h.recordType === 'SPIN') && h.studentId === st.id && h.classId === activeClass.id
         );
         const assignedSlot = assignedSlotsMap.get(st.id) ?? null;
 
@@ -743,6 +749,39 @@ export default function App() {
     },
     [activeClass, classes, history, handleUpdateClasses, handleUpdateHistory]
   );
+
+  // Synchronous snapshots prevent double-clicks from using stale React closures.
+  const reviewStateRef = useRef({ classes, history });
+  reviewStateRef.current = { classes, history };
+  const handleMysteryAssessment = (studentId: string, classId: string, questionContent: string,
+    attemptId: string, score?: string, slot?: TxColumn, note?: string, awardStar?: boolean) => {
+    const state = reviewStateRef.current;
+    const change = awardStar ? { stars: 1 } : score === 'Đạt' || score === 'Chưa đạt'
+      ? { outcome: score as 'Đạt' | 'Chưa đạt', note }
+      : { score: Number((score || '').replace(',', '.')), saveToGradebook: !!slot, note };
+    if (!awardStar && !score?.trim()) return false;
+    const existing = state.history.find(h => h.id === attemptId);
+    if (slot && existing?.score !== undefined) {
+      if (String(existing.score) !== String(change.score)) return false;
+      return handleSaveTxScore(studentId, classId, Number(existing.score), slot, note, questionContent, attemptId);
+    }
+    const result = applyMysteryDoorAssessment({ ...state, classId, studentId,
+      question: { id: attemptId, content: questionContent }, attemptId, mode: selectionMode, change });
+    if (!result.saved) return false;
+    reviewStateRef.current = { classes: result.classes, history: result.history };
+    if (result.classes !== state.classes) handleUpdateClasses(result.classes);
+    handleUpdateHistory(result.history);
+    return true;
+  };
+  const handleSaveTxScore = (studentId: string, classId: string, score: number, slot: TxColumn,
+    note?: string, questionContent?: string, recordId?: string) => {
+    const result = transferHistoryScoreToTx({ ...reviewStateRef.current, studentId, classId, score, slot, recordId });
+    if (!result.saved) return false;
+    reviewStateRef.current = { classes: result.classes, history: result.history };
+    handleUpdateClasses(result.classes);
+    handleUpdateHistory(result.history);
+    return true;
+  };
 
   // Undo one completed spin, or all students in a multi-pick round.
   const handleUndoLastSelection = useCallback(
@@ -1035,6 +1074,7 @@ export default function App() {
     return false;
   }, [handleSyncDisciplineRecords]);
 
+  setResponseCardOwner(currentUser?.uid);
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
       {/* Top Navigation */}
@@ -1120,8 +1160,17 @@ export default function App() {
             onUndoDisciplineRecord={handleUndoDisciplineRecord}
             disciplineRecords={disciplineRecords}
             disciplineViolationTypes={violationTypes}
+            currentUser={currentUser}
+            onMysteryAssessment={handleMysteryAssessment}
+            onNavigateToReviewBank={() => setCurrentTab('REVIEW_BANK')}
           />
         )}
+
+        {currentTab === 'REVIEW_BANK' && <ReviewQuestionBankScreen currentUser={currentUser} />}
+        {currentTab === 'RESPONSE_CARDS' && <ResponseCardsBoundary key={(currentUser?.uid || 'local_teacher') + activeClassId}><ResponseCardsScreen classes={classes}
+          activeClassId={activeClassId} onSelectClass={handleSelectClass}
+          onUpdateClasses={handleUpdateClasses} currentUser={currentUser}
+          history={history} onUpdateHistory={handleUpdateHistory} /></ResponseCardsBoundary>}
 
         {currentTab === 'TIMETABLE' && (
           <TimetableScreen
@@ -1197,6 +1246,7 @@ export default function App() {
             history={history}
             classes={classes}
             onClearHistory={() => handleUpdateHistory([])}
+            onSaveTxScore={handleSaveTxScore}
           />
         )}
 
@@ -1250,6 +1300,9 @@ export default function App() {
         isOpen={isQuestionBankOpen}
         onClose={() => setIsQuestionBankOpen(false)}
         activeSubject={activeClass.subject}
+        activeClassName={activeClass.name}
+        questions={activeClass.questions || []}
+        onUpdateQuestions={(questions) => handleUpdateClasses(classes.map(c => c.id === activeClass.id ? { ...c, questions } : c))}
         onOpenSpotlight={(q) => {
           setSpotlightQuestion(q);
         }}
