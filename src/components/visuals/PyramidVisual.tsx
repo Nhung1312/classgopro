@@ -102,23 +102,20 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
     }
   }, [isSpinning, hasCompleted, duration]);
 
-  // Layout NEVER depends on winner identity. The apex is no longer guaranteed to win.
-  // Choosing winners stays in SpinScreen/fairAlgorithm; this component only animates.
-  const { tiers, blocks } = useMemo(() => {
-    const winnerIds = new Set<string>(activeWinners.map((w: Student) => w.id));
+  // Fixed positions independent of the winner: nobody is pre-selected at the apex.
+  const { tiers, blocks, winnerBlock } = useMemo(() => {
+    const winnerIds = new Set<string>(activeWinners.map((w) => w.id));
     const layout = buildPyramidLayout(students || [], winnerIds);
+    const allBlocks: PyramidBlock[] = layout.blocks.map((slot) => ({
+      ...slot,
+      stt: getStudentSTT(slot.student, allClassStudents || students),
+      initials: getStudentInitials(slot.student.name),
+      gradient: getStudentAvatarGradient(slot.student.id || slot.student.name),
+    }));
     return {
       tiers: layout.tiers,
-      blocks: layout.blocks.map(({ student, tierIndex, colIndex, isWinner, elimProgress }): PyramidBlock => ({
-        student,
-        tierIndex,
-        colIndex,
-        isWinner,
-        elimProgress,
-        stt: getStudentSTT(student, allClassStudents || students),
-        initials: getStudentInitials(student.name),
-        gradient: getStudentAvatarGradient(student.id || student.name),
-      })),
+      blocks: allBlocks,
+      winnerBlock: allBlocks.find((block) => block.isWinner) || null,
     };
   }, [students, activeWinners, allClassStudents]);
 
@@ -165,11 +162,11 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
   // Live count of surviving blocks during spin
   const survivingCount = useMemo(() => {
     if (!isSpinning && !hasCompleted) return blocks.length;
-    if (hasCompleted) return activeWinners.length;
+    if (hasCompleted) return activeWinners.length || 1;
     return blocks.filter((b) => b.isWinner || animProgress < b.elimProgress + 0.05).length;
   }, [blocks, isSpinning, hasCompleted, animProgress, activeWinners.length]);
 
-  const primaryWinner = activeWinners[0] || null;
+  const primaryWinner = activeWinners[0] || (winnerBlock ? winnerBlock.student : null);
   const primarySTT = primaryWinner ? getStudentSTT(primaryWinner, allClassStudents || students) : 1;
   const primaryInitials = primaryWinner ? getStudentInitials(primaryWinner.name) : 'HS';
   const primaryGradient = primaryWinner
@@ -431,7 +428,6 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
                       !isWinner &&
                       animProgress >= blk.elimProgress &&
                       animProgress < blk.elimProgress + 0.05;
-                    // Keep the winner visually ordinary until the final reveal.
                     const isSurvivingWinner =
                       isWinner && (hasCompleted || (isSpinning && animProgress >= 0.92));
 
@@ -519,7 +515,7 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
           </span>
         </span>
         <span className="hidden sm:inline text-amber-300/60">
-          Các khối sẽ tiêu biến dần • Bất kỳ vị trí nào cũng có thể chiến thắng
+          Các khối sẽ tiêu biến dần • Khối trên đỉnh cao là người chiến thắng
         </span>
       </div>
     </div>

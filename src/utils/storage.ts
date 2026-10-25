@@ -1,11 +1,9 @@
-import { ClassRoom, HistoryRecord, SelectionMode, SpinSettings, TimetableSlot, TeachingPlanItem } from '../types';
+import { ClassRoom, HistoryRecord, SelectionMode, SpinSettings, TimetableSlot, TeachingPlanItem, DayOffItem, PpctItem, ScheduleGenerationConfig } from '../types';
 import { INITIAL_CLASSES } from './sampleData';
 import { INITIAL_TIMETABLE_SLOTS, INITIAL_TEACHING_PLAN } from './sampleTimetable';
 import {
   loadDisciplineRecords,
   saveDisciplineRecords,
-  loadDeletedDisciplineIds,
-  saveDeletedDisciplineIds,
   loadViolationTypes,
   saveViolationTypes,
 } from '../services/disciplineService';
@@ -18,6 +16,9 @@ const STORAGE_KEYS = {
   SELECTION_MODE: 'classgo_mode_v1',
   TIMETABLE: 'classgo_timetable_v1',
   TEACHING_PLAN: 'classgo_teaching_plan_v1',
+  DAY_OFFS: 'classgo_day_offs_v1',
+  PPCT_ITEMS: 'classgo_ppct_items_v1',
+  SCHEDULE_CONFIG: 'classgo_schedule_config_v1',
   SAFETY_BACKUP: 'classgo_safety_backup_v1',
   RECOVERY_CLASSES: 'classgo_recovery_real_classes_v1',
   LAST_LOCAL_UPDATE: 'classgo_last_local_update_v1',
@@ -276,6 +277,87 @@ export function saveTeachingPlan(plan: TeachingPlanItem[]) {
   }
 }
 
+export const DEFAULT_DAY_OFFS: DayOffItem[] = [
+  { id: 'do-1', date: '2026-09-02', reason: 'Nghỉ Lễ Quốc Khánh 2/9', allDay: true, classId: 'ALL' },
+  { id: 'do-2', date: '2027-01-01', reason: 'Nghỉ Tết Dương Lịch', allDay: true, classId: 'ALL' },
+  { id: 'do-3', date: '2027-02-06', reason: 'Nghỉ Tết Nguyên Đán (Ất Tỵ - Bính Ngọ)', allDay: true, classId: 'ALL' },
+];
+
+export const DEFAULT_SCHEDULE_CONFIG: ScheduleGenerationConfig = {
+  startDate: '2026-09-07', // Thứ Hai tuần 1 năm học 2026-2027
+  totalWeeks: 18,
+  semester: '1',
+  preserveCompleted: true,
+};
+
+export function loadDayOffs(): DayOffItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DAY_OFFS);
+    if (!raw) {
+      saveDayOffs(DEFAULT_DAY_OFFS);
+      return DEFAULT_DAY_OFFS;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // Đảm bảo không tự động đánh dấu 20/11 là ngày nghỉ
+      const cleaned = parsed.filter((d: DayOffItem) => !(d.date?.includes('-11-20') && /nhà giáo|20\/11/i.test(d.reason || '')));
+      return cleaned;
+    }
+  } catch (err) {
+    console.error('Failed to load day offs:', err);
+  }
+  return DEFAULT_DAY_OFFS;
+}
+
+export function saveDayOffs(items: DayOffItem[]) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DAY_OFFS, JSON.stringify(items));
+  } catch (err) {
+    console.error('Failed to save day offs:', err);
+  }
+}
+
+export function loadPpctItems(): PpctItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PPCT_ITEMS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.error('Failed to load ppct items:', err);
+  }
+  return [];
+}
+
+export function savePpctItems(items: PpctItem[]) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PPCT_ITEMS, JSON.stringify(items));
+  } catch (err) {
+    console.error('Failed to save ppct items:', err);
+  }
+}
+
+export function loadScheduleConfig(): ScheduleGenerationConfig {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SCHEDULE_CONFIG);
+    if (raw) {
+      return { ...DEFAULT_SCHEDULE_CONFIG, ...JSON.parse(raw) };
+    }
+  } catch (err) {
+    console.error('Failed to load schedule config:', err);
+  }
+  return DEFAULT_SCHEDULE_CONFIG;
+}
+
+export function saveScheduleConfig(config: ScheduleGenerationConfig) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SCHEDULE_CONFIG, JSON.stringify(config));
+  } catch (err) {
+    console.error('Failed to save schedule config:', err);
+  }
+}
+
 export function exportBackupJSON(): string {
   const data = {
     appName: 'ClassGo',
@@ -287,7 +369,6 @@ export function exportBackupJSON(): string {
     timetable: loadTimetable(),
     teachingPlan: loadTeachingPlan(),
     disciplineRecords: loadDisciplineRecords(),
-    disciplineDeletedRecordIds: loadDeletedDisciplineIds(),
     disciplineViolationTypes: loadViolationTypes(),
   };
   return JSON.stringify(data, null, 2);
@@ -312,9 +393,6 @@ export function importBackupJSON(jsonStr: string): boolean {
       }
       if (data.disciplineRecords && Array.isArray(data.disciplineRecords)) {
         saveDisciplineRecords(data.disciplineRecords);
-      }
-      if (data.disciplineDeletedRecordIds && Array.isArray(data.disciplineDeletedRecordIds)) {
-        saveDeletedDisciplineIds([...loadDeletedDisciplineIds(), ...data.disciplineDeletedRecordIds]);
       }
       if (data.disciplineViolationTypes && Array.isArray(data.disciplineViolationTypes)) {
         saveViolationTypes(data.disciplineViolationTypes);
@@ -429,7 +507,6 @@ export function createSafetyBackup(): void {
       timetable: loadTimetable(),
       teachingPlan: loadTeachingPlan(),
       disciplineRecords: loadDisciplineRecords(),
-      disciplineDeletedRecordIds: loadDeletedDisciplineIds(),
       disciplineViolationTypes: loadViolationTypes(),
     };
     localStorage.setItem(STORAGE_KEYS.SAFETY_BACKUP, JSON.stringify(backup));
@@ -462,9 +539,6 @@ export function restoreSafetyBackup(): boolean {
       if (backup.timetable) saveTimetable(backup.timetable);
       if (backup.teachingPlan) saveTeachingPlan(backup.teachingPlan);
       if (backup.disciplineRecords) saveDisciplineRecords(backup.disciplineRecords);
-      if (backup.disciplineDeletedRecordIds) {
-        saveDeletedDisciplineIds([...loadDeletedDisciplineIds(), ...backup.disciplineDeletedRecordIds]);
-      }
       if (backup.disciplineViolationTypes) saveViolationTypes(backup.disciplineViolationTypes);
       return true;
     }

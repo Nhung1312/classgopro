@@ -1,3 +1,4 @@
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import React, { useState } from 'react';
 import {
   UserCheck,
@@ -12,7 +13,6 @@ import {
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { soundEngine } from '../utils/audio';
-import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 interface QuickAttendanceModalProps {
   isOpen: boolean;
@@ -59,7 +59,8 @@ export const QuickAttendanceModal: React.FC<QuickAttendanceModalProps> = ({
 
   // Filter list
   const filteredStudents = students.filter((s) => {
-    const matchSearch = matchesVietnameseSearch(searchTerm, s.name, s.studentCode);
+    const matchSearch =
+      matchesVietnameseSearch(searchTerm, s.name, s.studentCode);
     if (!matchSearch) return false;
 
     if (filterMode === 'PRESENT') return !s.isAbsent;

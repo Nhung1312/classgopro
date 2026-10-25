@@ -214,8 +214,6 @@ export async function saveUserDataToFirestore(
   }
 }
 
-
-/** Atomic, additive nề nếp sync, independent of classes/grades and their timestamps. */
 export async function reconcileDisciplineRecordsWithFirestore(
   userId: string, local: DisciplineSyncState,
 ): Promise<DisciplineSyncState> {

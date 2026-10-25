@@ -1,3 +1,4 @@
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   FileSpreadsheet,
@@ -35,7 +36,6 @@ import {
 import { AutoCommentRulesModal } from './AutoCommentRulesModal';
 import { StudentProfileCard } from './StudentProfileCard';
 import { soundEngine } from '../utils/audio';
-import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 const GRADEBOOK_SUBJECT_OPTIONS = [
   'Giáo dục địa phương',

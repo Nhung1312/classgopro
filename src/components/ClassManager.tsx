@@ -1,3 +1,4 @@
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import React, { useState } from 'react';
 import {
   Plus,
@@ -17,7 +18,6 @@ import {
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { soundEngine } from '../utils/audio';
-import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import { isSampleClasses } from '../utils/storage';
 import { StudentInfoModal } from './StudentInfoModal';
 

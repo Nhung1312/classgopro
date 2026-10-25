@@ -47,9 +47,46 @@ export interface TeachingPlanItem {
   className: string;
   periodNumber: number; // Tiết theo phân phối chương trình (VD: Tiết 14)
   lessonTitle: string; // Tên bài học
-  date?: string;
+  date?: string; // e.g. "15/09/2025"
+  dayOfWeek?: 2 | 3 | 4 | 5 | 6 | 7; // Thứ 2 - Thứ 7
+  period?: number; // Tiết 1 - 10
+  session?: 'Sáng' | 'Chiều';
+  subject?: string;
+  room?: string;
   isCompleted?: boolean;
   notes?: string;
+  isOffDay?: boolean; // Đánh dấu nếu là tiết nghỉ được ghi nhận
+  offReason?: string; // Lý do nghỉ (nếu có)
+  isMakeup?: boolean; // Đánh dấu nếu là tiết dạy bù
+  makeupReason?: string; // Lý do dạy bù (bù cho tiết nào, ngày nào)
+  makeupOriginalDate?: string; // Ngày của tiết bị nghỉ cần bù (nếu có)
+}
+
+export interface PpctItem {
+  id: string;
+  periodNumber: number; // 1, 2, 3...
+  lessonTitle: string; // Tên bài dạy
+  grade?: string; // '6', '7', '8', '9', '10', '11', '12'
+  classId?: string; // Nếu gán riêng cho lớp cụ thể
+  subject?: string; // 'Toán học'
+  semester?: '1' | '2' | 'ALL';
+  notes?: string;
+}
+
+export interface DayOffItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  reason: string; // Tên ngày nghỉ: "Nghỉ lễ 2/9", "Nghỉ Tết", "Nghỉ bão"...
+  allDay: boolean; // true = nghỉ cả ngày
+  periods?: number[]; // [1, 2...] nếu chỉ nghỉ một số tiết cụ thể
+  classId?: string; // 'ALL' hoặc classId cụ thể
+}
+
+export interface ScheduleGenerationConfig {
+  startDate: string; // YYYY-MM-DD (Thứ Hai tuần 1)
+  totalWeeks: number; // 18 hoặc 35
+  semester: '1' | '2';
+  preserveCompleted: boolean; // Bảo toàn các tiết đã đánh dấu hoàn thành
 }
 
 export interface ClassRoom {
@@ -81,7 +118,67 @@ export interface HistoryRecord {
   assignedTxSlot?: 'tx1' | 'tx2' | 'tx3' | 'tx4' | null;
 }
 
-export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'DISCIPLINE' | 'CLASSES' | 'IMPORT' | 'STATS' | 'HISTORY' | 'SETTINGS';
+export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'DISCIPLINE' | 'CLASSES' | 'IMPORT' | 'STATS' | 'HISTORY' | 'SETTINGS' | 'REVIEW_BANK' | 'RESPONSE_CARDS';
+
+export type ReviewQuestionLevel = 'basic' | 'advanced';
+
+export type ReviewQuestionSource = 'builtin' | 'manual' | 'import' | 'ai' | 'community';
+
+export interface ReviewQuestion {
+  id: string;
+  bankId: string;
+
+  question: string;
+  answer: string;
+
+  level: ReviewQuestionLevel;
+  source: ReviewQuestionSource;
+
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ReviewQuestionBank {
+  id: string;
+
+  ownerId?: string;
+
+  subject: string;
+  grade: string;
+  semester?: string;
+
+  sectionId?: string;
+  sectionName?: string;
+
+  lessonId: string;
+  lessonName: string;
+
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ReviewSessionState {
+  lessonId: string;
+  bankId: string;
+  usedQuestionIds: string[];
+}
+
+export interface ClassGoJsonQuestionBankImport {
+  version: number;
+  type: 'classgo_review_question_bank';
+  subject: string;
+  grade: string;
+  semester?: string;
+  sectionName?: string;
+  lessonId: string;
+  lessonName: string;
+  questions: Array<{
+    id: string;
+    level: ReviewQuestionLevel;
+    question: string;
+    answer: string;
+  }>;
+}
 
 export type SelectionMode = 'FAIR' | 'PURE';
 
