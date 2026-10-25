@@ -1,5 +1,15 @@
 import * as XLSX from 'xlsx';
-import { ClassRoom, TimetableSlot, TeachingPlanItem } from '../types';
+import {
+  ClassRoom,
+  TimetableSlot,
+  TeachingPlanItem,
+  PpctItem,
+  DayOffItem,
+  ScheduleGenerationConfig,
+} from '../types';
+import { getSamplePpctForGrade, SAMPLE_PPCT_GRADE_7, SAMPLE_PPCT_GRADE_8, SAMPLE_PPCT_GRADE_10 } from './samplePpctData';
+import { extractGradeFromClassName } from '../services/reviewQuestionService';
+export { extractGradeFromClassName };
 
 /**
  * =========================================================================================
@@ -11,6 +21,58 @@ import { ClassRoom, TimetableSlot, TeachingPlanItem } from '../types';
 function normalizeStr(val: any): string {
   if (val === null || val === undefined) return '';
   return String(val).trim().toLowerCase();
+}
+
+/**
+ * Chuẩn hóa tên môn học tương đương:
+ * - Toán / Toán học / Toán 7 / Toán 8 -> 'Toán'
+ * - GDĐP / GD DP / Giáo dục địa phương -> 'GDĐP'
+ * - HĐTN / HĐTN&HN / Hoạt động trải nghiệm, hướng nghiệp -> 'HĐTN&HN'
+ * - Các môn khác giữ nguyên tên gốc
+ */
+export function normalizeSubjectName(raw?: string): string {
+  if (!raw) return 'Toán';
+  const s = String(raw).trim();
+  const lower = s.toLowerCase();
+
+  // Toán / Toán học / Toán 7 / Toán 8...
+  if (
+    /^(toán|toan)(\s+học|\s+hoc)?(\s+\d+)?$/i.test(s) ||
+    lower === 'toán' ||
+    lower === 'toan' ||
+    lower === 'toán học' ||
+    lower === 'toan hoc'
+  ) {
+    return 'Toán';
+  }
+
+  // GDĐP / GD DP / Giáo dục địa phương / GDĐP 7 / GDĐP 8...
+  if (
+    /^(gdđp|gddp|gd\s*đp|gd\s*dp)(\s+\d+)?$/i.test(s) ||
+    /giáo dục địa phương|giao duc dia phuong/i.test(lower)
+  ) {
+    return 'GDĐP';
+  }
+
+  // HĐTN / HĐTN&HN / HĐTN & HN / Hoạt động trải nghiệm / Hoạt động trải nghiệm, hướng nghiệp...
+  if (
+    /^(hđtn|hdtn|hđtn\s*&\s*hn|hdtn\s*&\s*hn|hđtn&hn|hdtn&hn)(\s+\d+)?$/i.test(s) ||
+    /hoạt động trải nghiệm|hoat dong trai nghiem/i.test(lower)
+  ) {
+    return 'HĐTN&HN';
+  }
+
+  return s;
+}
+
+/**
+ * Chuẩn hóa tên lớp học: xử lý các tiền tố như Lớp, Lop, Class
+ */
+export function normalizeClassName(raw: string): string {
+  if (!raw) return '';
+  let s = String(raw).trim();
+  s = s.replace(/^(lớp|lop|class)\s*/i, '').trim();
+  return s;
 }
 
 // Convert Vietnamese Day text to Day Number (2 - 7)
@@ -47,34 +109,81 @@ function parsePeriodNumber(periodRaw: any, sessionRaw?: any): number | null {
   return null;
 }
 
-// Find closest matching class
-function matchClass(classNameRaw: string, classes: ClassRoom[]): { classId: string; className: string } {
-  const raw = classNameRaw.trim();
-  const cleanRaw = raw.replace(/^(lớp|lop)\s*/i, '').trim().toLowerCase();
+/**
+ * Khớp tên lớp an toàn tuyệt đối:
+ * - Chuẩn hóa "7.1", "7/1", "7-1" tương thích với "7A1", "7.1"
+ * - Không tự ý gán bừa vào classes[0] làm sai lệch danh sách học sinh
+ */
+export function matchClass(classNameRaw: string, classes: ClassRoom[]): { classId: string; className: string } {
+  const raw = String(classNameRaw || '').trim();
+  if (!raw) {
+    return { classId: classes[0]?.id || 'class-default', className: classes[0]?.name || 'Lớp học' };
+  }
+
+  const cleanRaw = raw.replace(/^(lớp|lop|class)\s*/i, '').trim().toLowerCase();
 
   // 1. Exact match
   const exact = classes.find((c) => {
-    const cClean = c.name.replace(/^(lớp|lop)\s*/i, '').trim().toLowerCase();
+    const cClean = c.name.replace(/^(lớp|lop|class)\s*/i, '').trim().toLowerCase();
     return cClean === cleanRaw || c.name.toLowerCase() === raw.toLowerCase();
   });
   if (exact) {
     return { classId: exact.id, className: exact.name };
   }
 
-  // 2. Partial match
-  const partial = classes.find((c) => {
-    const cClean = c.name.replace(/^(lớp|lop)\s*/i, '').trim().toLowerCase();
-    return cClean.includes(cleanRaw) || cleanRaw.includes(cClean);
-  });
-  if (partial) {
-    return { classId: partial.id, className: partial.name };
+  // 2. Numeric dot/slash normalization: "7.1", "7/1", "7-1" <-> "7A1", "7.1"
+  const dotSlashMatch = cleanRaw.match(/^(\d+)[./-](\d+)$/);
+  if (dotSlashMatch) {
+    const grade = dotSlashMatch[1];
+    const secNum = parseInt(dotSlashMatch[2], 10);
+    const candidates = [
+      `${grade}a${secNum}`,
+      `${grade}a0${secNum}`,
+      `${grade}.${secNum}`,
+      `${grade}/${secNum}`,
+      `${grade}-${secNum}`,
+    ];
+    const found = classes.find((c) => {
+      const cClean = c.name.replace(/^(lớp|lop|class)\s*/i, '').trim().toLowerCase();
+      return candidates.includes(cClean);
+    });
+    if (found) {
+      return { classId: found.id, className: found.name };
+    }
   }
 
-  // 3. Fallback: use raw name
-  const fallbackName = raw.startsWith('Lớp ') ? raw.replace('Lớp ', '') : raw;
+  // Inverse: raw is "7a1" or "7a01" but class name is "7.1"
+  const alphaMatch = cleanRaw.match(/^(\d+)[a-z](\d+)$/);
+  if (alphaMatch) {
+    const grade = alphaMatch[1];
+    const secNum = parseInt(alphaMatch[2], 10);
+    const candidates = [`${grade}.${secNum}`, `${grade}/${secNum}`, `${grade}-${secNum}`];
+    const found = classes.find((c) => {
+      const cClean = c.name.replace(/^(lớp|lop|class)\s*/i, '').trim().toLowerCase();
+      return candidates.includes(cClean);
+    });
+    if (found) {
+      return { classId: found.id, className: found.name };
+    }
+  }
+
+  // 3. Partial substring match
+  if (cleanRaw.length >= 3) {
+    const partial = classes.find((c) => {
+      const cClean = c.name.replace(/^(lớp|lop|class)\s*/i, '').trim().toLowerCase();
+      return cClean === cleanRaw || cClean.includes(cleanRaw) || cleanRaw.includes(cClean);
+    });
+    if (partial) {
+      return { classId: partial.id, className: partial.name };
+    }
+  }
+
+  // 4. Safe fallback: use the cleaned raw class name as its own identifier,
+  // do NOT force to classes[0] to prevent cross-class contamination!
+  const fallbackClean = raw.replace(/^(lớp|lop|class)\s*/i, '').trim();
   return {
-    classId: classes[0]?.id || `auto-${Date.now()}`,
-    className: fallbackName || 'Lớp học',
+    classId: `auto-cls-${fallbackClean.toLowerCase().replace(/[^a-z0-9]/g, '') || Date.now()}`,
+    className: fallbackClean || 'Lớp học',
   };
 }
 
@@ -347,33 +456,59 @@ export function exportTeachingPlanToExcel(
   });
 
   const rows: (string | number)[][] = [
-    ['SỞ GD&ĐT / PHÒNG GD&ĐT', '', '', '', '', '', '', '', '', ''],
-    [schoolName.toUpperCase(), '', '', '', '', '', '', '', '', ''],
-    [`SỔ BÁO GIẢNG - TIẾN ĐỘ DẠY HỌC - ${semester.toUpperCase()}`, '', '', '', '', '', '', '', '', ''],
-    [`Giáo viên: ${teacherName} | Tổng số: ${plans.length} tiết (${plans.filter((p) => p.isCompleted).length} đã dạy)`, '', '', '', '', '', '', '', '', ''],
-    ['', '', '', '', '', '', '', '', '', ''],
+    ['SỞ GD&ĐT / PHÒNG GD&ĐT', '', '', '', '', '', '', '', '', '', ''],
+    [schoolName.toUpperCase(), '', '', '', '', '', '', '', '', '', ''],
+    [`SỔ BÁO GIẢNG - TIẾN ĐỘ DẠY HỌC - ${semester.toUpperCase()}`, '', '', '', '', '', '', '', '', '', ''],
+    [`Giáo viên: ${teacherName} | Tổng số: ${plans.length} tiết (${plans.filter((p) => p.isCompleted).length} đã dạy)`, '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', ''],
     [
       'STT',
       'Tuần',
+      'Thứ / Ngày',
+      'Buổi',
+      'Tiết TKB',
       'Lớp',
+      'Môn học',
       'Tiết PPCT',
-      'Tên bài dạy / Nội dung bài học',
-      'Ghi chú / Thiết bị ĐDDH',
+      'Tên bài dạy / Nội dung công việc',
+      'Ghi chú / ĐDDH',
       'Trạng thái',
-      'Ngày hoàn thành',
     ],
   ];
 
   sorted.forEach((item, idx) => {
+    const dayLabel = item.dayOfWeek ? `Thứ ${item.dayOfWeek}` : '';
+    const dateLabel = item.date ? (dayLabel ? `${dayLabel} (${item.date})` : item.date) : dayLabel;
+    const sessionLabel = item.session || (item.period && item.period > 5 ? 'Chiều' : 'Sáng');
+
+    let statusText = 'Chưa dạy';
+    if (item.isCompleted) {
+      statusText = item.isMakeup ? 'ĐÃ DẠY (BÙ)' : 'ĐÃ DẠY';
+    } else if (item.isMakeup) {
+      statusText = 'DẠY BÙ';
+    } else if (item.isOffDay) {
+      statusText = 'TIẾT NGHỈ';
+    }
+
+    let noteText = item.notes || '';
+    if (item.isMakeup && item.makeupReason && !noteText.includes('[DẠY BÙ]')) {
+      noteText = `[DẠY BÙ: ${item.makeupReason}] ${noteText}`.trim();
+    } else if (item.isOffDay && item.offReason && !noteText.includes('[NGHỈ]')) {
+      noteText = `[NGHỈ: ${item.offReason}] ${noteText}`.trim();
+    }
+
     rows.push([
       idx + 1,
       `Tuần ${item.week}`,
+      dateLabel || '—',
+      sessionLabel,
+      item.period ? `Tiết ${item.period}` : '—',
       `Lớp ${item.className}`,
-      item.periodNumber,
+      item.subject || 'Toán học',
+      item.isOffDay ? 'NGHỈ' : item.periodNumber,
       item.lessonTitle,
-      item.notes || '',
-      item.isCompleted ? 'ĐÃ DẠY' : 'Chưa dạy',
-      item.date || '',
+      noteText,
+      statusText,
     ]);
   });
 
@@ -381,12 +516,15 @@ export function exportTeachingPlanToExcel(
   ws['!cols'] = [
     { wch: 6 },  // STT
     { wch: 10 }, // Tuần
-    { wch: 14 }, // Lớp
+    { wch: 22 }, // Thứ/Ngày
+    { wch: 10 }, // Buổi
+    { wch: 10 }, // Tiết TKB
+    { wch: 12 }, // Lớp
+    { wch: 14 }, // Môn
     { wch: 12 }, // Tiết PPCT
-    { wch: 50 }, // Tên bài học
-    { wch: 30 }, // Ghi chú
+    { wch: 45 }, // Tên bài học
+    { wch: 25 }, // Ghi chú
     { wch: 14 }, // Trạng thái
-    { wch: 16 }, // Ngày
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'SoBaoGiang_vnEdu');
@@ -495,10 +633,10 @@ export async function parseTimetableFromExcel(
         const classNameRaw = parts[0]?.trim() || cellRaw;
         const matched = matchClass(classNameRaw, classes);
 
-        let subject = 'Toán học';
+        let subject = 'Toán';
         if (cellRaw.includes('(')) {
           const subMatch = cellRaw.match(/\(([^)]+)\)/);
-          if (subMatch) subject = subMatch[1].trim();
+          if (subMatch) subject = normalizeSubjectName(subMatch[1]);
         }
 
         let room = '';
@@ -571,7 +709,8 @@ export async function parseTimetableFromExcel(
       if (!classRaw) continue;
 
       const matched = matchClass(classRaw, classes);
-      const subject = subjectCol !== -1 && row[subjectCol] ? String(row[subjectCol]).trim() : 'Toán học';
+      const rawSub = subjectCol !== -1 && row[subjectCol] ? String(row[subjectCol]).trim() : '';
+      const subject = rawSub ? normalizeSubjectName(rawSub) : 'Toán';
       const room = roomCol !== -1 && row[roomCol] ? String(row[roomCol]).trim() : undefined;
       const note = noteCol !== -1 && row[noteCol] ? String(row[noteCol]).trim() : undefined;
 
@@ -721,3 +860,935 @@ export async function parseTeachingPlanFromExcel(
 
   return { items, warnings };
 }
+
+/**
+ * =========================================================================================
+ * 7. TẢI FILE MẪU EXCEL CHUẨN: PHÂN PHỐI CHƯƠNG TRÌNH (PPCT)
+ * =========================================================================================
+ */
+export function downloadVnEduPpctTemplate(_classes?: ClassRoom[]) {
+  const wb = XLSX.utils.book_new();
+
+  // SHEET 1: PPCT (Mẫu chung mọi môn, mọi khối với đúng thứ tự 6 cột)
+  const ppctRows: (string | number)[][] = [
+    ['Tiết PPCT', 'Khối', 'Môn học', 'Tên bài dạy', 'Học kỳ', 'Ghi chú'],
+  ];
+  const wsPpct = XLSX.utils.aoa_to_sheet(ppctRows);
+  wsPpct['!cols'] = [
+    { wch: 12 }, // Tiết PPCT
+    { wch: 10 }, // Khối
+    { wch: 16 }, // Môn học
+    { wch: 45 }, // Tên bài dạy
+    { wch: 12 }, // Học kỳ
+    { wch: 32 }, // Ghi chú
+  ];
+  XLSX.utils.book_append_sheet(wb, wsPpct, 'PPCT');
+
+  // SHEET 2: VI_DU_KHONG_NHAP (Dữ liệu mẫu tham khảo minh họa đa môn, đa khối)
+  const exampleRows: (string | number)[][] = [
+    ['Tiết PPCT', 'Khối', 'Môn học', 'Tên bài dạy', 'Học kỳ', 'Ghi chú'],
+    [1, '7', 'Toán', 'Tập hợp các số hữu tỉ', 'Học kỳ 1', 'Bài 1 chương I'],
+    [2, '7', 'Toán', 'Cộng, trừ số hữu tỉ', 'Học kỳ 1', 'Bài 2'],
+    [1, '7', 'GDĐP', 'Chủ đề 1: Bảo tồn, phát huy giá trị di sản Thành Nhà Hồ', 'Học kỳ 1', 'Tiết 1'],
+    [1, '7', 'HĐTN&HN', 'Chủ đề 1: Rèn luyện thói quen', 'Học kỳ 1', 'Tiết 1'],
+    [1, '8', 'Toán', 'Đơn thức', 'Học kỳ 1', 'Bài 1 chương I'],
+    [1, '8', 'GDĐP', 'Chủ đề 1: Danh lam thắng cảnh quê hương', 'Học kỳ 1', 'Tiết 1'],
+    [1, '9', 'Ngữ văn', 'Bài 1: Khát vọng sống', 'Học kỳ 1', 'Tiết 1'],
+  ];
+  const wsExample = XLSX.utils.aoa_to_sheet(exampleRows);
+  wsExample['!cols'] = [
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 16 },
+    { wch: 55 },
+    { wch: 12 },
+    { wch: 32 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsExample, 'VI_DU_KHONG_NHAP');
+
+  // SHEET 3: HUONG_DAN (Hướng dẫn sử dụng)
+  const guideRows: string[][] = [
+    ['HƯỚNG DẪN NHẬP PHÂN PHỐI CHƯƠNG TRÌNH (PPCT) TRONG CLASSGO'],
+    ['1. File mẫu này dùng chung cho TẤT CẢ các môn học và khối lớp (Toán, GDĐP, HĐTN&HN, Ngữ văn, KHTN...).'],
+    ['2. Thầy cô điền danh sách bài dạy vào sheet "PPCT" theo đúng 6 cột: Tiết PPCT, Khối, Môn học, Tên bài dạy, Học kỳ, Ghi chú.'],
+    ['3. Cột "Khối": Điền số khối (VD: 6, 7, 8, 9, 10, 11, 12). Hệ thống tự dùng chung cho các lớp cùng khối.'],
+    ['4. Cột "Môn học": Điền tên môn học (Toán, GDĐP, HĐTN&HN...). Hệ thống tự chuẩn hóa tên môn tương đương.'],
+    ['5. Tiết PPCT số 1 của các môn khác nhau hoàn toàn độc lập, hệ thống phân biệt chính xác theo Khối + Môn học + Tiết PPCT.'],
+    ['6. Sheet "VI_DU_KHONG_NHAP" và "HUONG_DAN" chỉ để tham khảo, phần mềm ClassGo tự động bỏ qua khi nạp file.'],
+  ];
+  const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
+  wsGuide['!cols'] = [{ wch: 95 }];
+  XLSX.utils.book_append_sheet(wb, wsGuide, 'HUONG_DAN');
+
+  XLSX.writeFile(wb, 'Mau_PPCT_Chung_Moi_Mon_ClassGo.xlsx');
+}
+
+/**
+ * =========================================================================================
+ * 8. TẢI FILE MẪU EXCEL TỔNG HỢP: TKB + PPCT + NGÀY NGHỈ (3 TRONG 1)
+ * =========================================================================================
+ */
+export function downloadCombinedTimetableAndPpctTemplate(classes?: ClassRoom[]) {
+  const wb = XLSX.utils.book_new();
+
+  const c1 = classes?.[0]?.name || '7A1';
+  const c2 = classes?.[1]?.name || '7A2';
+  const grade1 = extractGradeFromClassName(c1) || '7';
+
+  // SHEET 1: MA TRẬN TKB
+  const matrixRows: (string | number)[][] = [
+    ['THỜI KHÓA BIỂU GIẢNG DẠY (CHUẨN vnEdu / SMAS)', '', '', '', '', '', '', ''],
+    ['Năm học: 2025 - 2026 | Môn: Toán học', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', ''],
+    ['Buổi', 'Tiết', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'],
+    ['Sáng', 1, `${c1} (Toán) - P.201`, '', `${c1} (Toán)`, `${c2} (Toán)`, '', 'Chào cờ'],
+    ['Sáng', 2, `${c1} (Toán) - P.201`, `${c2} (Toán)`, '', `${c2} (Toán)`, `${c1} (Toán)`, ''],
+    ['Sáng', 3, `${c2} (Toán) - P.202`, `${c1} (Toán)`, `${c2} (Toán)`, '', `${c2} (Toán)`, ''],
+    ['Sáng', 4, '', '', `${c1} (Toán)`, `${c1} (Toán)`, '', ''],
+    ['Sáng', 5, '', '', '', '', '', 'Sinh hoạt lớp'],
+    ['Chiều', 6, '', '', '', '', '', ''],
+    ['Chiều', 7, '', '', '', '', '', ''],
+    ['Chiều', 8, '', '', '', '', '', ''],
+    ['Chiều', 9, '', '', '', '', '', ''],
+    ['Chiều', 10, '', '', '', '', '', ''],
+  ];
+  const wsMatrix = XLSX.utils.aoa_to_sheet(matrixRows);
+  wsMatrix['!cols'] = [
+    { wch: 10 },
+    { wch: 8 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+    { wch: 22 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsMatrix, '1_ThoiKhoaBieu');
+
+  // SHEET 2: PPCT THEO KHỐI
+  const ppctRows: (string | number)[][] = [
+    ['PHÂN PHỐI CHƯƠNG TRÌNH MÔN TOÁN (DÙNG CHUNG CHO CÁC LỚP CÙNG KHỐI)', '', '', '', ''],
+    ['Tiết PPCT', 'Khối lớp', 'Môn học', 'Tên bài dạy / Nội dung bài học', 'Ghi chú'],
+  ];
+  SAMPLE_PPCT_GRADE_7.slice(0, 30).forEach((item) => {
+    ppctRows.push([
+      item.periodNumber,
+      `Khối ${grade1}`,
+      item.subject || 'Toán học',
+      item.lessonTitle,
+      item.notes || '',
+    ]);
+  });
+  const wsPpct = XLSX.utils.aoa_to_sheet(ppctRows);
+  wsPpct['!cols'] = [
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 45 },
+    { wch: 30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsPpct, '2_PhanPhoiChuongTrinh');
+
+  // SHEET 3: NGÀY NGHỈ / LỄ
+  const offRows: (string | number)[][] = [
+    ['DANH SÁCH NGÀY NGHỈ LỄ & TIẾT NGHỈ DỰ KIẾN (TỰ ĐỘNG DỜI TIẾT)', '', '', ''],
+    ['Ngày (YYYY-MM-DD)', 'Tên ngày nghỉ / Lý do', 'Nghỉ cả ngày (CÓ/KHÔNG)', 'Tiết nghỉ (Nếu chỉ nghỉ 1 số tiết)'],
+    ['2025-09-02', 'Nghỉ Lễ Quốc Khánh 2/9', 'CÓ', ''],
+    ['2025-11-20', 'Ngày Nhà giáo Việt Nam 20/11', 'CÓ', ''],
+    ['2026-01-01', 'Nghỉ Tết Dương Lịch', 'CÓ', ''],
+  ];
+  const wsOff = XLSX.utils.aoa_to_sheet(offRows);
+  wsOff['!cols'] = [
+    { wch: 18 },
+    { wch: 35 },
+    { wch: 24 },
+    { wch: 30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsOff, '3_NgayNghi');
+
+  XLSX.writeFile(wb, 'Mau_TongHop_TKB_PPCT_NgayNghi_ClassGo.xlsx');
+}
+
+/**
+ * =========================================================================================
+ * 9. ĐỌC FILE EXCEL PHÂN PHỐI CHƯƠNG TRÌNH (PPCT)
+ * =========================================================================================
+ */
+export async function parsePpctFromExcel(
+  file: File
+): Promise<{
+  items: PpctItem[];
+  warnings: string[];
+}> {
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data, { type: 'array' });
+
+  // Filter out guidance/example sheets to avoid importing sample rows
+  const validSheetNames = wb.SheetNames.filter(
+    (name) => !/vi_du|ví dụ|huong_dan|hướng dẫn|sample|example|guide|huongdan/i.test(name)
+  );
+
+  // Look for sheet with "ppct" or "phân phối" or "kế hoạch" or fallback to first valid sheet
+  const targetSheetName =
+    validSheetNames.find((name) => /ppct|phân phối|phan phoi|kế hoạch|ke hoach|chương trình/i.test(name)) ||
+    validSheetNames[0] ||
+    wb.SheetNames[0];
+
+  const ws = wb.Sheets[targetSheetName];
+  if (!ws) {
+    throw new Error('Không tìm thấy bảng tính phân phối chương trình hợp lệ.');
+  }
+
+  const rawRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  if (rawRows.length < 2) {
+    throw new Error('File Excel PPCT không có đủ dữ liệu.');
+  }
+
+  // Detect header row
+  let headerRowIndex = -1;
+  let ppctCol = -1;
+  let titleCol = -1;
+  let gradeCol = -1;
+  let subjectCol = -1;
+  let semesterCol = -1;
+  let noteCol = -1;
+
+  for (let r = 0; r < Math.min(rawRows.length, 12); r++) {
+    const row = rawRows[r];
+    for (let c = 0; c < row.length; c++) {
+      const headerText = normalizeStr(row[c]);
+      if (/tiết|tiet|stt|ppct/i.test(headerText) && ppctCol === -1) ppctCol = c;
+      if (/tên bài|ten bai|bài dạy|bai day|nội dung|noi dung|bài học|lesson/i.test(headerText) && titleCol === -1) titleCol = c;
+      if (/khối|khoi|lớp|lop|grade/i.test(headerText) && gradeCol === -1) gradeCol = c;
+      if (/môn|mon|subject/i.test(headerText) && subjectCol === -1) subjectCol = c;
+      if (/học kỳ|hoc ky|hk/i.test(headerText) && semesterCol === -1) semesterCol = c;
+      if (/ghi chú|ghi chu|thiết bị|thiet bi|đồ dùng|do dung|note|nguồn|nguon/i.test(headerText) && noteCol === -1) noteCol = c;
+    }
+
+    if (ppctCol !== -1 && titleCol !== -1) {
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  // If no labeled header row found, assume col 0 is period number and col 1 is title
+  if (headerRowIndex === -1) {
+    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+      const col0 = parseInt(String(rawRows[r][0] || '').match(/\d+/)?.[0] || '0', 10);
+      const col1 = String(rawRows[r][1] || '').trim();
+      if (col0 >= 1 && col1.length >= 3) {
+        headerRowIndex = r - 1;
+        ppctCol = 0;
+        titleCol = 1;
+        break;
+      }
+    }
+  }
+
+  if (headerRowIndex === -1 && titleCol === -1) {
+    throw new Error(
+      'Không nhận diện được cột Tiết PPCT và Tên bài dạy trong file. Vui lòng kiểm tra lại định dạng file mẫu.'
+    );
+  }
+
+  const items: PpctItem[] = [];
+  const warnings: string[] = [];
+  const seenMap = new Set<string>();
+
+  for (let r = headerRowIndex + 1; r < rawRows.length; r++) {
+    const row = rawRows[r];
+    if (!row || row.length === 0) continue;
+
+    // Period number
+    let periodNum = items.length + 1;
+    if (ppctCol !== -1 && row[ppctCol] !== undefined && row[ppctCol] !== '') {
+      const pMatch = String(row[ppctCol]).match(/\d+/);
+      if (pMatch) periodNum = parseInt(pMatch[0], 10);
+    }
+
+    // Title
+    const titleRaw = titleCol !== -1 ? String(row[titleCol] || '').trim() : '';
+    if (!titleRaw) continue;
+
+    // Grade
+    let grade = '7';
+    if (gradeCol !== -1 && row[gradeCol]) {
+      const gMatch = String(row[gradeCol]).match(/\d+/);
+      if (gMatch) grade = gMatch[0];
+    }
+
+    // Subject: Normalized canonical subject
+    const rawSub = subjectCol !== -1 && row[subjectCol] !== undefined ? String(row[subjectCol]).trim() : '';
+    const subject = rawSub ? normalizeSubjectName(rawSub) : 'Toán';
+
+    // Semester: Do not invent semester if not provided
+    let semester: '1' | '2' | 'ALL' | undefined = undefined;
+    if (semesterCol !== -1 && row[semesterCol] !== undefined && row[semesterCol] !== '') {
+      const semStr = normalizeStr(row[semesterCol]);
+      if (semStr.includes('1') || (semStr.includes('i') && !semStr.includes('ii'))) {
+        semester = '1';
+      } else if (semStr.includes('2') || semStr.includes('ii')) {
+        semester = '2';
+      } else if (semStr.includes('all') || semStr.includes('cả năm') || semStr.includes('ca nam')) {
+        semester = 'ALL';
+      }
+    }
+
+    const notes = noteCol !== -1 && row[noteCol] ? String(row[noteCol]).trim() : undefined;
+
+    // Deduplicate strictly by: Khối + Môn học + Tiết PPCT
+    const key = `${grade}__${subject.toLowerCase()}__${periodNum}`;
+    if (seenMap.has(key)) {
+      warnings.push(`Tiết PPCT số ${periodNum} của Khối ${grade} (môn ${subject}) bị trùng ở dòng ${r + 1}. Đã bỏ qua dòng trùng.`);
+      continue;
+    }
+    seenMap.add(key);
+
+    items.push({
+      id: `ppct-imp-${grade}-${subject.toLowerCase().replace(/[^a-z0-9]/g, '')}-${periodNum}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      periodNumber: periodNum,
+      lessonTitle: titleRaw,
+      grade,
+      subject,
+      semester,
+      notes,
+    });
+  }
+
+  if (items.length === 0) {
+    throw new Error('Không tìm thấy danh sách bài học nào trong file PPCT.');
+  }
+
+  // Sort items by grade, then subject, then periodNumber asc
+  items.sort((a, b) => {
+    if ((a.grade || '') !== (b.grade || '')) {
+      return Number(a.grade || 0) - Number(b.grade || 0);
+    }
+    if ((a.subject || '') !== (b.subject || '')) {
+      return (a.subject || '').localeCompare(b.subject || '');
+    }
+    return a.periodNumber - b.periodNumber;
+  });
+
+  return { items, warnings };
+}
+
+export interface MissingPpctInfo {
+  classId: string;
+  className: string;
+  subject: string;
+  grade: string;
+}
+
+/**
+ * =========================================================================================
+ * 10. THUẬT TOÁN TỰ ĐỘNG SINH SỔ BÁO GIẢNG (TKB + PPCT + QUẢN LÝ NGÀY NGHỈ + DẠY BÙ)
+ * =========================================================================================
+ * - Giữ nguyên tuyệt đối các tiết đã đánh dấu "Đã dạy" (isCompleted === true), bao gồm tiết dạy bù.
+ * - Quản lý PPCT độc lập theo từng lớp và môn học; nhiều lớp cùng khối có tiến độ riêng biệt.
+ * - Không làm mất, bỏ qua, nhân đôi hoặc đảo thứ tự tiết PPCT.
+ * - Không dùng PPCT Toán 7 thay cho môn/khối khác khi thiếu dữ liệu (cảnh báo rõ ràng).
+ * - Tự động dời bài chưa dạy qua tiết sau khi gặp ngày nghỉ hoặc tiết nghỉ đột xuất.
+ */
+export function generateTeachingPlanFromTimetable({
+  timetable,
+  ppctItems,
+  dayOffs,
+  config,
+  existingPlan = [],
+  classes = [],
+}: {
+  timetable: TimetableSlot[];
+  ppctItems: PpctItem[];
+  dayOffs: DayOffItem[];
+  config: ScheduleGenerationConfig;
+  existingPlan?: TeachingPlanItem[];
+  classes?: ClassRoom[];
+}): {
+  generatedPlan: TeachingPlanItem[];
+  stats: {
+    totalSlots: number;
+    assignedLessons: number;
+    offSlotsCount: number;
+    makeupSlotsCount: number;
+    completedPreservedCount: number;
+    classStats: { [className: string]: { totalSlots: number; lessonsAssigned: number; offCount: number; makeupCount: number } };
+  };
+  warnings: string[];
+  missingPpctClasses: MissingPpctInfo[];
+} {
+  const warnings: string[] = [];
+  const missingPpctClasses: MissingPpctInfo[] = [];
+
+  if (timetable.length === 0) {
+    throw new Error('Thời khóa biểu chưa có tiết học nào. Vui lòng xếp hoặc nhập TKB trước khi sinh Sổ báo giảng.');
+  }
+
+  // Helper to normalize strings for comparison
+  const norm = (s: any) => normalizeStr(s);
+
+  // 1. Phân loại danh sách lớp & môn học duy nhất có trong TKB
+  interface ClassSubjectKeyInfo {
+    key: string;
+    classId: string;
+    className: string;
+    subject: string;
+    grade: string;
+  }
+
+  const classSubjectMap = new Map<string, ClassSubjectKeyInfo>();
+
+  timetable.forEach((slot) => {
+    const foundCls = classes.find((c) => c.id === slot.classId);
+    const clsName = foundCls ? foundCls.name : slot.className;
+    const grade = extractGradeFromClassName(clsName) || '';
+    const subject = normalizeSubjectName(slot.subject || foundCls?.subject || 'Toán');
+    const key = `${slot.classId}__${subject.toLowerCase()}`;
+
+    if (!classSubjectMap.has(key)) {
+      classSubjectMap.set(key, {
+        key,
+        classId: slot.classId,
+        className: clsName,
+        subject,
+        grade,
+      });
+    }
+  });
+
+  // 2. Tìm nguồn PPCT phù hợp cho từng (Lớp, Môn học, Khối)
+  // ƯU TIÊN: 1. PPCT riêng theo Lớp -> 2. PPCT theo Khối & Môn -> 3. PPCT mẫu chuẩn GDPT 2018 (chỉ khi đúng môn Toán 7,8,10)
+  interface ClassSubjectState {
+    key: string;
+    classId: string;
+    className: string;
+    subject: string;
+    grade: string;
+    ppctPool: PpctItem[];
+    remainingLessons: PpctItem[];
+    pointer: number;
+    assignedCount: number;
+    offCount: number;
+    makeupCount: number;
+    completedCount: number;
+    hasMissingPpct: boolean;
+  }
+
+  // Tập hợp các tiết đã hoàn thành trong existingPlan để bảo toàn tuyệt đối
+  // Map lưu theo key: classKey -> Set<periodNumber đã dạy>
+  const completedPeriodsByClassKey = new Map<string, Set<number>>();
+  // Map lưu các tiết đã hoàn thành theo tọa độ thời gian để không sinh đè
+  const completedSlotCoordinates = new Set<string>();
+  const completedPreservedItems: TeachingPlanItem[] = [];
+
+  existingPlan.forEach((p) => {
+    if (p.isCompleted) {
+      completedPreservedItems.push(p);
+
+      const pSub = normalizeSubjectName(p.subject || 'Toán');
+      const pKey = `${p.classId}__${pSub.toLowerCase()}`;
+      if (!completedPeriodsByClassKey.has(pKey)) {
+        completedPeriodsByClassKey.set(pKey, new Set<number>());
+      }
+      if (p.periodNumber && p.periodNumber > 0) {
+        completedPeriodsByClassKey.get(pKey)!.add(p.periodNumber);
+      }
+
+      // Đánh dấu tọa độ thời gian đã có tiết hoàn thành
+      if (p.date && p.period) {
+        completedSlotCoordinates.add(`${p.date}__${p.period}__${p.classId}`);
+      }
+      if (p.week && p.dayOfWeek && p.period) {
+        completedSlotCoordinates.add(`w${p.week}__d${p.dayOfWeek}__p${p.period}__${p.classId}`);
+      }
+    }
+  });
+
+  // Giữ lại các tiết dạy bù CHƯA hoàn thành đã lên lịch trước đó để xếp tiếp
+  const pendingMakeupItems = existingPlan.filter((p) => p.isMakeup && !p.isCompleted);
+
+  const states = new Map<string, ClassSubjectState>();
+
+  classSubjectMap.forEach((info, key) => {
+    // 2.1: Tìm trong PPCT người dùng tải lên theo classId
+    let pool = ppctItems.filter(
+      (p) => p.classId === info.classId && normalizeSubjectName(p.subject) === info.subject
+    );
+
+    // 2.2: Nếu chưa có theo lớp, tìm theo Khối & Môn
+    if (pool.length === 0 && info.grade) {
+      pool = ppctItems.filter(
+        (p) =>
+          (!p.classId || p.classId === 'ALL') &&
+          String(p.grade || '').trim() === info.grade &&
+          normalizeSubjectName(p.subject) === info.subject
+      );
+    }
+
+    // 2.3: Nếu vẫn chưa có, kiểm tra kho mẫu chuẩn GDPT 2018 (chỉ đúng môn Toán khối 7, 8, 10)
+    let isFromSample = false;
+    if (pool.length === 0 && info.subject === 'Toán') {
+      const samplePool = getSamplePpctForGrade(info.grade, info.subject);
+      if (samplePool.length > 0) {
+        pool = samplePool;
+        isFromSample = true;
+      }
+    }
+
+    // Sort pool asc
+    pool = [...pool].sort((a, b) => a.periodNumber - b.periodNumber);
+
+    let hasMissingPpct = false;
+    if (pool.length === 0) {
+      hasMissingPpct = true;
+      missingPpctClasses.push({
+        classId: info.classId,
+        className: info.className,
+        subject: info.subject,
+        grade: info.grade,
+      });
+      warnings.push(
+        `Lớp ${info.className} (${info.subject} - Khối ${info.grade || '?'}) chưa có phân phối chương trình tải lên. Vui lòng nạp file PPCT thực tế.`
+      );
+    } else if (isFromSample) {
+      warnings.push(
+        `Lớp ${info.className} (${info.subject} Khối ${info.grade}) đang tạm xem trước bằng PPCT mẫu chuẩn GDPT 2018. Thầy cô nên tải file PPCT thực tế của trường lên.`
+      );
+    }
+
+    // Lọc ra các bài PPCT CHƯA DẠY (không bị lặp lại những bài đã đánh dấu Đã dạy)
+    const taughtSet = completedPeriodsByClassKey.get(key) || new Set<number>();
+    const remainingLessons = pool.filter((p) => !taughtSet.has(p.periodNumber));
+
+    states.set(key, {
+      ...info,
+      ppctPool: pool,
+      remainingLessons,
+      pointer: 0,
+      assignedCount: taughtSet.size,
+      offCount: 0,
+      makeupCount: 0,
+      completedCount: taughtSet.size,
+      hasMissingPpct,
+    });
+  });
+
+  // 3. Mốc thời gian năm học (Mặc định năm học 2026-2027)
+  let start = new Date(config.startDate + 'T00:00:00');
+  if (isNaN(start.getTime())) {
+    start = new Date('2026-09-07T00:00:00'); // Thứ Hai tuần 1 năm học 2026-2027
+  }
+
+  // Điều chỉnh về Thứ Hai của Tuần 1
+  const dayOfWeekOfStart = start.getDay(); // 0: Sun, 1: Mon
+  const diffToMonday = dayOfWeekOfStart === 0 ? -6 : 1 - dayOfWeekOfStart;
+  const mondayWeek1 = new Date(start);
+  mondayWeek1.setDate(start.getDate() + diffToMonday);
+
+  const generatedPlan: TeachingPlanItem[] = [];
+  let totalSlots = 0;
+  let assignedLessons = 0;
+  let totalOffSlots = 0;
+  let totalMakeupSlots = 0;
+
+  // Đưa toàn bộ các tiết ĐÃ HOÀN THÀNH vào kết quả trước tiên (Bảo toàn 100%)
+  if (config.preserveCompleted) {
+    completedPreservedItems.forEach((compItem) => {
+      generatedPlan.push({ ...compItem });
+      assignedLessons++;
+    });
+  }
+
+  // 4. Mô phỏng tuần tự theo thời gian: Tuần 1 đến totalWeeks
+  for (let w = 1; w <= config.totalWeeks; w++) {
+    const mondayOfW = new Date(mondayWeek1);
+    mondayOfW.setDate(mondayWeek1.getDate() + (w - 1) * 7);
+
+    // Ngày trong tuần: Thứ 2 (d=0) đến Thứ 7 (d=5)
+    for (let d = 0; d <= 5; d++) {
+      const dayDate = new Date(mondayOfW);
+      dayDate.setDate(mondayOfW.getDate() + d);
+
+      const dayOfWeekNum = (d + 2) as 2 | 3 | 4 | 5 | 6 | 7;
+      const yyyy = dayDate.getFullYear();
+      const mm = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(dayDate.getDate()).padStart(2, '0');
+      const dateIso = `${yyyy}-${mm}-${dd}`;
+      const dateFormatted = `${dd}/${mm}/${yyyy}`;
+
+      // 4.1: Kiểm tra các tiết DẠY BÙ CHƯA HOÀN THÀNH rơi vào ngày này
+      const makeupsToday = pendingMakeupItems.filter((mk) => {
+        if (!mk.date) return false;
+        // Chuẩn hóa ngày so sánh DD/MM/YYYY hoặc YYYY-MM-DD
+        const mkDate = mk.date.includes('/')
+          ? mk.date
+          : `${mk.date.slice(8, 10)}/${mk.date.slice(5, 7)}/${mk.date.slice(0, 4)}`;
+        return mkDate === dateFormatted;
+      });
+
+      for (const mk of makeupsToday) {
+        const sub = normalizeSubjectName(mk.subject || 'Toán');
+        const state = states.get(`${mk.classId}__${sub.toLowerCase()}`);
+        if (!state) continue;
+
+        let lessonPeriod = 0;
+        let lessonTitle = mk.lessonTitle || 'Tiết Dạy Bù';
+
+        if (state.pointer < state.remainingLessons.length) {
+          const nextLesson = state.remainingLessons[state.pointer++];
+          lessonPeriod = nextLesson.periodNumber;
+          lessonTitle = nextLesson.lessonTitle;
+        }
+
+        generatedPlan.push({
+          id: mk.id || `plan-mk-${dateIso}-${mk.period}-${mk.classId}-${Date.now()}`,
+          week: w,
+          date: dateFormatted,
+          dayOfWeek: dayOfWeekNum,
+          period: mk.period || 1,
+          session: mk.session || ((mk.period || 1) <= 5 ? 'Sáng' : 'Chiều'),
+          classId: mk.classId,
+          className: state.className,
+          subject: state.subject,
+          room: mk.room,
+          periodNumber: lessonPeriod,
+          lessonTitle,
+          notes: mk.notes || (mk.makeupReason ? `[DẠY BÙ] ${mk.makeupReason}` : '[DẠY BÙ]'),
+          isCompleted: false,
+          isOffDay: false,
+          isMakeup: true,
+          makeupReason: mk.makeupReason,
+          makeupOriginalDate: mk.makeupOriginalDate,
+        });
+
+        state.makeupCount++;
+        totalMakeupSlots++;
+        assignedLessons++;
+      }
+
+      // 4.2: Duyệt các tiết học bình thường trong TKB của ngày này (Tiết 1 -> 10)
+      const daySlots = timetable
+        .filter((s) => s.dayOfWeek === dayOfWeekNum)
+        .sort((a, b) => a.period - b.period);
+
+      for (const slot of daySlots) {
+        totalSlots++;
+        const sub = normalizeSubjectName(slot.subject || 'Toán');
+        const state = states.get(`${slot.classId}__${sub.toLowerCase()}`);
+        if (!state) continue;
+
+        // Bỏ qua nếu slot này đã bị chiếm bởi một tiết ĐÃ HOÀN THÀNH
+        const coord1 = `${dateFormatted}__${slot.period}__${slot.classId}`;
+        const coord2 = `w${w}__d${dayOfWeekNum}__p${slot.period}__${slot.classId}`;
+        if (completedSlotCoordinates.has(coord1) || completedSlotCoordinates.has(coord2)) {
+          // Tiết này đã được dạy trước đó và đã có trong generatedPlan -> Không ghi đè
+          continue;
+        }
+
+        // Bỏ qua nếu trùng với một tiết DẠY BÙ vừa xếp ở trên
+        const makeupDuplicate = makeupsToday.some(
+          (mk) => mk.classId === slot.classId && mk.period === slot.period
+        );
+        if (makeupDuplicate) {
+          continue;
+        }
+
+        // Kiểm tra xem slot/ngày này có thuộc NGÀY NGHỈ hay không (Lễ, Tết, Nghỉ đột xuất)
+        const offMatch = dayOffs.find((off) => {
+          if (off.date !== dateIso) return false;
+          const matchClass = !off.classId || off.classId === 'ALL' || off.classId === slot.classId;
+          if (!matchClass) return false;
+          if (off.allDay) return true;
+          if (off.periods && off.periods.includes(slot.period)) return true;
+          return false;
+        });
+
+        if (offMatch) {
+          // 👉 TIẾT NGHỈ: TUYỆT ĐỐI KHÔNG TĂNG CON TRỎ PPCT!
+          // Bài học tự động dời sang tiết học tiếp theo của đúng lớp này và môn này!
+          state.offCount++;
+          totalOffSlots++;
+
+          generatedPlan.push({
+            id: `plan-off-${w}-${dayOfWeekNum}-${slot.period}-${slot.classId}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            week: w,
+            date: dateFormatted,
+            dayOfWeek: dayOfWeekNum,
+            period: slot.period,
+            session: slot.period <= 5 ? 'Sáng' : 'Chiều',
+            classId: slot.classId,
+            className: state.className,
+            subject: state.subject,
+            room: slot.room,
+            periodNumber: 0,
+            lessonTitle: `[NGHỈ] ${offMatch.reason} (Bài PPCT tự động dời sang tiết sau)`,
+            notes: `Nghỉ: ${offMatch.reason}`,
+            isCompleted: false,
+            isOffDay: true,
+            offReason: offMatch.reason,
+          });
+          continue;
+        }
+
+        // 👉 TIẾT DẠY BÌNH THƯỜNG:
+        if (state.hasMissingPpct) {
+          // Lớp chưa có PPCT: tạo tiết giữ chỗ và cảnh báo
+          generatedPlan.push({
+            id: `plan-miss-${w}-${dayOfWeekNum}-${slot.period}-${slot.classId}-${Date.now()}`,
+            week: w,
+            date: dateFormatted,
+            dayOfWeek: dayOfWeekNum,
+            period: slot.period,
+            session: slot.period <= 5 ? 'Sáng' : 'Chiều',
+            classId: slot.classId,
+            className: state.className,
+            subject: state.subject,
+            room: slot.room,
+            periodNumber: 0,
+            lessonTitle: `[CHƯA CÓ PPCT] Lớp ${state.className} (${state.subject}) cần nạp file PPCT`,
+            notes: 'Vui lòng tải file PPCT lên để hiển thị đúng tên bài dạy',
+            isCompleted: false,
+            isOffDay: false,
+          });
+          continue;
+        }
+
+        if (state.pointer < state.remainingLessons.length) {
+          // Gán bài PPCT chưa dạy tiếp theo
+          const nextLesson = state.remainingLessons[state.pointer++];
+
+          generatedPlan.push({
+            id: `plan-gen-${w}-${dayOfWeekNum}-${slot.period}-${slot.classId}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+            week: w,
+            date: dateFormatted,
+            dayOfWeek: dayOfWeekNum,
+            period: slot.period,
+            session: slot.period <= 5 ? 'Sáng' : 'Chiều',
+            classId: slot.classId,
+            className: state.className,
+            subject: state.subject,
+            room: slot.room,
+            periodNumber: nextLesson.periodNumber,
+            lessonTitle: nextLesson.lessonTitle,
+            notes: nextLesson.notes || slot.note || '',
+            isCompleted: false,
+            isOffDay: false,
+          });
+
+          state.assignedCount++;
+          assignedLessons++;
+        } else {
+          // Đã hoàn thành hết toàn bộ khung PPCT chuẩn
+          generatedPlan.push({
+            id: `plan-ext-${w}-${dayOfWeekNum}-${slot.period}-${slot.classId}-${Date.now()}`,
+            week: w,
+            date: dateFormatted,
+            dayOfWeek: dayOfWeekNum,
+            period: slot.period,
+            session: slot.period <= 5 ? 'Sáng' : 'Chiều',
+            classId: slot.classId,
+            className: state.className,
+            subject: state.subject,
+            room: slot.room,
+            periodNumber: state.ppctPool.length + 1,
+            lessonTitle: 'Ôn tập & Bổ trợ nâng cao kiến thức',
+            notes: 'Đã hoàn thành toàn bộ khung PPCT theo quy định',
+            isCompleted: false,
+            isOffDay: false,
+          });
+        }
+      }
+    }
+  }
+
+  // Sắp xếp lại generatedPlan theo thứ tự thời gian chuẩn xác
+  generatedPlan.sort((a, b) => {
+    if (a.week !== b.week) return a.week - b.week;
+    if ((a.dayOfWeek || 0) !== (b.dayOfWeek || 0)) return (a.dayOfWeek || 0) - (b.dayOfWeek || 0);
+    return (a.period || 0) - (b.period || 0);
+  });
+
+  // 5. Thống kê theo từng lớp (cộng dồn nếu một lớp học nhiều môn, ví dụ 7A1 học cả Toán và GDĐP)
+  const classStats: { [className: string]: { totalSlots: number; lessonsAssigned: number; offCount: number; makeupCount: number } } = {};
+  states.forEach((state) => {
+    const prev = classStats[state.className] || { totalSlots: 0, lessonsAssigned: 0, offCount: 0, makeupCount: 0 };
+    classStats[state.className] = {
+      totalSlots: prev.totalSlots + state.assignedCount + state.offCount + state.makeupCount,
+      lessonsAssigned: prev.lessonsAssigned + state.assignedCount,
+      offCount: prev.offCount + state.offCount,
+      makeupCount: prev.makeupCount + state.makeupCount,
+    };
+  });
+
+  return {
+    generatedPlan,
+    stats: {
+      totalSlots,
+      assignedLessons,
+      offSlotsCount: totalOffSlots,
+      makeupSlotsCount: totalMakeupSlots,
+      completedPreservedCount: completedPreservedItems.length,
+      classStats,
+    },
+    warnings,
+    missingPpctClasses,
+  };
+}
+
+/**
+ * =========================================================================================
+ * 11. HỖ TRỢ DẠY BÙ: TỰ ĐỘNG LẤY BÀI PPCT TIẾP THEO & PHÁT HIỆN XUNG ĐỘT
+ * =========================================================================================
+ */
+
+/**
+ * Tìm bài PPCT chưa dạy tiếp theo của một lớp & môn học
+ */
+export function findNextUntaughtPpctLesson({
+  classId,
+  subject,
+  classes = [],
+  ppctItems = [],
+  teachingPlan = [],
+}: {
+  classId: string;
+  subject?: string;
+  classes?: ClassRoom[];
+  ppctItems?: PpctItem[];
+  teachingPlan?: TeachingPlanItem[];
+}): PpctItem | null {
+  const foundCls = classes.find((c) => c.id === classId);
+  const clsName = foundCls ? foundCls.name : '';
+  const grade = extractGradeFromClassName(clsName) || '';
+  const sub = normalizeSubjectName(subject || foundCls?.subject || 'Toán');
+
+  // 1. Tìm pool PPCT phù hợp
+  let pool = ppctItems.filter(
+    (p) => p.classId === classId && normalizeSubjectName(p.subject) === sub
+  );
+
+  if (pool.length === 0 && grade) {
+    pool = ppctItems.filter(
+      (p) =>
+        (!p.classId || p.classId === 'ALL') &&
+        String(p.grade || '').trim() === grade &&
+        normalizeSubjectName(p.subject) === sub
+    );
+  }
+
+  if (pool.length === 0 && sub === 'Toán') {
+    pool = getSamplePpctForGrade(grade, sub);
+  }
+
+  pool = [...pool].sort((a, b) => a.periodNumber - b.periodNumber);
+  if (pool.length === 0) return null;
+
+  // 2. Tìm các periodNumber đã dạy hoặc đã được lên lịch
+  const taughtPeriods = new Set<number>();
+  teachingPlan.forEach((p) => {
+    if (p.classId === classId && normalizeSubjectName(p.subject) === sub) {
+      if (p.periodNumber && p.periodNumber > 0) {
+        // Nếu đã hoàn thành hoặc là một tiết dạy bình thường/bù
+        taughtPeriods.add(p.periodNumber);
+      }
+    }
+  });
+
+  // 3. Lấy bài đầu tiên chưa có trong taughtPeriods
+  const next = pool.find((p) => !taughtPeriods.has(p.periodNumber));
+  return next || null;
+}
+
+/**
+ * Kiểm tra xung đột thời gian thực khi giáo viên chọn tiết dạy bù
+ */
+export function checkMakeupCollision({
+  date,
+  period,
+  classId,
+  subject,
+  timetable,
+  teachingPlan,
+  dayOffs,
+}: {
+  date: string; // YYYY-MM-DD
+  period: number; // 1 - 10
+  classId: string;
+  subject?: string;
+  timetable: TimetableSlot[];
+  teachingPlan: TeachingPlanItem[];
+  dayOffs: DayOffItem[];
+}): {
+  hasConflict: boolean;
+  conflicts: string[];
+  severity: 'CRITICAL' | 'WARNING' | 'NONE';
+} {
+  const conflicts: string[] = [];
+
+  // Parse day of week từ date
+  const d = new Date(date + 'T00:00:00');
+  if (isNaN(d.getTime())) {
+    return { hasConflict: true, conflicts: ['Ngày dạy bù không hợp lệ.'], severity: 'CRITICAL' };
+  }
+
+  const jsDay = d.getDay(); // 0 is Sun, 1 is Mon
+  if (jsDay === 0) {
+    conflicts.push('Chủ Nhật: Thầy/Cô đang xếp lịch dạy bù vào Chủ Nhật.');
+  }
+
+  const dayOfWeekNum = jsDay === 0 ? 8 : (jsDay + 1); // 2: T2 -> 7: T7
+
+  // 1. Kiểm tra trùng ngày nghỉ / tiết nghỉ
+  const offMatch = dayOffs.find((off) => {
+    if (off.date !== date) return false;
+    const matchClass = !off.classId || off.classId === 'ALL' || off.classId === classId;
+    if (!matchClass) return false;
+    if (off.allDay) return true;
+    if (off.periods && off.periods.includes(period)) return true;
+    return false;
+  });
+
+  if (offMatch) {
+    conflicts.push(`Trùng ngày nghỉ: "${offMatch.reason}" (${offMatch.allDay ? 'Nghỉ cả ngày' : `Nghỉ tiết ${period}`}).`);
+  }
+
+  // 2. Kiểm tra trùng Thời khóa biểu chính thức của lớp
+  if (dayOfWeekNum >= 2 && dayOfWeekNum <= 7) {
+    const classTkbSlot = timetable.find((s) => s.dayOfWeek === dayOfWeekNum && s.period === period && s.classId === classId);
+    if (classTkbSlot) {
+      conflicts.push(`Trùng TKB lớp: Lớp ${classTkbSlot.className} đã có tiết học môn ${classTkbSlot.subject || 'học'} vào Thứ ${dayOfWeekNum} Tiết ${period}.`);
+    }
+
+    // 3. Kiểm tra trùng lịch dạy lớp khác của cùng giáo viên
+    const otherClassSlot = timetable.find((s) => s.dayOfWeek === dayOfWeekNum && s.period === period && s.classId !== classId);
+    if (otherClassSlot) {
+      conflicts.push(`Trùng lịch GV: Thầy/Cô đã có tiết dạy tại Lớp ${otherClassSlot.className} (${otherClassSlot.subject}) vào Thứ ${dayOfWeekNum} Tiết ${period}.`);
+    }
+  }
+
+  // 4. Kiểm tra trùng với một tiết khác đã có trong Sổ báo giảng vào cùng ngày & tiết
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const dateFormatted = `${dd}/${mm}/${yyyy}`;
+
+  const existingPlanConflict = teachingPlan.find((p) => {
+    const pDate = p.date || '';
+    const matchDate = pDate === dateFormatted || pDate === date;
+    return matchDate && p.period === period && !p.isOffDay;
+  });
+
+  if (existingPlanConflict) {
+    conflicts.push(`Trùng kế hoạch: Đã có tiết dạy "${existingPlanConflict.lessonTitle}" của Lớp ${existingPlanConflict.className} vào ngày ${dateFormatted} Tiết ${period}.`);
+  }
+
+  const hasConflict = conflicts.length > 0;
+  const severity = offMatch || conflicts.some((c) => c.includes('Trùng lịch GV') || c.includes('Trùng TKB'))
+    ? 'CRITICAL'
+    : hasConflict
+    ? 'WARNING'
+    : 'NONE';
+
+  return { hasConflict, conflicts, severity };
+}
+

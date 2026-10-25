@@ -47,9 +47,10 @@ import {
   CallTargetFilter,
   DisciplineRecord,
   DisciplineViolationType,
+  ReviewQuestionBank,
 } from '../types';
+import { User as FirebaseUser } from 'firebase/auth';
 import { chooseMultipleStudents, getEligibleStudents, MultiSelectionResult } from '../utils/fairAlgorithm';
-import { resolveCompletedSpinStudents } from '../utils/spinCount';
 import {
   formatStudentDisplayName,
   getStudentSTT,
@@ -66,6 +67,9 @@ import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionC
 import { speechEngine } from '../utils/speech';
 import { MathRenderer } from './MathRenderer';
 import { StudentProfileCard } from './StudentProfileCard';
+import { loadQuestionBanks } from '../services/reviewQuestionService';
+import { MysteryDoorGame } from './mystery-door/MysteryDoorGame';
+import { MysteryBankPickerModal } from './mystery-door/MysteryBankPickerModal';
 
 import { WheelVisual } from './visuals/WheelVisual';
 import { SlotVisual } from './visuals/SlotVisual';
@@ -116,15 +120,16 @@ interface SpinScreenProps {
   selectionMode: SelectionMode;
   onToggleSelectionMode: () => void;
   settings: SpinSettings;
-  onStudentSelected: (student: Student, mode: SelectionMode, score?: string, note?: string) => void;
+  onStudentSelected: (student: Student, mode: SelectionMode, score?: string, note?: string, questionContent?: string) => void;
   onBatchStudentsSelected?: (students: Student[], mode: SelectionMode) => void;
   onSaveScoreAndNote?: (
     students: Student[],
     mode: SelectionMode,
     score?: string,
-    note?: string
+    note?: string,
+    questionContent?: string
   ) => void;
-  onUndoLastSelection?: (recordId: string, studentIds?: string[]) => void;
+  onUndoLastSelection?: (recordId: string) => void;
   lastHistoryRecord?: HistoryRecord | null;
   onOpenPresentation: () => void;
   onOpenTimer: () => void;
@@ -143,6 +148,16 @@ interface SpinScreenProps {
   onUndoDisciplineRecord?: (recordId: string) => void;
   disciplineRecords?: DisciplineRecord[];
   disciplineViolationTypes?: DisciplineViolationType[];
+  currentUser?: FirebaseUser | null;
+  onSaveTxScoreDirect?: (
+    studentId: string,
+    classId: string,
+    score: number,
+    slot: TxColumn,
+    note?: string,
+    questionContent?: string
+  ) => Promise<boolean> | boolean;
+  onNavigateToReviewBank?: () => void;
 }
 
 export const SpinScreen: React.FC<SpinScreenProps> = ({
@@ -172,6 +187,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   onUndoDisciplineRecord,
   disciplineRecords = [],
   disciplineViolationTypes = [],
+  currentUser,
+  onSaveTxScoreDirect,
+  onNavigateToReviewBank,
 }) => {
   const [visualType, setVisualType] = useState<SpinVisualType>(
     settings.defaultVisualType || 'WHEEL'
@@ -206,12 +224,20 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const [speechState, setSpeechState] = useState<'idle' | 'speaking' | 'paused' | 'error'>('idle');
   const [speakingText, setSpeakingText] = useState<string>('');
 
+  // Mystery Door Game integration states
+  const [activeMysteryBank, setActiveMysteryBank] = useState<ReviewQuestionBank | null>(null);
+  const [isLessonPickerOpen, setIsLessonPickerOpen] = useState(false);
+  const [mysteryDoorToast, setMysteryDoorToast] = useState<string | null>(null);
+
+  const handleOpenMysteryDoor = () => {
+    soundEngine.playTick(1.2);
+    setIsLessonPickerOpen(true);
+  };
+
   // Wheel angle state
   const [wheelAngle, setWheelAngle] = useState(0);
 
   const animationFrameRef = useRef<number | null>(null);
-  const spinInProgressRef = useRef(false);
-  const previousClassIdRef = useRef(activeClass?.id);
   const startTimeRef = useRef<number>(0);
 
   const students = activeClass?.students || [];
@@ -271,11 +297,12 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   const minCall = fairPool.length > 0 ? Math.min(...fairPool.map((s) => s.callCount || 0)) : 0;
   const minCandidates = fairPool.length > 0 ? fairPool.filter((s) => (s.callCount || 0) === minCall) : [];
 
-  // Every visual mode shows the same completed call count, including while
-  // the App's shared class roster is being persisted/refreshed.
+  // Resolve current up-to-date students for winner(s) directly from activeClass.students
   const resolvedSelectedStudents = useMemo(() => {
     if (!selectedResult) return [];
-    return resolveCompletedSpinStudents(selectedResult.selectedStudents, students);
+    return selectedResult.selectedStudents.map(
+      (oldStudent) => students.find((s) => s.id === oldStudent.id) || oldStudent
+    );
   }, [selectedResult, students]);
 
   const resolvedWinner = useMemo(() => {
@@ -325,7 +352,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       return;
     }
 
-    if (isSpinning || spinInProgressRef.current || eligibleStudents.length === 0) return;
+    if (isSpinning || eligibleStudents.length === 0) return;
 
     // 1. Filter candidates according to selected targetFilter
     const candidatePool = targetFilter === 'ALL' ? eligibleStudents : targetCandidates;
@@ -336,8 +363,6 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     const result = chooseMultipleStudents(candidatePool, effectiveCount, selectionMode);
     if (!result || result.selectedStudents.length === 0) return;
 
-    // Synchronous lock: double click / Enter+Space must not start two rounds.
-    spinInProgressRef.current = true;
     setTargetWinner(result.selectedStudents[0]);
     setTargetWinners(result.selectedStudents);
     setIsSpinning(true);
@@ -465,7 +490,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           }, 350);
         }
 
-        // Increment count and notify parent once per completed round.
+        // Increment count and notify parent
         if (result.selectedStudents.length === 1) {
           onStudentSelected(result.selectedStudents[0], selectionMode);
         } else if (onBatchStudentsSelected) {
@@ -473,7 +498,6 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
         } else {
           result.selectedStudents.forEach((s) => onStudentSelected(s, selectionMode));
         }
-        spinInProgressRef.current = false;
       }
     };
 
@@ -506,29 +530,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      spinInProgressRef.current = false;
       soundEngine.stopBGM();
       speechEngine.stop();
     };
   }, []);
-
-  // A completed result belongs to its original class. Changing classes
-  // must never show (or count) that winner in a different class.
-  useEffect(() => {
-    if (previousClassIdRef.current === activeClass?.id) return;
-    previousClassIdRef.current = activeClass?.id;
-    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
-    animationFrameRef.current = null;
-    spinInProgressRef.current = false;
-    soundEngine.stopBGM();
-    speechEngine.stop();
-    setIsSpinning(false);
-    setHasCompleted(false);
-    setSelectedResult(null);
-    setTargetWinner(null);
-    setTargetWinners([]);
-    setDisplayName('???');
-  }, [activeClass?.id]);
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -582,7 +587,7 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     hasCompleted,
   ]);
 
-  const handleSaveScoreAndNote = (scoreVal?: string, noteVal?: string) => {
+  const handleSaveScoreAndNote = (scoreVal?: string, noteVal?: string, questionContent?: string) => {
     const targetStudents =
       resolvedSelectedStudents.length > 0
         ? resolvedSelectedStudents
@@ -610,10 +615,10 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
     }
 
     if (onSaveScoreAndNote) {
-      onSaveScoreAndNote(targetStudents, selectionMode, finalScore, finalNote);
+      onSaveScoreAndNote(targetStudents, selectionMode, finalScore, finalNote, questionContent);
     } else {
       targetStudents.forEach((st) => {
-        onStudentSelected(st, selectionMode, finalScore, finalNote);
+        onStudentSelected(st, selectionMode, finalScore, finalNote, questionContent);
       });
     }
     setFeedbackSaved(true);
@@ -646,9 +651,8 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
   };
 
   const handleUndo = () => {
-    if (lastHistoryRecord && onUndoLastSelection && hasCompleted && selectedResult) {
-      // Undo the whole completed selection, including multi-pick rounds.
-      onUndoLastSelection(lastHistoryRecord.id, selectedResult.selectedStudents.map((s) => s.id));
+    if (lastHistoryRecord && onUndoLastSelection) {
+      onUndoLastSelection(lastHistoryRecord.id);
       setHasCompleted(false);
       setSelectedResult(null);
       setDisplayName('???');
@@ -932,25 +936,14 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
               <button
                 key={mode.id}
                 onClick={() => {
-                  if (spinInProgressRef.current) return;
-                  if (visualType !== mode.id) {
-                    // Changing the animation style must not preview the previous
-                    // round as if it were the next winner. Keep class call counts.
-                    setHasCompleted(false);
-                    setSelectedResult(null);
-                    setTargetWinner(null);
-                    setTargetWinners([]);
-                    setDisplayName('???');
-                  }
                   setVisualType(mode.id);
                   soundEngine.playTick(1.2);
                 }}
-                disabled={isSpinning}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
                   visualType === mode.id
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                     : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700/80'
-                } disabled:cursor-not-allowed disabled:opacity-50`}
+                }`}
               >
                 {mode.icon}
                 <span>{mode.label}</span>
@@ -1471,16 +1464,36 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
                 ))}
               </div>
             </div>
-            {/* Absent / Cancel roll button */}
-            <button
-              onClick={handleUndo}
-              className="inline-flex items-center gap-1.5 text-xs text-rose-300 hover:text-rose-200 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium self-start sm:self-auto"
-              title="Nhấn nếu học sinh vắng mặt để không tính lượt này"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-              <span>Học sinh vắng mặt (Hủy lượt này)</span>
-            </button>
+            {/* Action Buttons: Mystery Door & Absent */}
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={handleOpenMysteryDoor}
+                className="inline-flex items-center gap-1.5 text-xs text-amber-300 hover:text-slate-950 bg-amber-500/20 hover:bg-amber-400 border border-amber-500/50 px-3 py-1.5 rounded-lg transition-all font-black shadow-md cursor-pointer hover:scale-105 active:scale-95"
+                title="Mở Ô Cửa Bí Mật để kiểm tra bài cũ cho học sinh này"
+              >
+                <span>🚪</span>
+                <span>Ô CỬA BÍ MẬT</span>
+              </button>
+
+              <button
+                onClick={handleUndo}
+                className="inline-flex items-center gap-1.5 text-xs text-rose-300 hover:text-rose-200 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium cursor-pointer"
+                title="Nhấn nếu học sinh vắng mặt để không tính lượt này"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span>Học sinh vắng mặt (Hủy lượt này)</span>
+              </button>
+            </div>
           </div>
+
+          {/* Mystery Door Toast Notice if any */}
+          {mysteryDoorToast && (
+            <div className="p-3 bg-amber-950/60 border border-amber-500/50 rounded-xl text-xs text-amber-300 font-bold flex items-center gap-2 animate-fade-in">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{mysteryDoorToast}</span>
+            </div>
+          )}
 
           {/* Quick Score Buttons & Star Rewards */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-700/50">
@@ -1732,6 +1745,55 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
           disciplineRecords={disciplineRecords}
           disciplineViolationTypes={disciplineViolationTypes}
           onClose={() => setSelectedProfileStudent(null)}
+        />
+      )}
+
+      {/* Lesson / Bank Picker Modal for Mystery Door */}
+      {isLessonPickerOpen && (
+        <MysteryBankPickerModal
+          isOpen={isLessonPickerOpen}
+          activeClass={activeClass}
+          student={resolvedWinner || resolvedSelectedStudents[0] || selectedResult?.selectedStudents[0] || null}
+          ownerId={currentUser?.uid}
+          onSelectBank={(bank) => {
+            setActiveMysteryBank(bank);
+            setIsLessonPickerOpen(false);
+          }}
+          onClose={() => setIsLessonPickerOpen(false)}
+          onNavigateToReviewBank={() => {
+            setIsLessonPickerOpen(false);
+            if (onNavigateToReviewBank) onNavigateToReviewBank();
+          }}
+        />
+      )}
+
+      {/* Mystery Door Game Modal for the Winner */}
+      {activeMysteryBank && (
+        <MysteryDoorGame
+          bank={activeMysteryBank}
+          ownerId={currentUser?.uid}
+          student={resolvedWinner || resolvedSelectedStudents[0] || selectedResult?.selectedStudents[0] || null}
+          classId={activeClass.id}
+          className={activeClass.name}
+          onClose={() => setActiveMysteryBank(null)}
+          onSaveHistoryScore={(score, note, questionContent) => {
+            const winner = resolvedWinner || resolvedSelectedStudents[0] || selectedResult?.selectedStudents[0];
+            if (winner) {
+              setQuickScore(score);
+              if (note) setQuickNote(note);
+              handleSaveScoreAndNote(score, note, questionContent);
+            }
+          }}
+          onSaveTxScore={async (score, slot, note, questionContent) => {
+            const winner = resolvedWinner || resolvedSelectedStudents[0] || selectedResult?.selectedStudents[0];
+            if (winner && onSaveTxScoreDirect) {
+              setQuickScore(String(score));
+              if (note) setQuickNote(note);
+              const success = await onSaveTxScoreDirect(winner.id, activeClass.id, score, slot, note, questionContent);
+              return !!success;
+            }
+            return false;
+          }}
         />
       )}
     </div>

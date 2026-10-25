@@ -43,10 +43,7 @@ import {
   saveViolationTypes,
   createDisciplineRecord,
   deleteDisciplineRecord,
-  loadDeletedDisciplineIds,
-  saveDeletedDisciplineIds,
 } from './services/disciplineService';
-import { mergeDisciplineSyncStates } from './utils/disciplineSync';
 import { INITIAL_CLASSES } from './utils/sampleData';
 import { soundEngine } from './utils/audio';
 import { auth } from './lib/firebase';
@@ -57,7 +54,6 @@ import {
   subscribeToUserData,
   getEffectiveSubscription,
   ensureUserSubscription,
-  reconcileDisciplineRecordsWithFirestore,
 } from './utils/firestoreService';
 import { ENABLE_TRIAL_LIMIT } from './config/subscriptionConfig';
 
@@ -68,7 +64,6 @@ import { ClassManager } from './components/ClassManager';
 import { ExcelImportScreen } from './components/ExcelImportScreen';
 import { mergeEduStudentsWithExisting } from './utils/studentMergeHelper';
 import { applyQuickScoreToStudent, TxColumn } from './utils/quickScoreHelper';
-import { undoCompletedSpin } from './utils/undoCompletedSpin';
 import { StatsScreen } from './components/StatsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -80,6 +75,8 @@ import { MathQuestionSpotlightModal } from './components/MathQuestionSpotlightMo
 import { TimetableScreen } from './components/TimetableScreen';
 import { GradebookScreen } from './components/GradebookScreen';
 import { DisciplineScreen } from './components/DisciplineScreen';
+import { ReviewQuestionBankScreen } from './components/ReviewQuestionBankScreen';
+import { ResponseCardsScreen } from './components/response-cards/ResponseCardsScreen';
 import { AuthModal } from './components/AuthModal';
 import { UpgradeProModal } from './components/UpgradeProModal';
 import { PaymentHistoryModal } from './components/PaymentHistoryModal';
@@ -138,23 +135,6 @@ export default function App() {
       setShowDataRecoveryBanner(false);
     }
   }, [classes]);
-
-  // Reconcile the nề nếp journal independently from class data timestamps.
-  const handleSyncDisciplineRecords = useCallback(async (userId: string) => {
-    const fromCloud = await reconcileDisciplineRecordsWithFirestore(userId, {
-      records: loadDisciplineRecords(),
-      deletedIds: loadDeletedDisciplineIds(),
-    });
-    if (auth.currentUser?.uid !== userId) return;
-    // Merge again in case another violation was recorded during the network request.
-    const merged = mergeDisciplineSyncStates({
-      records: loadDisciplineRecords(),
-      deletedIds: loadDeletedDisciplineIds(),
-    }, fromCloud);
-    saveDeletedDisciplineIds(merged.deletedIds);
-    saveDisciplineRecords(merged.records);
-    setDisciplineRecords(merged.records);
-  }, []);
 
   // Listen to Firebase Auth state change & real-time Firestore sync
   useEffect(() => {
@@ -222,6 +202,7 @@ export default function App() {
               selectionMode: loadSelectionMode(),
               timetableSlots: loadTimetable(),
               teachingPlan: loadTeachingPlan(),
+              disciplineRecords: loadDisciplineRecords(),
               disciplineViolationTypes: loadViolationTypes(),
             });
             setClasses(currentLocalClasses);
@@ -257,6 +238,10 @@ export default function App() {
             if (cloudData.teachingPlan) {
               setTeachingPlan(cloudData.teachingPlan);
               saveTeachingPlan(cloudData.teachingPlan);
+            }
+            if (cloudData.disciplineRecords) {
+              setDisciplineRecords(cloudData.disciplineRecords);
+              saveDisciplineRecords(cloudData.disciplineRecords);
             }
             if (cloudData.disciplineViolationTypes) {
               setViolationTypes(cloudData.disciplineViolationTypes);
@@ -300,6 +285,10 @@ export default function App() {
                 setTeachingPlan(cloudData.teachingPlan);
                 saveTeachingPlan(cloudData.teachingPlan);
               }
+              if (cloudData.disciplineRecords) {
+                setDisciplineRecords(cloudData.disciplineRecords);
+                saveDisciplineRecords(cloudData.disciplineRecords);
+              }
               if (cloudData.disciplineViolationTypes) {
                 setViolationTypes(cloudData.disciplineViolationTypes);
                 saveViolationTypes(cloudData.disciplineViolationTypes);
@@ -314,6 +303,7 @@ export default function App() {
                 selectionMode: loadSelectionMode(),
                 timetableSlots: loadTimetable(),
                 teachingPlan: loadTeachingPlan(),
+                disciplineRecords: loadDisciplineRecords(),
                 disciplineViolationTypes: loadViolationTypes(),
               });
               setClasses(currentLocalClasses);
@@ -326,7 +316,6 @@ export default function App() {
               saveClasses(cloudData.classes);
             }
           }
-          await handleSyncDisciplineRecords(user.uid);
         } catch (error) {
           console.error('Failed to sync data with Firestore on auth change:', error);
         } finally {
@@ -341,7 +330,7 @@ export default function App() {
       unsubscribe();
       if (unsubFirestoreUser) unsubFirestoreUser();
     };
-  }, [handleSyncDisciplineRecords]);
+  }, []);
 
   // Helper to sync changes to Firestore in the background if user is logged in
   const syncToCloudIfLoggedIn = useCallback((partialData: any) => {
@@ -368,9 +357,9 @@ export default function App() {
         selectionMode,
         timetableSlots: timetable,
         teachingPlan,
+        disciplineRecords,
         disciplineViolationTypes: violationTypes,
       });
-      await handleSyncDisciplineRecords(currentUser.uid);
       soundEngine.playVictoryFanfare();
       alert('Đồng bộ Cloud thành công! Toàn bộ dữ liệu của Thầy/Cô đã được lưu trữ an toàn trên tài khoản.');
     } catch (err) {
@@ -379,7 +368,7 @@ export default function App() {
     } finally {
       setIsSyncingCloud(false);
     }
-  }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan, violationTypes, handleSyncDisciplineRecords]);
+  }, [currentUser, classes, activeClassId, history, settings, selectionMode, timetable, teachingPlan, disciplineRecords, violationTypes]);
 
   // One-click recovery handler from persistent safety vault
   const handleTriggerRecovery = useCallback(() => {
@@ -409,12 +398,8 @@ export default function App() {
   const handleUpdateDisciplineRecords = useCallback((newRecords: DisciplineRecord[]) => {
     setDisciplineRecords(newRecords);
     saveDisciplineRecords(newRecords);
-    if (auth.currentUser) {
-      handleSyncDisciplineRecords(auth.currentUser.uid).catch((error) => {
-        console.warn('Nề nếp saved on device; database sync can retry at login/manual sync:',error);
-      });
-    }
-  }, [handleSyncDisciplineRecords]);
+    syncToCloudIfLoggedIn({ disciplineRecords: newRecords });
+  }, [syncToCloudIfLoggedIn]);
 
   const handleUpdateViolationTypes = useCallback((newTypes: DisciplineViolationType[]) => {
     setViolationTypes(newTypes);
@@ -430,9 +415,10 @@ export default function App() {
       source: 'random_picker',
       note: note || 'Ghi nhận sau khi quay trúng học sinh',
     });
-    handleUpdateDisciplineRecords(loadDisciplineRecords());
+    const updated = [newRec, ...disciplineRecords];
+    handleUpdateDisciplineRecords(updated);
     return newRec.id;
-  }, [activeClassId, handleUpdateDisciplineRecords]);
+  }, [activeClassId, disciplineRecords, handleUpdateDisciplineRecords]);
 
   const handleUndoDisciplineRecord = useCallback((recordId: string) => {
     const updated = deleteDisciplineRecord(recordId);
@@ -667,7 +653,7 @@ export default function App() {
 
   // Called when teacher saves score & note for selected students (single or batch)
   const handleSaveScoreAndNote = useCallback(
-    (targetStudents: Student[], mode: SelectionMode, score?: string, note?: string) => {
+    (targetStudents: Student[], mode: SelectionMode, score?: string, note?: string, questionContent?: string) => {
       if (!targetStudents || targetStudents.length === 0) return;
       const targetIds = new Set(targetStudents.map((s) => s.id));
       const now = new Date();
@@ -715,6 +701,7 @@ export default function App() {
             score: score !== undefined ? score : updatedHistory[histIndex].score,
             note: note !== undefined ? note : updatedHistory[histIndex].note,
             assignedTxSlot: assignedSlot ?? updatedHistory[histIndex].assignedTxSlot,
+            questionContent: questionContent || updatedHistory[histIndex].questionContent,
           };
         } else {
           newlyCreatedRecords.push({
@@ -731,6 +718,7 @@ export default function App() {
             score,
             note,
             assignedTxSlot: assignedSlot,
+            questionContent,
           });
         }
       });
@@ -744,13 +732,116 @@ export default function App() {
     [activeClass, classes, history, handleUpdateClasses, handleUpdateHistory]
   );
 
-  // Undo one completed spin, or all students in a multi-pick round.
+  // Dedicated handler to save score explicitly to a specific TX slot in Gradebook
+  const handleSaveTxScore = useCallback(
+    async (
+      studentId: string,
+      classId: string,
+      score: number,
+      slot: TxColumn,
+      note?: string,
+      questionContent?: string
+    ) => {
+      let targetStudentName = '';
+      const now = new Date();
+      const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+      const formattedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const updatedClasses = classes.map((cls) => {
+        if (cls.id === classId) {
+          const updatedStudents = cls.students.map((s) => {
+            if (s.id === studentId) {
+              targetStudentName = s.name;
+              const updatedScores = { ...(s.scores || {}) };
+              updatedScores[slot] = score;
+              return {
+                ...s,
+                scores: updatedScores,
+                notes: note && note.trim() !== '' ? note.trim() : s.notes,
+              };
+            }
+            return s;
+          });
+          return { ...cls, students: updatedStudents };
+        }
+        return cls;
+      });
+
+      handleUpdateClasses(updatedClasses);
+
+      // Also update matching recent history or create record with assignedTxSlot
+      const histIndex = history.findIndex((h) => h.studentId === studentId && h.classId === classId);
+      if (histIndex !== -1) {
+        const updatedHistory = [...history];
+        updatedHistory[histIndex] = {
+          ...updatedHistory[histIndex],
+          score: String(score),
+          note: note !== undefined && note.trim() !== '' ? note.trim() : updatedHistory[histIndex].note,
+          assignedTxSlot: slot,
+          questionContent: questionContent || updatedHistory[histIndex].questionContent,
+        };
+        handleUpdateHistory(updatedHistory);
+        setLastHistoryRecord(updatedHistory[histIndex]);
+      } else {
+        const newRecord: HistoryRecord = {
+          id: `hist-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          timestamp: now.toISOString(),
+          formattedDate,
+          formattedTime,
+          classId,
+          className: classes.find((c) => c.id === classId)?.name || '',
+          studentId,
+          studentName: targetStudentName || 'Học sinh',
+          callCountAfter:
+            classes.find((c) => c.id === classId)?.students.find((s) => s.id === studentId)?.callCount || 0,
+          mode: selectionMode,
+          score: String(score),
+          note,
+          assignedTxSlot: slot,
+          questionContent,
+        };
+        const newHistory = [newRecord, ...history];
+        handleUpdateHistory(newHistory);
+        setLastHistoryRecord(newRecord);
+      }
+      return true;
+    },
+    [classes, history, selectionMode, handleUpdateClasses, handleUpdateHistory]
+  );
+
+  // Undo student selection (e.g. if absent)
   const handleUndoLastSelection = useCallback(
-    (recordId: string, selectedStudentIds?: string[]) => {
-      const restored = undoCompletedSpin(classes, history, recordId, selectedStudentIds);
-      if (!restored) return;
-      handleUpdateClasses(restored.classes);
-      handleUpdateHistory(restored.history);
+    (recordId: string) => {
+      const targetRecord = history.find((h) => h.id === recordId);
+      if (!targetRecord) return;
+
+      // Decrement student count and revert assignedTxSlot if any
+      const updatedClasses = classes.map((cls) => {
+        if (cls.id === targetRecord.classId) {
+          const updatedStudents = cls.students.map((s) => {
+            if (s.id === targetRecord.studentId) {
+              const currentScores = s.scores ? { ...s.scores } : {};
+              if (targetRecord.assignedTxSlot && currentScores[targetRecord.assignedTxSlot] !== undefined) {
+                currentScores[targetRecord.assignedTxSlot] = null;
+              }
+              return {
+                ...s,
+                callCount: Math.max(0, (s.callCount || 1) - 1),
+                scores: currentScores,
+              };
+            }
+            return s;
+          });
+          return { ...cls, students: updatedStudents };
+        }
+        return cls;
+      });
+
+      handleUpdateClasses(updatedClasses);
+
+      // Remove from history
+      const updatedHistory = history.filter((h) => h.id !== recordId);
+      handleUpdateHistory(updatedHistory);
       setLastHistoryRecord(null);
     },
     [classes, history, handleUpdateClasses, handleUpdateHistory]
@@ -996,13 +1087,7 @@ export default function App() {
     setActiveClassId(loadActiveClassId(freshClasses));
     setHistory(loadHistory());
     setSettings(loadSettings());
-    setDisciplineRecords(loadDisciplineRecords());
-    setViolationTypes(loadViolationTypes());
-    if (auth.currentUser) {
-      handleSyncDisciplineRecords(auth.currentUser.uid).catch((error) =>
-        console.warn('Imported nề nếp saved locally; cloud sync failed:',error));
-    }
-  }, [handleSyncDisciplineRecords]);
+  }, []);
 
   // Restore safety backup
   const handleRestoreSafetyBackup = useCallback(() => {
@@ -1025,15 +1110,14 @@ export default function App() {
           settings: loadSettings(),
           timetableSlots: loadTimetable(),
           teachingPlan: loadTeachingPlan(),
+          disciplineRecords: loadDisciplineRecords(),
           disciplineViolationTypes: loadViolationTypes(),
-        }).catch((error) => console.warn('Backup cloud sync failed:', error));
-        handleSyncDisciplineRecords(auth.currentUser.uid).catch((error) =>
-          console.warn('Restored nề nếp saved locally; cloud sync failed:', error));
+        });
       }
       return true;
     }
     return false;
-  }, [handleSyncDisciplineRecords]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white font-sans antialiased">
@@ -1120,6 +1204,25 @@ export default function App() {
             onUndoDisciplineRecord={handleUndoDisciplineRecord}
             disciplineRecords={disciplineRecords}
             disciplineViolationTypes={violationTypes}
+            currentUser={currentUser}
+            onSaveTxScoreDirect={handleSaveTxScore}
+            onNavigateToReviewBank={() => setCurrentTab('REVIEW_BANK')}
+          />
+        )}
+
+        {currentTab === 'REVIEW_BANK' && (
+          <ReviewQuestionBankScreen currentUser={currentUser} />
+        )}
+
+        {currentTab === 'RESPONSE_CARDS' && (
+          <ResponseCardsScreen
+            classes={classes}
+            activeClassId={activeClassId}
+            onSelectClass={handleSelectClass}
+            onUpdateClasses={handleUpdateClasses}
+            currentUser={currentUser}
+            onUpdateHistory={handleUpdateHistory}
+            history={history}
           />
         )}
 
@@ -1197,6 +1300,7 @@ export default function App() {
             history={history}
             classes={classes}
             onClearHistory={() => handleUpdateHistory([])}
+            onSaveTxScore={handleSaveTxScore}
           />
         )}
 

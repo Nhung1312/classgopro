@@ -3,7 +3,6 @@ import { Trophy, Sparkles, Flame, Eye, Crown, Zap, Shield, RotateCcw } from 'luc
 import { Student } from '../../types';
 import { getStudentSTT } from '../../utils/studentDisplay';
 import { getStudentInitials, getStudentAvatarGradient } from '../../utils/studentAvatar';
-import { buildPyramidLayout } from '../../utils/pyramidLayout';
 
 interface PyramidVisualProps {
   students: Student[];
@@ -14,6 +13,44 @@ interface PyramidVisualProps {
   duration?: number;
   allClassStudents?: Student[];
   onSelectStudentProfile?: (student: Student) => void;
+}
+
+/**
+ * Calculates symmetric, strictly increasing tiers for ANY student count N.
+ * The apex (tier 0) starts with 1 stone block, expanding smoothly to the base.
+ */
+function calculatePyramidTiers(n: number): number[] {
+  if (n <= 0) return [];
+  if (n === 1) return [1];
+  if (n === 2) return [1, 1];
+  if (n === 3) return [1, 2];
+  if (n === 4) return [1, 1, 2];
+  if (n === 5) return [1, 2, 2];
+
+  let bestR = 2;
+  for (let r = 2; r <= 14; r++) {
+    const tri = (r * (r + 1)) / 2;
+    if (tri <= n) {
+      bestR = r;
+    }
+  }
+
+  const r = bestR;
+  const tiers: number[] = [];
+  for (let i = 1; i <= r; i++) {
+    tiers.push(i);
+  }
+  let currentSum = (r * (r + 1)) / 2;
+  let remaining = n - currentSum;
+
+  let tierIdx = r - 1;
+  while (remaining > 0) {
+    tiers[tierIdx]++;
+    remaining--;
+    tierIdx--;
+    if (tierIdx < 1) tierIdx = r - 1;
+  }
+  return tiers;
 }
 
 interface PyramidBlock {
@@ -102,23 +139,110 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
     }
   }, [isSpinning, hasCompleted, duration]);
 
-  // Layout NEVER depends on winner identity. The apex is no longer guaranteed to win.
-  // Choosing winners stays in SpinScreen/fairAlgorithm; this component only animates.
-  const { tiers, blocks } = useMemo(() => {
-    const winnerIds = new Set<string>(activeWinners.map((w: Student) => w.id));
-    const layout = buildPyramidLayout(students || [], winnerIds);
+  // 3. Build Pyramid Grid & assign elimination milestones
+  const { tiers, blocks, winnerBlock } = useMemo(() => {
+    if (!students || students.length === 0) {
+      return { tiers: [], blocks: [], winnerBlock: null };
+    }
+
+    const total = students.length;
+    const tierCounts = calculatePyramidTiers(total);
+
+    // Identify winners by id
+    const winnerIds = new Set<string>(activeWinners.map((w) => w.id));
+
+    // Separate non-winners and winners
+    const nonWinnerStudents: Student[] = [];
+    const winnerStudentPool: Student[] = [];
+
+    students.forEach((s) => {
+      if (winnerIds.has(s.id)) {
+        winnerStudentPool.push(s);
+      } else {
+        nonWinnerStudents.push(s);
+      }
+    });
+
+    // Pseudo-random deterministic shuffle for non-winners elimination order
+    const shuffledNonWinners = [...nonWinnerStudents].sort((a, b) => {
+      const hA = (a.id.charCodeAt(0) * 31 + a.name.charCodeAt(0)) % 100;
+      const hB = (b.id.charCodeAt(0) * 31 + b.name.charCodeAt(0)) % 100;
+      return hA - hB;
+    });
+
+    // Distribute students into tiers: place primary winner at apex or prominent tier
+    // Arrange students so apex (tier 0) gets winner if possible, or distributes naturally
+    const allOrdered: Student[] = [];
+    if (winnerStudentPool.length > 0) {
+      allOrdered.push(...winnerStudentPool);
+      allOrdered.push(...shuffledNonWinners);
+    } else {
+      allOrdered.push(...students);
+    }
+
+    let studentPointer = 0;
+    const allBlocks: PyramidBlock[] = [];
+    let foundWinnerBlock: PyramidBlock | null = null;
+
+    tierCounts.forEach((count, tIdx) => {
+      for (let c = 0; c < count; c++) {
+        if (studentPointer >= allOrdered.length) break;
+        const st = allOrdered[studentPointer];
+        const isW = winnerIds.has(st.id);
+        const stt = getStudentSTT(st, allClassStudents || students);
+        const initials = getStudentInitials(st?.name);
+        const gradient = getStudentAvatarGradient(st.id || st.name);
+
+        const blk: PyramidBlock = {
+          student: st,
+          stt,
+          initials,
+          gradient,
+          isWinner: isW,
+          elimProgress: isW ? 999 : 0.5,
+          tierIndex: tIdx,
+          colIndex: c,
+        };
+
+        allBlocks.push(blk);
+        if (isW && !foundWinnerBlock) {
+          foundWinnerBlock = blk;
+        }
+
+        studentPointer++;
+      }
+    });
+
+    if (winnerIds.size === 0 && allBlocks.length > 0) {
+      allBlocks[0].isWinner = true;
+      allBlocks[0].elimProgress = 999;
+      foundWinnerBlock = allBlocks[0];
+    }
+
+    // Elimination sequence: BOTTOM (đáy) TO TOP (đỉnh)
+    // Non-winner blocks at highest tierIndex (base / đáy) eliminate first;
+    // blocks at lower tierIndex (towards apex / đỉnh) eliminate last.
+    const nonWinnerBlocks = allBlocks.filter((b) => !b.isWinner);
+    nonWinnerBlocks.sort((a, b) => {
+      // 1. Higher tierIndex (bottom of pyramid) eliminates first
+      if (b.tierIndex !== a.tierIndex) {
+        return b.tierIndex - a.tierIndex;
+      }
+      // 2. Within the same tier, pseudo-random deterministic stagger
+      const hA = (a.student.id.charCodeAt(0) * 31 + a.student.name.charCodeAt(0)) % 100;
+      const hB = (b.student.id.charCodeAt(0) * 31 + b.student.name.charCodeAt(0)) % 100;
+      return hA - hB;
+    });
+
+    const totalNonWinners = nonWinnerBlocks.length;
+    nonWinnerBlocks.forEach((blk, idx) => {
+      blk.elimProgress = 0.08 + (idx / Math.max(1, totalNonWinners)) * 0.80;
+    });
+
     return {
-      tiers: layout.tiers,
-      blocks: layout.blocks.map(({ student, tierIndex, colIndex, isWinner, elimProgress }): PyramidBlock => ({
-        student,
-        tierIndex,
-        colIndex,
-        isWinner,
-        elimProgress,
-        stt: getStudentSTT(student, allClassStudents || students),
-        initials: getStudentInitials(student.name),
-        gradient: getStudentAvatarGradient(student.id || student.name),
-      })),
+      tiers: tierCounts,
+      blocks: allBlocks,
+      winnerBlock: foundWinnerBlock,
     };
   }, [students, activeWinners, allClassStudents]);
 
@@ -165,11 +289,11 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
   // Live count of surviving blocks during spin
   const survivingCount = useMemo(() => {
     if (!isSpinning && !hasCompleted) return blocks.length;
-    if (hasCompleted) return activeWinners.length;
+    if (hasCompleted) return activeWinners.length || 1;
     return blocks.filter((b) => b.isWinner || animProgress < b.elimProgress + 0.05).length;
   }, [blocks, isSpinning, hasCompleted, animProgress, activeWinners.length]);
 
-  const primaryWinner = activeWinners[0] || null;
+  const primaryWinner = activeWinners[0] || (winnerBlock ? winnerBlock.student : null);
   const primarySTT = primaryWinner ? getStudentSTT(primaryWinner, allClassStudents || students) : 1;
   const primaryInitials = primaryWinner ? getStudentInitials(primaryWinner.name) : 'HS';
   const primaryGradient = primaryWinner
@@ -431,9 +555,8 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
                       !isWinner &&
                       animProgress >= blk.elimProgress &&
                       animProgress < blk.elimProgress + 0.05;
-                    // Keep the winner visually ordinary until the final reveal.
                     const isSurvivingWinner =
-                      isWinner && (hasCompleted || (isSpinning && animProgress >= 0.92));
+                      isWinner && (isSpinning || hasCompleted);
 
                     if (isEliminated) {
                       // Block dissolved: render empty ghost space to maintain layout integrity while shrinking
@@ -519,7 +642,7 @@ export const PyramidVisual: React.FC<PyramidVisualProps> = ({
           </span>
         </span>
         <span className="hidden sm:inline text-amber-300/60">
-          Các khối sẽ tiêu biến dần • Bất kỳ vị trí nào cũng có thể chiến thắng
+          Các khối sẽ tiêu biến dần • Khối trên đỉnh cao là người chiến thắng
         </span>
       </div>
     </div>

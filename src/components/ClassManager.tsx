@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { ClassRoom, Student } from '../types';
 import { soundEngine } from '../utils/audio';
-import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import { isSampleClasses } from '../utils/storage';
 import { StudentInfoModal } from './StudentInfoModal';
 
@@ -81,7 +80,8 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
 
   // Filter students by search
   const filteredStudents = (activeClass?.students || []).filter((s) =>
-    matchesVietnameseSearch(searchTerm, s.name, s.studentCode)
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.studentCode && s.studentCode.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Handle create class

@@ -1,4 +1,4 @@
-import { doc, getDoc, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
   ClassRoom,
@@ -12,7 +12,6 @@ import {
   DisciplineViolationType,
 } from '../types';
 import { ENABLE_TRIAL_LIMIT, TRIAL_DURATION_DAYS } from '../config/subscriptionConfig';
-import { DisciplineSyncState, mergeDisciplineSyncStates } from './disciplineSync';
 
 export interface UserCloudData {
   classes?: ClassRoom[];
@@ -23,7 +22,6 @@ export interface UserCloudData {
   timetableSlots?: TimetableSlot[];
   teachingPlan?: TeachingPlanItem[];
   disciplineRecords?: DisciplineRecord[];
-  disciplineDeletedRecordIds?: string[];
   disciplineViolationTypes?: DisciplineViolationType[];
   subscription?: UserSubscription;
   dataUpdatedAt?: string;
@@ -214,28 +212,3 @@ export async function saveUserDataToFirestore(
   }
 }
 
-
-/** Atomic, additive nề nếp sync, independent of classes/grades and their timestamps. */
-export async function reconcileDisciplineRecordsWithFirestore(
-  userId: string, local: DisciplineSyncState,
-): Promise<DisciplineSyncState> {
-  const ref = doc(db,'users',userId);
-  return runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const data = snapshot.exists() ? snapshot.data() as UserCloudData : null;
-    const cloud: DisciplineSyncState = {
-      records: Array.isArray(data?.disciplineRecords) ? data.disciplineRecords : [],
-      deletedIds: Array.isArray(data?.disciplineDeletedRecordIds) ? data.disciplineDeletedRecordIds : [],
-    };
-    const merged = mergeDisciplineSyncStates(local,cloud);
-    if (JSON.stringify(merged.records) !== JSON.stringify(cloud.records) ||
-        JSON.stringify(merged.deletedIds) !== JSON.stringify(cloud.deletedIds)) {
-      transaction.set(ref,{
-        disciplineRecords: sanitizeForFirestore(merged.records),
-        disciplineDeletedRecordIds: merged.deletedIds,
-        disciplineLastSyncedAt: new Date().toISOString(),
-      },{merge:true});
-    }
-    return merged;
-  });
-}

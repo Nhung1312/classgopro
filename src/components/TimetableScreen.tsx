@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Calendar,
   Clock,
@@ -22,16 +22,37 @@ import {
   X,
   FileCheck,
 } from 'lucide-react';
-import { ClassRoom, TimetableSlot, TeachingPlanItem } from '../types';
+import {
+  ClassRoom,
+  TimetableSlot,
+  TeachingPlanItem,
+  DayOffItem,
+  PpctItem,
+  ScheduleGenerationConfig,
+} from '../types';
 import { soundEngine } from '../utils/audio';
 import {
   downloadVnEduTimetableTemplate,
   downloadVnEduTeachingPlanTemplate,
+  downloadVnEduPpctTemplate,
+  downloadCombinedTimetableAndPpctTemplate,
   exportTimetableToExcel,
   exportTeachingPlanToExcel,
   parseTimetableFromExcel,
   parseTeachingPlanFromExcel,
+  generateTeachingPlanFromTimetable,
 } from '../utils/timetableExcelService';
+import {
+  loadDayOffs,
+  saveDayOffs,
+  loadPpctItems,
+  savePpctItems,
+  loadScheduleConfig,
+  saveScheduleConfig,
+} from '../utils/storage';
+import { AutoScheduleModal } from './timetable/AutoScheduleModal';
+import { MakeupLessonModal } from './timetable/MakeupLessonModal';
+import { DayOffAndMakeupModal } from './timetable/DayOffAndMakeupModal';
 
 interface TimetableScreenProps {
   classes: ClassRoom[];
@@ -111,6 +132,106 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
       return () => clearTimeout(timer);
     }
   }, [toastFeedback]);
+
+  // Auto Schedule & Day Off state
+  const [isAutoScheduleModalOpen, setIsAutoScheduleModalOpen] = useState(false);
+  const [dayOffs, setDayOffs] = useState<DayOffItem[]>(() => loadDayOffs());
+  const [ppctItems, setPpctItems] = useState<PpctItem[]>(() => loadPpctItems());
+  const [scheduleConfig, setScheduleConfig] = useState<ScheduleGenerationConfig>(() => loadScheduleConfig());
+  const [activeWeekFilter, setActiveWeekFilter] = useState<number | 'ALL'>('ALL');
+
+  // Makeup lesson & Day Off modal states
+  const [isMakeupModalOpen, setIsMakeupModalOpen] = useState(false);
+  const [editingMakeupItem, setEditingMakeupItem] = useState<TeachingPlanItem | null>(null);
+  const [isDayOffAndMakeupModalOpen, setIsDayOffAndMakeupModalOpen] = useState(false);
+
+  const handleSaveMakeupLesson = (savedItem: TeachingPlanItem) => {
+    let updated: TeachingPlanItem[];
+    if (editingMakeupItem) {
+      updated = teachingPlan.map((p) => (p.id === savedItem.id ? savedItem : p));
+    } else {
+      updated = [...teachingPlan, savedItem];
+    }
+    updated.sort((a, b) => {
+      if (a.week !== b.week) return a.week - b.week;
+      if ((a.dayOfWeek || 0) !== (b.dayOfWeek || 0)) return (a.dayOfWeek || 0) - (b.dayOfWeek || 0);
+      return (a.period || 0) - (b.period || 0);
+    });
+    onUpdateTeachingPlan(updated);
+    setToastFeedback({
+      message: `✅ Đã lưu tiết dạy bù: Lớp ${savedItem.className} (Ngày ${savedItem.date} - Tiết ${savedItem.period})!`,
+      type: 'success',
+    });
+  };
+
+  const handleOpenAddMakeup = () => {
+    setEditingMakeupItem(null);
+    setIsMakeupModalOpen(true);
+  };
+
+  const handleEditMakeup = (item: TeachingPlanItem) => {
+    setEditingMakeupItem(item);
+    setIsMakeupModalOpen(true);
+  };
+
+  const handleDeleteMakeup = (id: string) => {
+    const item = teachingPlan.find((p) => p.id === id);
+    if (!item) return;
+    if (item.isCompleted) {
+      if (!window.confirm('Tiết dạy bù này đã hoàn thành. Thầy/Cô có chắc chắn muốn hủy không?')) {
+        return;
+      }
+    }
+    const updated = teachingPlan.filter((p) => p.id !== id);
+    onUpdateTeachingPlan(updated);
+    setToastFeedback({
+      message: '🗑️ Đã hủy tiết dạy bù.',
+      type: 'info',
+    });
+    soundEngine.playTick(0.8);
+  };
+
+  const handleQuickDayOff = (planItem: TeachingPlanItem) => {
+    if (!planItem.date) return;
+    let dateIso = planItem.date;
+    if (planItem.date.includes('/')) {
+      const [dd, mm, yyyy] = planItem.date.split('/');
+      dateIso = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    }
+    const newOff: DayOffItem = {
+      id: `do-${Date.now()}`,
+      date: dateIso,
+      reason: `Nghỉ đột xuất: Lớp ${planItem.className} Tiết ${planItem.period || 1}`,
+      allDay: false,
+      periods: planItem.period ? [planItem.period] : [1],
+      classId: planItem.classId,
+    };
+    const updatedDayOffs = [...dayOffs, newOff];
+    setDayOffs(updatedDayOffs);
+    saveDayOffs(updatedDayOffs);
+
+    try {
+      const res = generateTeachingPlanFromTimetable({
+        timetable,
+        ppctItems,
+        dayOffs: updatedDayOffs,
+        config: scheduleConfig,
+        existingPlan: teachingPlan,
+        classes,
+      });
+      onUpdateTeachingPlan(res.generatedPlan);
+      setToastFeedback({
+        message: `🏖️ Đã ghi nhận nghỉ Tiết ${planItem.period} ngày ${planItem.date}. Bài học tự động dời sang tiết sau!`,
+        type: 'success',
+      });
+      soundEngine.playSuccess();
+    } catch (err: any) {
+      setToastFeedback({
+        message: 'Lỗi khi cập nhật dời bài: ' + (err.message || ''),
+        type: 'error',
+      });
+    }
+  };
 
   // Teaching Log state
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('ALL');
@@ -410,9 +531,19 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
     soundEngine.playTick(0.8);
   };
 
-  const filteredPlans = teachingPlan.filter(
-    (p) => selectedClassFilter === 'ALL' || p.classId === selectedClassFilter
-  );
+  const availableWeeks = useMemo(() => {
+    const set = new Set<number>();
+    teachingPlan.forEach((p) => {
+      if (p.week) set.add(p.week);
+    });
+    return Array.from(set).sort((a, b) => a - b);
+  }, [teachingPlan]);
+
+  const filteredPlans = teachingPlan.filter((p) => {
+    const matchClass = selectedClassFilter === 'ALL' || p.classId === selectedClassFilter;
+    const matchWeek = activeWeekFilter === 'ALL' || p.week === activeWeekFilter;
+    return matchClass && matchWeek;
+  });
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
@@ -699,7 +830,7 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
           />
 
           {/* Action Toolbar for Teaching Plan */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <BookOpen className="w-4 h-4 text-emerald-400" />
@@ -714,26 +845,92 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Tải mẫu Excel Sổ báo giảng */}
+              {/* ✨ NÚT CHÍNH: TỰ ĐỘNG SINH SỔ BÁO GIẢNG */}
               <button
                 type="button"
-                onClick={handleDownloadPlanTemplate}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
-                title="Tải file Excel mẫu Sổ báo giảng chuẩn vnEdu (kèm các tuần mẫu thực tế)"
+                onClick={() => {
+                  soundEngine.playVictoryFanfare();
+                  setIsAutoScheduleModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-black flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                title="Tự động ghép TKB + PPCT + Quản lý ngày nghỉ để tạo toàn bộ Sổ báo giảng"
               >
-                <Download className="w-3.5 h-3.5 text-sky-400" />
-                <span>Tải Mẫu vnEdu (.xlsx)</span>
+                <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                <span>✨ TỰ ĐỘNG SINH SỔ BÁO GIẢNG</span>
+              </button>
+
+              {/* 🔄 NÚT THÊM TIẾT DẠY BÙ */}
+              <button
+                type="button"
+                onClick={handleOpenAddMakeup}
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-black flex items-center gap-2 shadow-lg shadow-amber-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                title="Thêm một tiết dạy bù vào ngày giờ cụ thể và tự động lấy bài PPCT chưa dạy tiếp theo"
+              >
+                <Plus className="w-4 h-4 text-white" />
+                <span>+ THÊM TIẾT DẠY BÙ</span>
+              </button>
+
+              {/* ⚡ QUẢN LÝ NGHỈ & DẠY BÙ */}
+              <button
+                type="button"
+                onClick={() => setIsDayOffAndMakeupModalOpen(true)}
+                className="px-3.5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold flex items-center gap-2 transition-all active:scale-95 shadow-sm cursor-pointer"
+                title="Quản lý chi tiết các ngày nghỉ lễ, nghỉ đột xuất và danh sách các tiết dạy bù"
+              >
+                <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                <span>⚡ Quản Lý Nghỉ & Bù</span>
+                {teachingPlan.filter((p) => p.isMakeup).length > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-amber-500/30 text-amber-300 text-[10px] flex items-center justify-center font-black border border-amber-500/50">
+                    {teachingPlan.filter((p) => p.isMakeup).length}
+                  </span>
+                )}
+              </button>
+
+              {/* Tải mẫu Excel kết hợp 3-trong-1 */}
+              <button
+                type="button"
+                onClick={() => {
+                  downloadCombinedTimetableAndPpctTemplate(classes);
+                  setToastFeedback({
+                    message: '📥 Đã tải file mẫu tổng hợp (TKB + PPCT + Ngày nghỉ) thành công!',
+                    type: 'success',
+                  });
+                  soundEngine.playSuccess();
+                }}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm cursor-pointer"
+                title="Tải file mẫu Excel kết hợp TKB + PPCT theo khối + Quản lý ngày nghỉ"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <span>Mẫu TKB+PPCT (.xlsx)</span>
+              </button>
+
+              {/* Tải mẫu PPCT */}
+              <button
+                type="button"
+                onClick={() => {
+                  downloadVnEduPpctTemplate(classes);
+                  setToastFeedback({
+                    message: '📥 Đã tải file mẫu PPCT chuẩn GDPT 2018 thành công!',
+                    type: 'success',
+                  });
+                  soundEngine.playSuccess();
+                }}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm cursor-pointer"
+                title="Tải file mẫu Phân phối chương trình bộ môn chuẩn Bộ GD&ĐT"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Mẫu PPCT (.xlsx)</span>
               </button>
 
               {/* Nhập từ Excel */}
               <button
                 type="button"
                 onClick={() => planFileInputRef.current?.click()}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-indigo-600/30"
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-indigo-600 text-white text-xs font-bold border border-slate-700 hover:border-indigo-500 flex items-center gap-1.5 transition-all active:scale-95 shadow-md cursor-pointer"
                 title="Nhập file Sổ báo giảng xuất từ vnEdu hoặc file Excel mẫu"
               >
                 <UploadCloud className="w-3.5 h-3.5" />
-                <span>Nhập Báo Giảng Từ Excel</span>
+                <span>Nhập Excel</span>
               </button>
 
               {/* Xuất Excel */}
@@ -741,11 +938,11 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
                 type="button"
                 onClick={handleExportTeachingPlan}
                 disabled={teachingPlan.length === 0}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-emerald-600/20"
+                className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-emerald-600/20 cursor-pointer"
                 title="Xuất toàn bộ Sổ báo giảng ra file Excel chuẩn vnEdu"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Xuất Báo Giảng Chuẩn vnEdu</span>
+                <span>Xuất vnEdu</span>
               </button>
 
               {/* Xóa Sổ báo giảng */}
@@ -753,7 +950,7 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsClearPlanConfirmOpen(true)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                   title="Xóa tất cả các tiết trong Sổ báo giảng"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -853,71 +1050,126 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Sổ Báo Giảng Bộ Môn</h3>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>📖</span>
+                  <span>Sổ Báo Giảng Bộ Môn</span>
+                </h3>
                 <span className="text-xs text-slate-400">
                   (Đã hoàn thành {teachingPlan.filter((p) => p.isCompleted).length}/{teachingPlan.length} tiết)
                 </span>
               </div>
 
-              {/* Filter by class */}
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-xs text-slate-400 font-bold">Lọc theo lớp:</span>
-                <select
-                  value={selectedClassFilter}
-                  onChange={(e) => setSelectedClassFilter(e.target.value)}
-                  className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="ALL">Tất cả các lớp</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      Lớp {c.name}
-                    </option>
-                  ))}
-                </select>
+              {/* Filter by Week and Class */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Filter by Week */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-slate-400 font-bold">Tuần:</span>
+                  <select
+                    value={activeWeekFilter === 'ALL' ? 'ALL' : String(activeWeekFilter)}
+                    onChange={(e) => setActiveWeekFilter(e.target.value === 'ALL' ? 'ALL' : parseInt(e.target.value, 10))}
+                    className="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-bold"
+                  >
+                    <option value="ALL">Tất cả các tuần ({availableWeeks.length > 0 ? `Tuần ${availableWeeks[0]}-${availableWeeks[availableWeeks.length - 1]}` : 'Trống'})</option>
+                    {availableWeeks.map((w) => (
+                      <option key={w} value={String(w)}>
+                        Tuần {w}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filter by class */}
+                <div className="flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-400 font-bold">Lớp:</span>
+                  <select
+                    value={selectedClassFilter}
+                    onChange={(e) => setSelectedClassFilter(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-bold"
+                  >
+                    <option value="ALL">Tất cả các lớp</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        Lớp {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
             {/* List entries */}
             <div className="space-y-2.5">
               {filteredPlans.length === 0 ? (
-                <div className="text-center py-10 text-slate-500 text-xs">
-                  Chưa có tiết báo giảng nào. Thầy cô hãy thêm tiết học ở khung phía trên nhé!
+                <div className="text-center py-12 text-slate-500 text-xs space-y-2">
+                  <div className="text-2xl">📅</div>
+                  <p>Chưa có tiết báo giảng nào cho bộ lọc này.</p>
+                  <p className="text-indigo-400 font-bold">
+                    Thầy/Cô hãy bấm nút &quot;✨ TỰ ĐỘNG SINH SỔ BÁO GIẢNG&quot; ở trên để tạo lịch tự động trong 3 giây nhé!
+                  </p>
                 </div>
               ) : (
                 filteredPlans.map((plan) => (
                   <div
                     key={plan.id}
                     className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                      plan.isCompleted
+                      plan.isOffDay
+                        ? 'bg-amber-950/20 border-amber-500/40 text-amber-100'
+                        : plan.isCompleted
                         ? 'bg-slate-950/40 border-slate-800 opacity-75'
                         : 'bg-slate-800/80 border-slate-700/80 hover:border-indigo-500/50'
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <button
-                        onClick={() => handleTogglePlanCompleted(plan.id)}
-                        className="mt-0.5 text-slate-400 hover:text-indigo-400 transition-colors"
-                        title={plan.isCompleted ? 'Đánh dấu chưa dạy' : 'Đánh dấu đã dạy xong'}
-                      >
-                        {plan.isCompleted ? (
-                          <CheckSquare className="w-5 h-5 text-emerald-400" />
-                        ) : (
-                          <Square className="w-5 h-5 text-slate-500" />
-                        )}
-                      </button>
+                      {!plan.isOffDay && (
+                        <button
+                          onClick={() => handleTogglePlanCompleted(plan.id)}
+                          className="mt-1 text-slate-400 hover:text-indigo-400 transition-colors cursor-pointer"
+                          title={plan.isCompleted ? 'Đánh dấu chưa dạy' : 'Đánh dấu đã dạy xong'}
+                        >
+                          {plan.isCompleted ? (
+                            <CheckSquare className="w-5 h-5 text-emerald-400" />
+                          ) : (
+                            <Square className="w-5 h-5 text-slate-500" />
+                          )}
+                        </button>
+                      )}
+
+                      {plan.isOffDay && (
+                        <span className="mt-1 text-base">🏖️</span>
+                      )}
 
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold text-[11px] border border-indigo-500/30">
                             Tuần {plan.week}
                           </span>
+                          {plan.dayOfWeek && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-bold">
+                              Thứ {plan.dayOfWeek} {plan.date ? `(${plan.date})` : ''}
+                            </span>
+                          )}
+                          {plan.period && (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[11px]">
+                              Tiết {plan.period} ({plan.session || (plan.period <= 5 ? 'Sáng' : 'Chiều')})
+                            </span>
+                          )}
                           <span className="font-extrabold text-amber-300 text-xs">
                             Lớp {plan.className}
                           </span>
-                          <span className="text-[11px] font-bold text-slate-400">
-                            (Tiết PPCT: {plan.periodNumber})
-                          </span>
+                          {plan.isMakeup ? (
+                            <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-600 to-orange-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                              🔄 DẠY BÙ
+                            </span>
+                          ) : !plan.isOffDay ? (
+                            <span className="text-[11px] font-bold text-slate-400">
+                              (Tiết PPCT: {plan.periodNumber})
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                              🏖️ NGHỈ (Dời bài)
+                            </span>
+                          )}
                           {plan.isCompleted && (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
                               ✓ Đã dạy
@@ -927,7 +1179,11 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
 
                         <div
                           className={`text-sm font-bold mt-1 ${
-                            plan.isCompleted ? 'line-through text-slate-400' : 'text-white'
+                            plan.isOffDay
+                              ? 'text-amber-300'
+                              : plan.isCompleted
+                              ? 'line-through text-slate-400'
+                              : 'text-white'
                           }`}
                         >
                           {plan.lessonTitle}
@@ -941,18 +1197,48 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-center">
+                    <div className="flex items-center gap-1.5 self-end sm:self-center flex-wrap">
+                      {/* Báo nghỉ đột xuất cho tiết này */}
+                      {!plan.isOffDay && !plan.isCompleted && !plan.isMakeup && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickDayOff(plan)}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950 text-rose-300 border border-slate-700 hover:border-rose-700 text-xs font-bold transition-all cursor-pointer"
+                          title="Báo nghỉ tiết này (bão lũ, đi công tác...). Bài học sẽ tự động dời sang tiết sau!"
+                        >
+                          <span>⚡ Báo nghỉ</span>
+                        </button>
+                      )}
+
+                      {/* Nút sửa tiết dạy bù */}
+                      {plan.isMakeup && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditMakeup(plan)}
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-950 text-amber-300 border border-slate-700 hover:border-amber-700 text-xs font-bold transition-all cursor-pointer"
+                          title="Chỉnh sửa ngày giờ hoặc ghi chú tiết dạy bù"
+                        >
+                          <span>Sửa bù</span>
+                        </button>
+                      )}
+
+                      {!plan.isOffDay && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectClassAndSpin(plan.classId)}
+                          className="px-3.5 py-1.5 rounded-xl bg-slate-700 hover:bg-indigo-600 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                          title="Chuyển ngay sang tab Quay Tên kiểm tra bài cũ cho lớp này"
+                        >
+                          <span>Vào lớp</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => onSelectClassAndSpin(plan.classId)}
-                        className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-indigo-600 text-white text-xs font-bold flex items-center gap-1 transition-all"
-                      >
-                        <span>Vào lớp</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeletePlanItem(plan.id)}
-                        className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                        title="Xóa tiết báo giảng này"
+                        type="button"
+                        onClick={() => plan.isMakeup ? handleDeleteMakeup(plan.id) : handleDeletePlanItem(plan.id)}
+                        className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        title={plan.isMakeup ? 'Hủy tiết dạy bù này' : 'Xóa tiết báo giảng này'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1442,6 +1728,79 @@ export const TimetableScreen: React.FC<TimetableScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: TỰ ĐỘNG SINH SỔ BÁO GIẢNG (TKB + PPCT + QUẢN LÝ NGÀY NGHỈ)      */}
+      {/* ========================================================================= */}
+      {isAutoScheduleModalOpen && (
+        <AutoScheduleModal
+          isOpen={isAutoScheduleModalOpen}
+          onClose={() => setIsAutoScheduleModalOpen(false)}
+          classes={classes}
+          timetable={timetable}
+          existingPlan={teachingPlan}
+          onApplyGeneratedPlan={(newPlan) => {
+            onUpdateTeachingPlan(newPlan);
+            setToastFeedback({
+              message: `🎉 Đã sinh thành công ${newPlan.length} tiết vào Sổ Báo Giảng!`,
+              type: 'success',
+            });
+            soundEngine.playVictoryFanfare();
+          }}
+          savedDayOffs={dayOffs}
+          onUpdateDayOffs={(items) => {
+            setDayOffs(items);
+            saveDayOffs(items);
+          }}
+          savedPpctItems={ppctItems}
+          onUpdatePpctItems={(items) => {
+            setPpctItems(items);
+            savePpctItems(items);
+          }}
+          savedConfig={scheduleConfig}
+          onUpdateConfig={(cfg) => {
+            setScheduleConfig(cfg);
+            saveScheduleConfig(cfg);
+          }}
+        />
+      )}
+
+      {/* MODAL: THÊM / CHỈNH SỬA TIẾT DẠY BÙ */}
+      <MakeupLessonModal
+        isOpen={isMakeupModalOpen}
+        onClose={() => {
+          setIsMakeupModalOpen(false);
+          setEditingMakeupItem(null);
+        }}
+        classes={classes}
+        timetable={timetable}
+        teachingPlan={teachingPlan}
+        ppctItems={ppctItems}
+        dayOffs={dayOffs}
+        config={scheduleConfig}
+        editingItem={editingMakeupItem}
+        onSaveMakeup={handleSaveMakeupLesson}
+      />
+
+      {/* MODAL: BẢNG ĐIỀU KHIỂN NGHỈ ĐỘT XUẤT & DẠY BÙ */}
+      <DayOffAndMakeupModal
+        isOpen={isDayOffAndMakeupModalOpen}
+        onClose={() => setIsDayOffAndMakeupModalOpen(false)}
+        classes={classes}
+        timetable={timetable}
+        teachingPlan={teachingPlan}
+        onUpdateTeachingPlan={onUpdateTeachingPlan}
+        dayOffs={dayOffs}
+        onUpdateDayOffs={(items) => {
+          setDayOffs(items);
+          saveDayOffs(items);
+        }}
+        ppctItems={ppctItems}
+        config={scheduleConfig}
+        onOpenAddMakeupModal={handleOpenAddMakeup}
+        onEditMakeupItem={handleEditMakeup}
+        onSelectClassAndSpin={onSelectClassAndSpin}
+      />
 
       {/* ========================================================================= */}
       {/* FLOATING TOAST NOTIFICATION                                               */}

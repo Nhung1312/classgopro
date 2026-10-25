@@ -35,7 +35,6 @@ import {
 import { AutoCommentRulesModal } from './AutoCommentRulesModal';
 import { StudentProfileCard } from './StudentProfileCard';
 import { soundEngine } from '../utils/audio';
-import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 const GRADEBOOK_SUBJECT_OPTIONS = [
   'Giáo dục địa phương',
@@ -428,7 +427,8 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
 
 
   const filteredStudents = currentClass.students.filter((s) =>
-    matchesVietnameseSearch(searchTerm, s.name, s.studentCode)
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.studentCode && s.studentCode.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Stats calculation
