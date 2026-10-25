@@ -965,9 +965,19 @@ export interface GeneratedAiQuestionDraft {
 export async function generateQuestionsViaAi(
   params: GenerateAiQuestionsParams
 ): Promise<Array<{ level: ReviewQuestionLevel; question: string; answer: string }>> {
+  // Require a real teacher session; the Vercel API validates the Firebase ID token and allowlist.
+  const { auth } = await import('../lib/firebase');
+  const teacher = auth.currentUser;
+  if (!teacher) {
+    throw new Error('Vui lòng đăng nhập tài khoản giáo viên để sử dụng chức năng tạo câu hỏi AI.');
+  }
+  const idToken = await teacher.getIdToken();
   const response = await fetch('/api/generate-questions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
     body: JSON.stringify(params),
   });
 
