@@ -1,3 +1,4 @@
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import React, { useState } from 'react';
 import {
   UserCheck,
@@ -59,8 +60,7 @@ export const QuickAttendanceModal: React.FC<QuickAttendanceModalProps> = ({
   // Filter list
   const filteredStudents = students.filter((s) => {
     const matchSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.studentCode && s.studentCode.toLowerCase().includes(searchTerm.toLowerCase()));
+      matchesVietnameseSearch(searchTerm, s.name, s.studentCode);
     if (!matchSearch) return false;
 
     if (filterMode === 'PRESENT') return !s.isAbsent;

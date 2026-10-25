@@ -1,3 +1,4 @@
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import React, { useState } from 'react';
 import {
   Plus,
@@ -80,8 +81,7 @@ export const ClassManager: React.FC<ClassManagerProps> = ({
 
   // Filter students by search
   const filteredStudents = (activeClass?.students || []).filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.studentCode && s.studentCode.toLowerCase().includes(searchTerm.toLowerCase()))
+    matchesVietnameseSearch(searchTerm, s.name, s.studentCode)
   );
 
   // Handle create class

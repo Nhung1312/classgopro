@@ -1,3 +1,4 @@
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   FileSpreadsheet,
@@ -427,8 +428,7 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
 
 
   const filteredStudents = currentClass.students.filter((s) =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.studentCode && s.studentCode.toLowerCase().includes(searchTerm.toLowerCase()))
+    matchesVietnameseSearch(searchTerm, s.name, s.studentCode)
   );
 
   // Stats calculation
