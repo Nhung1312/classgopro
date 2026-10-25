@@ -1,0 +1,1253 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "classgo-kntt-math-6-9-toc",
+  "bookSeries": "Kết nối tri thức với cuộc sống",
+  "subject": "Toán",
+  "source": "Bốn file mục lục Toán 6, 7, 8, 9 do người dùng cung cấp",
+  "notes": [
+    "Trường volume (Tập 1/Tập 2) lấy từ mục lục; không đồng nhất bắt buộc Tập 1 = Học kỳ I và Tập 2 = Học kỳ II. Việc gán học kỳ cần cho giáo viên tùy chỉnh theo PPCT thực tế.",
+    "additional_activities chỉ ghi những mục Luyện tập chung và Bài tập cuối chương có mặt trong nguồn Toán 8; đây không phải bài có số thứ tự.",
+    "Đây là danh mục bài học để lọc và tạo câu hỏi, không phải PPCT số tiết và không phải kho câu hỏi."
+  ],
+  "summary": {
+    "grades": 4,
+    "chapters": 39,
+    "numberedLessons": 151
+  },
+  "grades": [
+    {
+      "grade": 6,
+      "chapters": [
+        {
+          "id": "KNTT-MATH-6-C01",
+          "number": 1,
+          "roman": "I",
+          "title": "TẬP HỢP CÁC SỐ TỰ NHIÊN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L01",
+              "number": 1,
+              "title": "Tập hợp"
+            },
+            {
+              "id": "KNTT-MATH-6-L02",
+              "number": 2,
+              "title": "Cách ghi số tự nhiên"
+            },
+            {
+              "id": "KNTT-MATH-6-L03",
+              "number": 3,
+              "title": "Thứ tự trong tập hợp các số tự nhiên"
+            },
+            {
+              "id": "KNTT-MATH-6-L04",
+              "number": 4,
+              "title": "Phép cộng và phép trừ số tự nhiên"
+            },
+            {
+              "id": "KNTT-MATH-6-L05",
+              "number": 5,
+              "title": "Phép nhân và phép chia số tự nhiên"
+            },
+            {
+              "id": "KNTT-MATH-6-L06",
+              "number": 6,
+              "title": "Lũy thừa với số mũ tự nhiên"
+            },
+            {
+              "id": "KNTT-MATH-6-L07",
+              "number": 7,
+              "title": "Thứ tự thực hiện các phép tính"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C02",
+          "number": 2,
+          "roman": "II",
+          "title": "TÍNH CHIA HẾT TRONG TẬP HỢP CÁC SỐ TỰ NHIÊN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L08",
+              "number": 8,
+              "title": "Quan hệ chia hết và tính chất"
+            },
+            {
+              "id": "KNTT-MATH-6-L09",
+              "number": 9,
+              "title": "Dấu hiệu chia hết"
+            },
+            {
+              "id": "KNTT-MATH-6-L10",
+              "number": 10,
+              "title": "Số nguyên tố"
+            },
+            {
+              "id": "KNTT-MATH-6-L11",
+              "number": 11,
+              "title": "Ước chung. Ước chung lớn nhất"
+            },
+            {
+              "id": "KNTT-MATH-6-L12",
+              "number": 12,
+              "title": "Bội chung. Bội chung nhỏ nhất"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C03",
+          "number": 3,
+          "roman": "III",
+          "title": "SỐ NGUYÊN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L13",
+              "number": 13,
+              "title": "Tập hợp các số nguyên"
+            },
+            {
+              "id": "KNTT-MATH-6-L14",
+              "number": 14,
+              "title": "Phép cộng và phép trừ số nguyên"
+            },
+            {
+              "id": "KNTT-MATH-6-L15",
+              "number": 15,
+              "title": "Quy tắc dấu ngoặc"
+            },
+            {
+              "id": "KNTT-MATH-6-L16",
+              "number": 16,
+              "title": "Phép nhân số nguyên"
+            },
+            {
+              "id": "KNTT-MATH-6-L17",
+              "number": 17,
+              "title": "Phép chia hết. Ước và bội của một số nguyên"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C04",
+          "number": 4,
+          "roman": "IV",
+          "title": "MỘT SỐ HÌNH PHẲNG TRONG THỰC TIỄN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L18",
+              "number": 18,
+              "title": "Hình tam giác đều. Hình vuông. Hình lục giác đều"
+            },
+            {
+              "id": "KNTT-MATH-6-L19",
+              "number": 19,
+              "title": "Hình chữ nhật. Hình thoi. Hình bình hành. Hình thang cân"
+            },
+            {
+              "id": "KNTT-MATH-6-L20",
+              "number": 20,
+              "title": "Chu vi và diện tích của một số tứ giác đã học"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C05",
+          "number": 5,
+          "roman": "V",
+          "title": "TÍNH ĐỐI XỨNG CỦA HÌNH PHẲNG TRONG TỰ NHIÊN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L21",
+              "number": 21,
+              "title": "Hình có trục đối xứng"
+            },
+            {
+              "id": "KNTT-MATH-6-L22",
+              "number": 22,
+              "title": "Hình có tâm đối xứng"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C06",
+          "number": 6,
+          "roman": "VI",
+          "title": "PHÂN SỐ",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L23",
+              "number": 23,
+              "title": "Mở rộng phân số. Phân số bằng nhau"
+            },
+            {
+              "id": "KNTT-MATH-6-L24",
+              "number": 24,
+              "title": "So sánh phân số. Hỗn số dương"
+            },
+            {
+              "id": "KNTT-MATH-6-L25",
+              "number": 25,
+              "title": "Phép cộng và phép trừ phân số"
+            },
+            {
+              "id": "KNTT-MATH-6-L26",
+              "number": 26,
+              "title": "Phép nhân và phép chia phân số"
+            },
+            {
+              "id": "KNTT-MATH-6-L27",
+              "number": 27,
+              "title": "Hai bài toán về phân số"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C07",
+          "number": 7,
+          "roman": "VII",
+          "title": "SỐ THẬP PHÂN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L28",
+              "number": 28,
+              "title": "Số thập phân"
+            },
+            {
+              "id": "KNTT-MATH-6-L29",
+              "number": 29,
+              "title": "Tính toán với số thập phân"
+            },
+            {
+              "id": "KNTT-MATH-6-L30",
+              "number": 30,
+              "title": "Làm tròn và ước lượng"
+            },
+            {
+              "id": "KNTT-MATH-6-L31",
+              "number": 31,
+              "title": "Một số bài toán về tỉ số và tỉ số phần trăm"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C08",
+          "number": 8,
+          "roman": "VIII",
+          "title": "NHỮNG HÌNH HÌNH HỌC CƠ BẢN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L32",
+              "number": 32,
+              "title": "Điểm và đường thẳng"
+            },
+            {
+              "id": "KNTT-MATH-6-L33",
+              "number": 33,
+              "title": "Điểm nằm giữa hai điểm. Tia"
+            },
+            {
+              "id": "KNTT-MATH-6-L34",
+              "number": 34,
+              "title": "Đoạn thẳng. Độ dài đoạn thẳng"
+            },
+            {
+              "id": "KNTT-MATH-6-L35",
+              "number": 35,
+              "title": "Trung điểm của đoạn thẳng"
+            },
+            {
+              "id": "KNTT-MATH-6-L36",
+              "number": 36,
+              "title": "Góc"
+            },
+            {
+              "id": "KNTT-MATH-6-L37",
+              "number": 37,
+              "title": "Số đo góc"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-6-C09",
+          "number": 9,
+          "roman": "IX",
+          "title": "DỮ LIỆU VÀ XÁC SUẤT THỰC NGHIỆM",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-6-L38",
+              "number": 38,
+              "title": "Dữ liệu và thu thập dữ liệu"
+            },
+            {
+              "id": "KNTT-MATH-6-L39",
+              "number": 39,
+              "title": "Bảng thống kê và biểu đồ tranh"
+            },
+            {
+              "id": "KNTT-MATH-6-L40",
+              "number": 40,
+              "title": "Biểu đồ cột"
+            },
+            {
+              "id": "KNTT-MATH-6-L41",
+              "number": 41,
+              "title": "Biểu đồ cột kép"
+            },
+            {
+              "id": "KNTT-MATH-6-L42",
+              "number": 42,
+              "title": "Kết quả có thể và sự kiện trong trò chơi, thí nghiệm"
+            },
+            {
+              "id": "KNTT-MATH-6-L43",
+              "number": 43,
+              "title": "Xác suất thực nghiệm"
+            }
+          ]
+        }
+      ],
+      "chapter_count": 9,
+      "numbered_lesson_count": 43
+    },
+    {
+      "grade": 7,
+      "chapters": [
+        {
+          "id": "KNTT-MATH-7-C01",
+          "number": 1,
+          "roman": "I",
+          "title": "SỐ HỮU TỈ",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L01",
+              "number": 1,
+              "title": "Tập hợp các số hữu tỉ"
+            },
+            {
+              "id": "KNTT-MATH-7-L02",
+              "number": 2,
+              "title": "Cộng, trừ, nhân, chia số hữu tỉ"
+            },
+            {
+              "id": "KNTT-MATH-7-L03",
+              "number": 3,
+              "title": "Lũy thừa với số mũ tự nhiên của một số hữu tỉ"
+            },
+            {
+              "id": "KNTT-MATH-7-L04",
+              "number": 4,
+              "title": "Thứ tự thực hiện các phép tính. Quy tắc chuyển vế"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C02",
+          "number": 2,
+          "roman": "II",
+          "title": "SỐ THỰC",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L05",
+              "number": 5,
+              "title": "Làm quen với số thập phân vô hạn tuần hoàn"
+            },
+            {
+              "id": "KNTT-MATH-7-L06",
+              "number": 6,
+              "title": "Số vô tỉ. Căn bậc hai số học"
+            },
+            {
+              "id": "KNTT-MATH-7-L07",
+              "number": 7,
+              "title": "Tập hợp các số thực"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C03",
+          "number": 3,
+          "roman": "III",
+          "title": "GÓC VÀ ĐƯỜNG THẲNG SONG SONG",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L08",
+              "number": 8,
+              "title": "Góc ở vị trí đặc biệt. Tia phân giác của một góc"
+            },
+            {
+              "id": "KNTT-MATH-7-L09",
+              "number": 9,
+              "title": "Hai đường thẳng song song và dấu hiệu nhận biết"
+            },
+            {
+              "id": "KNTT-MATH-7-L10",
+              "number": 10,
+              "title": "Tiên đề Euclid. Tính chất của hai đường thẳng song song"
+            },
+            {
+              "id": "KNTT-MATH-7-L11",
+              "number": 11,
+              "title": "Định lí và chứng minh định lí"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C04",
+          "number": 4,
+          "roman": "IV",
+          "title": "TAM GIÁC BẰNG NHAU",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L12",
+              "number": 12,
+              "title": "Tổng các góc trong một tam giác"
+            },
+            {
+              "id": "KNTT-MATH-7-L13",
+              "number": 13,
+              "title": "Hai tam giác bằng nhau. Trường hợp bằng nhau thứ nhất của tam giác"
+            },
+            {
+              "id": "KNTT-MATH-7-L14",
+              "number": 14,
+              "title": "Trường hợp bằng nhau thứ hai và thứ ba của tam giác"
+            },
+            {
+              "id": "KNTT-MATH-7-L15",
+              "number": 15,
+              "title": "Các trường hợp bằng nhau của tam giác vuông"
+            },
+            {
+              "id": "KNTT-MATH-7-L16",
+              "number": 16,
+              "title": "Tam giác cân. Đường trung trực của đoạn thẳng"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C05",
+          "number": 5,
+          "roman": "V",
+          "title": "THU THẬP VÀ BIỂU DIỄN DỮ LIỆU",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L17",
+              "number": 17,
+              "title": "Thu thập và phân loại dữ liệu"
+            },
+            {
+              "id": "KNTT-MATH-7-L18",
+              "number": 18,
+              "title": "Biểu đồ hình quạt tròn"
+            },
+            {
+              "id": "KNTT-MATH-7-L19",
+              "number": 19,
+              "title": "Biểu đồ đoạn thẳng"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C06",
+          "number": 6,
+          "roman": "VI",
+          "title": "TỈ LỆ THỨC VÀ ĐẠI LƯỢNG TỈ LỆ",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L20",
+              "number": 20,
+              "title": "Tỉ lệ thức"
+            },
+            {
+              "id": "KNTT-MATH-7-L21",
+              "number": 21,
+              "title": "Tính chất của dãy tỉ số bằng nhau"
+            },
+            {
+              "id": "KNTT-MATH-7-L22",
+              "number": 22,
+              "title": "Đại lượng tỉ lệ thuận"
+            },
+            {
+              "id": "KNTT-MATH-7-L23",
+              "number": 23,
+              "title": "Đại lượng tỉ lệ nghịch"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C07",
+          "number": 7,
+          "roman": "VII",
+          "title": "BIỂU THỨC ĐẠI SỐ VÀ ĐA THỨC MỘT BIẾN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L24",
+              "number": 24,
+              "title": "Biểu thức đại số"
+            },
+            {
+              "id": "KNTT-MATH-7-L25",
+              "number": 25,
+              "title": "Đa thức một biến"
+            },
+            {
+              "id": "KNTT-MATH-7-L26",
+              "number": 26,
+              "title": "Phép cộng và phép trừ đa thức một biến"
+            },
+            {
+              "id": "KNTT-MATH-7-L27",
+              "number": 27,
+              "title": "Phép nhân đa thức một biến"
+            },
+            {
+              "id": "KNTT-MATH-7-L28",
+              "number": 28,
+              "title": "Phép chia đa thức một biến"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C08",
+          "number": 8,
+          "roman": "VIII",
+          "title": "LÀM QUEN VỚI BIẾN CỐ VÀ XÁC SUẤT CỦA BIẾN CỐ",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L29",
+              "number": 29,
+              "title": "Làm quen với biến cố"
+            },
+            {
+              "id": "KNTT-MATH-7-L30",
+              "number": 30,
+              "title": "Làm quen với xác suất của biến cố"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C09",
+          "number": 9,
+          "roman": "IX",
+          "title": "QUAN HỆ GIỮA CÁC YẾU TỐ TRONG MỘT TAM GIÁC",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L31",
+              "number": 31,
+              "title": "Quan hệ giữa góc và cạnh đối diện trong một tam giác"
+            },
+            {
+              "id": "KNTT-MATH-7-L32",
+              "number": 32,
+              "title": "Quan hệ giữa đường vuông góc và đường xiên"
+            },
+            {
+              "id": "KNTT-MATH-7-L33",
+              "number": 33,
+              "title": "Quan hệ giữa ba cạnh của một tam giác"
+            },
+            {
+              "id": "KNTT-MATH-7-L34",
+              "number": 34,
+              "title": "Sự đồng quy của ba đường trung tuyến, ba đường phân giác trong một tam giác"
+            },
+            {
+              "id": "KNTT-MATH-7-L35",
+              "number": 35,
+              "title": "Sự đồng quy của ba đường trung trực, ba đường cao trong một tam giác"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-7-C10",
+          "number": 10,
+          "roman": "X",
+          "title": "MỘT SỐ HÌNH KHỐI TRONG THỰC TIỄN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-7-L36",
+              "number": 36,
+              "title": "Hình hộp chữ nhật và hình lập phương"
+            },
+            {
+              "id": "KNTT-MATH-7-L37",
+              "number": 37,
+              "title": "Hình lăng trụ đứng tam giác và hình lăng trụ đứng tứ giác"
+            }
+          ]
+        }
+      ],
+      "chapter_count": 10,
+      "numbered_lesson_count": 37
+    },
+    {
+      "grade": 8,
+      "chapters": [
+        {
+          "id": "KNTT-MATH-8-C01",
+          "number": 1,
+          "roman": "I",
+          "title": "ĐA THỨC",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L01",
+              "number": 1,
+              "title": "Đơn thức"
+            },
+            {
+              "id": "KNTT-MATH-8-L02",
+              "number": 2,
+              "title": "Đa thức"
+            },
+            {
+              "id": "KNTT-MATH-8-L03",
+              "number": 3,
+              "title": "Phép cộng và phép trừ đa thức"
+            },
+            {
+              "id": "KNTT-MATH-8-L04",
+              "number": 4,
+              "title": "Phép nhân đa thức"
+            },
+            {
+              "id": "KNTT-MATH-8-L05",
+              "number": 5,
+              "title": "Phép chia đa thức cho đơn thức"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C02",
+          "number": 2,
+          "roman": "II",
+          "title": "HẰNG ĐẲNG THỨC ĐÁNG NHỚ VÀ ỨNG DỤNG",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L06",
+              "number": 6,
+              "title": "Hiệu hai bình phương. Bình phương của một tổng hay một hiệu"
+            },
+            {
+              "id": "KNTT-MATH-8-L07",
+              "number": 7,
+              "title": "Lập phương của một tổng hay một hiệu"
+            },
+            {
+              "id": "KNTT-MATH-8-L08",
+              "number": 8,
+              "title": "Tổng và hiệu hai lập phương"
+            },
+            {
+              "id": "KNTT-MATH-8-L09",
+              "number": 9,
+              "title": "Phân tích đa thức thành nhân tử"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C03",
+          "number": 3,
+          "roman": "III",
+          "title": "TỨ GIÁC",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L10",
+              "number": 10,
+              "title": "Tứ giác"
+            },
+            {
+              "id": "KNTT-MATH-8-L11",
+              "number": 11,
+              "title": "Hình thang cân"
+            },
+            {
+              "id": "KNTT-MATH-8-L12",
+              "number": 12,
+              "title": "Hình bình hành"
+            },
+            {
+              "id": "KNTT-MATH-8-L13",
+              "number": 13,
+              "title": "Hình chữ nhật"
+            },
+            {
+              "id": "KNTT-MATH-8-L14",
+              "number": 14,
+              "title": "Hình thoi và hình vuông"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C04",
+          "number": 4,
+          "roman": "IV",
+          "title": "ĐỊNH LÍ THALÈS",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L15",
+              "number": 15,
+              "title": "Định lí Thalès trong tam giác"
+            },
+            {
+              "id": "KNTT-MATH-8-L16",
+              "number": 16,
+              "title": "Đường trung bình của tam giác"
+            },
+            {
+              "id": "KNTT-MATH-8-L17",
+              "number": 17,
+              "title": "Tính chất đường phân giác của tam giác"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C05",
+          "number": 5,
+          "roman": "V",
+          "title": "DỮ LIỆU VÀ BIỂU ĐỒ",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L18",
+              "number": 18,
+              "title": "Thu thập và phân loại dữ liệu"
+            },
+            {
+              "id": "KNTT-MATH-8-L19",
+              "number": 19,
+              "title": "Biểu diễn dữ liệu bằng bảng, biểu đồ"
+            },
+            {
+              "id": "KNTT-MATH-8-L20",
+              "number": 20,
+              "title": "Phân tích số liệu thống kê dựa vào biểu đồ"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C06",
+          "number": 6,
+          "roman": "VI",
+          "title": "PHÂN THỨC ĐẠI SỐ",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L21",
+              "number": 21,
+              "title": "Phân thức đại số"
+            },
+            {
+              "id": "KNTT-MATH-8-L22",
+              "number": 22,
+              "title": "Tính chất cơ bản của phân thức đại số"
+            },
+            {
+              "id": "KNTT-MATH-8-L23",
+              "number": 23,
+              "title": "Phép cộng và phép trừ phân thức đại số"
+            },
+            {
+              "id": "KNTT-MATH-8-L24",
+              "number": 24,
+              "title": "Phép nhân và phép chia phân thức đại số"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C07",
+          "number": 7,
+          "roman": "VII",
+          "title": "PHƯƠNG TRÌNH BẬC NHẤT VÀ HÀM SỐ BẬC NHẤT",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L25",
+              "number": 25,
+              "title": "Phương trình bậc nhất một ẩn"
+            },
+            {
+              "id": "KNTT-MATH-8-L26",
+              "number": 26,
+              "title": "Giải bài toán bằng cách lập phương trình"
+            },
+            {
+              "id": "KNTT-MATH-8-L27",
+              "number": 27,
+              "title": "Khái niệm hàm số và đồ thị của hàm số"
+            },
+            {
+              "id": "KNTT-MATH-8-L28",
+              "number": 28,
+              "title": "Hàm số bậc nhất và đồ thị của hàm số bậc nhất"
+            },
+            {
+              "id": "KNTT-MATH-8-L29",
+              "number": 29,
+              "title": "Hệ số góc của đường thẳng"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C08",
+          "number": 8,
+          "roman": "VIII",
+          "title": "MỞ ĐẦU VỀ TÍNH XÁC SUẤT CỦA BIẾN CỐ",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L30",
+              "number": 30,
+              "title": "Kết quả có thể và kết quả thuận lợi"
+            },
+            {
+              "id": "KNTT-MATH-8-L31",
+              "number": 31,
+              "title": "Cách tính xác suất của biến cố bằng tỉ số"
+            },
+            {
+              "id": "KNTT-MATH-8-L32",
+              "number": 32,
+              "title": "Mối liên hệ giữa xác suất thực nghiệm với xác suất và ứng dụng"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C09",
+          "number": 9,
+          "roman": "IX",
+          "title": "TAM GIÁC ĐỒNG DẠNG",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L33",
+              "number": 33,
+              "title": "Hai tam giác đồng dạng"
+            },
+            {
+              "id": "KNTT-MATH-8-L34",
+              "number": 34,
+              "title": "Ba trường hợp đồng dạng của hai tam giác"
+            },
+            {
+              "id": "KNTT-MATH-8-L35",
+              "number": 35,
+              "title": "Định lí Pythagore và ứng dụng"
+            },
+            {
+              "id": "KNTT-MATH-8-L36",
+              "number": 36,
+              "title": "Các trường hợp đồng dạng của hai tam giác vuông"
+            },
+            {
+              "id": "KNTT-MATH-8-L37",
+              "number": 37,
+              "title": "Hình đồng dạng"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-8-C10",
+          "number": 10,
+          "roman": "X",
+          "title": "MỘT SỐ HÌNH KHỐI TRONG THỰC TIỄN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-8-L38",
+              "number": 38,
+              "title": "Hình chóp tam giác đều"
+            },
+            {
+              "id": "KNTT-MATH-8-L39",
+              "number": 39,
+              "title": "Hình chóp tứ giác đều"
+            }
+          ],
+          "additional_activities": [
+            {
+              "type": "practice",
+              "title": "Luyện tập chung"
+            },
+            {
+              "type": "chapter_exercises",
+              "title": "Bài tập cuối chương"
+            }
+          ]
+        }
+      ],
+      "chapter_count": 10,
+      "numbered_lesson_count": 39
+    },
+    {
+      "grade": 9,
+      "chapters": [
+        {
+          "id": "KNTT-MATH-9-C01",
+          "number": 1,
+          "roman": "I",
+          "title": "PHƯƠNG TRÌNH VÀ HỆ HAI PHƯƠNG TRÌNH BẬC NHẤT HAI ẨN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L01",
+              "number": 1,
+              "title": "Khái niệm phương trình và hệ hai phương trình bậc nhất hai ẩn"
+            },
+            {
+              "id": "KNTT-MATH-9-L02",
+              "number": 2,
+              "title": "Giải hệ hai phương trình bậc nhất hai ẩn"
+            },
+            {
+              "id": "KNTT-MATH-9-L03",
+              "number": 3,
+              "title": "Giải bài toán bằng cách lập hệ phương trình"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C02",
+          "number": 2,
+          "roman": "II",
+          "title": "PHƯƠNG TRÌNH VÀ BẤT PHƯƠNG TRÌNH BẬC NHẤT MỘT ẨN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L04",
+              "number": 4,
+              "title": "Phương trình quy về phương trình bậc nhất một ẩn"
+            },
+            {
+              "id": "KNTT-MATH-9-L05",
+              "number": 5,
+              "title": "Bất đẳng thức và tính chất"
+            },
+            {
+              "id": "KNTT-MATH-9-L06",
+              "number": 6,
+              "title": "Bất phương trình bậc nhất một ẩn"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C03",
+          "number": 3,
+          "roman": "III",
+          "title": "CĂN BẬC HAI VÀ CĂN BẬC BA",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L07",
+              "number": 7,
+              "title": "Căn bậc hai và căn thức bậc hai"
+            },
+            {
+              "id": "KNTT-MATH-9-L08",
+              "number": 8,
+              "title": "Khai căn bậc hai với phép nhân và phép chia"
+            },
+            {
+              "id": "KNTT-MATH-9-L09",
+              "number": 9,
+              "title": "Biến đổi đơn giản và rút gọn biểu thức chứa căn thức bậc hai"
+            },
+            {
+              "id": "KNTT-MATH-9-L10",
+              "number": 10,
+              "title": "Căn bậc ba và căn thức bậc ba"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C04",
+          "number": 4,
+          "roman": "IV",
+          "title": "HỆ THỨC LƯỢNG TRONG TAM GIÁC VUÔNG",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L11",
+              "number": 11,
+              "title": "Tỉ số lượng giác của góc nhọn"
+            },
+            {
+              "id": "KNTT-MATH-9-L12",
+              "number": 12,
+              "title": "Một số hệ thức giữa cạnh, góc trong tam giác vuông và ứng dụng"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C05",
+          "number": 5,
+          "roman": "V",
+          "title": "ĐƯỜNG TRÒN",
+          "volume": 1,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L13",
+              "number": 13,
+              "title": "Mở đầu về đường tròn"
+            },
+            {
+              "id": "KNTT-MATH-9-L14",
+              "number": 14,
+              "title": "Cung và dây của một đường tròn"
+            },
+            {
+              "id": "KNTT-MATH-9-L15",
+              "number": 15,
+              "title": "Độ dài của cung tròn. Diện tích hình quạt tròn và hình vành khuyên"
+            },
+            {
+              "id": "KNTT-MATH-9-L16",
+              "number": 16,
+              "title": "Vị trí tương đối của đường thẳng và đường tròn"
+            },
+            {
+              "id": "KNTT-MATH-9-L17",
+              "number": 17,
+              "title": "Vị trí tương đối của hai đường tròn"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C06",
+          "number": 6,
+          "roman": "VI",
+          "title": "HÀM SỐ y = ax² (a ≠ 0). PHƯƠNG TRÌNH BẬC HAI MỘT ẨN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L18",
+              "number": 18,
+              "title": "Hàm số y = ax² (a ≠ 0)"
+            },
+            {
+              "id": "KNTT-MATH-9-L19",
+              "number": 19,
+              "title": "Phương trình bậc hai một ẩn"
+            },
+            {
+              "id": "KNTT-MATH-9-L20",
+              "number": 20,
+              "title": "Định lí Viète và ứng dụng"
+            },
+            {
+              "id": "KNTT-MATH-9-L21",
+              "number": 21,
+              "title": "Giải bài toán bằng cách lập phương trình"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C07",
+          "number": 7,
+          "roman": "VII",
+          "title": "TẦN SỐ VÀ TẦN SỐ TƯƠNG ĐỐI",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L22",
+              "number": 22,
+              "title": "Bảng tần số và biểu đồ tần số"
+            },
+            {
+              "id": "KNTT-MATH-9-L23",
+              "number": 23,
+              "title": "Bảng tần số tương đối và biểu đồ tần số tương đối"
+            },
+            {
+              "id": "KNTT-MATH-9-L24",
+              "number": 24,
+              "title": "Bảng tần số, tần số tương đối ghép nhóm và biểu đồ"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C08",
+          "number": 8,
+          "roman": "VIII",
+          "title": "XÁC SUẤT CỦA BIẾN CỐ TRONG MỘT SỐ MÔ HÌNH XÁC SUẤT ĐƠN GIẢN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L25",
+              "number": 25,
+              "title": "Phép thử ngẫu nhiên và không gian mẫu"
+            },
+            {
+              "id": "KNTT-MATH-9-L26",
+              "number": 26,
+              "title": "Xác suất của biến cố liên quan tới phép thử"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C09",
+          "number": 9,
+          "roman": "IX",
+          "title": "ĐƯỜNG TRÒN NGOẠI TIẾP VÀ ĐƯỜNG TRÒN NỘI TIẾP",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L27",
+              "number": 27,
+              "title": "Góc nội tiếp"
+            },
+            {
+              "id": "KNTT-MATH-9-L28",
+              "number": 28,
+              "title": "Đường tròn ngoại tiếp và đường tròn nội tiếp của một tam giác"
+            },
+            {
+              "id": "KNTT-MATH-9-L29",
+              "number": 29,
+              "title": "Tứ giác nội tiếp"
+            },
+            {
+              "id": "KNTT-MATH-9-L30",
+              "number": 30,
+              "title": "Đa giác đều"
+            }
+          ]
+        },
+        {
+          "id": "KNTT-MATH-9-C10",
+          "number": 10,
+          "roman": "X",
+          "title": "MỘT SỐ HÌNH KHỐI TRONG THỰC TIỄN",
+          "volume": 2,
+          "lessons": [
+            {
+              "id": "KNTT-MATH-9-L31",
+              "number": 31,
+              "title": "Hình trụ và hình nón"
+            },
+            {
+              "id": "KNTT-MATH-9-L32",
+              "number": 32,
+              "title": "Hình cầu"
+            }
+          ]
+        }
+      ],
+      "chapter_count": 10,
+      "numbered_lesson_count": 32
+    }
+  ]
+}

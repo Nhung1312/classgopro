@@ -28,6 +28,7 @@ import {
   CreditCard,
   AlertTriangle,
   History as HistoryIcon,
+  ScanLine,
 } from 'lucide-react';
 import { AppTab, ClassRoom, SelectionMode, UserSubscription } from '../types';
 import { soundEngine } from '../utils/audio';
@@ -102,6 +103,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const tabs: { id: AppTab; label: string; icon: React.ReactNode }[] = [
     { id: 'SPIN', label: 'Quay Tên', icon: <Sparkles className="w-4 h-4" /> },
+    { id: 'REVIEW_BANK', label: 'Kho KT Bài Cũ', icon: <BookOpen className="w-4 h-4 text-amber-400" /> },
+    { id: 'RESPONSE_CARDS', label: 'Thẻ Trả Lời', icon: <ScanLine className="w-4 h-4 text-emerald-400" /> },
     { id: 'TIMETABLE', label: 'TKB & Báo Giảng', icon: <Calendar className="w-4 h-4 text-sky-400" /> },
     { id: 'GRADEBOOK', label: 'Sổ Điểm GVBM', icon: <GraduationCap className="w-4 h-4 text-emerald-400" /> },
     { id: 'DISCIPLINE', label: 'Theo Dõi Nề Nếp', icon: <ClipboardList className="w-4 h-4 text-amber-400" /> },
@@ -115,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur border-b border-slate-800 shadow-md">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-        
+
         {/* Brand & Class Switcher */}
         <div className="flex items-center justify-between gap-3">
           <div

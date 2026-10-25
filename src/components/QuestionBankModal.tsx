@@ -30,43 +30,9 @@ export interface QuestionBankModalProps {
   onSelectQuestion?: (question: QuestionItem) => void;
   selectedStudentName?: string;
   activeSubject?: string;
+  activeClassName?: string;
   onOpenSpotlight?: (question: QuestionItem) => void;
 }
-
-const DEFAULT_MATH_SAMPLE_QUESTIONS: QuestionItem[] = [
-  {
-    id: 'q-math-1',
-    content: 'Tính đạo hàm của hàm số $y = \\frac{2x - 1}{x + 1}$ tại điểm $x_0 = 1$.',
-    level: 'Trung bình',
-    suggestedAnswer: 'Áp dụng công thức $(u/v)\' = \\frac{u\'v - uv\'}{v^2}$, ta có $y\' = \\frac{3}{(x+1)^2} \\Rightarrow y\'(1) = \\frac{3}{4}$.',
-    hint: 'Nhớ lại công thức tính đạo hàm của phân thức bậc nhất trên bậc nhất.',
-  },
-  {
-    id: 'q-math-2',
-    content: 'Nêu công thức nghiệm của phương trình bậc hai $ax^2 + bx + c = 0$ ($a \\neq 0$) khi $\\Delta = b^2 - 4ac > 0$.',
-    level: 'Dễ',
-    suggestedAnswer: 'Phương trình có 2 nghiệm phân biệt: $x_{1,2} = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}$.',
-  },
-  {
-    id: 'q-math-3',
-    content: 'Tính tích phân: $I = \\int_{0}^{\\frac{\\pi}{2}} \\sin(x) \\cos(x) dx$.',
-    level: 'Trung bình',
-    suggestedAnswer: '$I = \\int_{0}^{\\frac{\\pi}{2}} \\frac{1}{2}\\sin(2x)dx = [-\\frac{1}{4}\\cos(2x)]_0^{\\frac{\\pi}{2}} = \\frac{1}{2}$. Hoặc đổi biến $t = \\sin(x) \\Rightarrow I = \\frac{1}{2}$.',
-  },
-  {
-    id: 'q-math-4',
-    content: 'Trong không gian $Oxyz$, cho mặt phẳng $(P): 2x - y + 2z - 5 = 0$. Tìm khoảng cách từ điểm $M(1; -2; 3)$ đến $(P)$.',
-    level: 'Khó',
-    suggestedAnswer: '$d(M, (P)) = \\frac{|2(1) - (-2) + 2(3) - 5|}{\\sqrt{2^2 + (-1)^2 + 2^2}} = \\frac{|2 + 2 + 6 - 5|}{\\sqrt{9}} = \\frac{5}{3}$.',
-    hint: 'Áp dụng công thức $d(M, (P)) = \\frac{|Ax_0 + By_0 + Cz_0 + D|}{\\sqrt{A^2 + B^2 + C^2}}$.',
-  },
-  {
-    id: 'q-math-5',
-    content: 'Giải phương trình lượng giác cơ bản: $2\\sin(x) - \\sqrt{3} = 0$.',
-    level: 'Dễ',
-    suggestedAnswer: '$\\sin(x) = \\frac{\\sqrt{3}}{2} \\Leftrightarrow x = \\frac{\\pi}{3} + k2\\pi$ hoặc $x = \\frac{2\\pi}{3} + k2\\pi$ ($k \\in \\mathbb{Z}$).',
-  },
-];
 
 export function QuestionBankModal({
   isOpen,
@@ -76,6 +42,8 @@ export function QuestionBankModal({
   onSelectQuestionForStudent,
   onSelectQuestion,
   selectedStudentName,
+  activeSubject,
+  activeClassName,
   onOpenSpotlight,
 }: QuestionBankModalProps) {
   const [activeTab, setActiveTab] = useState<'RANDOM' | 'MANAGE' | 'IMPORT'>('RANDOM');
@@ -88,7 +56,11 @@ export function QuestionBankModal({
   const [newLevel, setNewLevel] = useState<'Dễ' | 'Trung bình' | 'Khó'>('Trung bình');
   const [newAnswer, setNewAnswer] = useState('');
   const [newHint, setNewHint] = useState('');
+  const [newChapter, setNewChapter] = useState('');
+  const [newLesson, setNewLesson] = useState('');
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null);
+  const [exportGroup, setExportGroup] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [showMathToolbar, setShowMathToolbar] = useState(false);
 
   // Batch import text state
@@ -101,7 +73,50 @@ export function QuestionBankModal({
 
   if (!isOpen) return null;
 
-  const currentList = questions && questions.length > 0 ? questions : DEFAULT_MATH_SAMPLE_QUESTIONS;
+  const currentList = questions || [];
+  const groupOptions = [...new Map(currentList.filter(q => q.lesson)
+    .map(q => [JSON.stringify([q.chapter || '', q.lesson || '']), {chapter:q.chapter||'',lesson:q.lesson||''}])).entries()];
+  const grade = activeClassName?.match(/[6789]/)?.[0] || '';
+
+  const exportSelectedLesson = async () => {
+    if (!exportGroup) { alert('Hãy chọn bài học cần xuất.'); return; }
+    try {
+      const { buildReviewBankJson } = await import('../utils/reviewBankExchange');
+      const [chapter, lesson] = JSON.parse(exportGroup) as [string,string];
+      const payload = buildReviewBankJson({
+        questions: currentList, subject: activeSubject || 'Toán', grade, chapter, lesson
+      });
+      const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ClassGo_Kho_bai_cu_' + grade + '_' + Date.now() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+    } catch (err) { alert(err instanceof Error ? err.message : 'Không thể xuất JSON.'); }
+  };
+  const importReviewExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (!newLesson.trim()) { alert('Nhập tên bài học vào ô bên dưới trước khi nhập Excel.'); return; }
+      if (file.size > 800_000) { alert('Excel quá lớn để lưu an toàn; hãy chia thành nhiều bài.'); return; }
+      const XLSX = await import('xlsx');
+      const {convertExcelReviewRows} = await import('../utils/reviewBankExchange');
+      const data = XLSX.read(await file.arrayBuffer(),{type:'array'});
+      const sheet = data.Sheets[data.SheetNames[0]];
+      if (!sheet) { alert('Excel chưa có trang dữ liệu.'); return; }
+      const rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:''});
+      if (rows.length > 500) { alert('Một lần nhập tối đa 500 hàng.'); return; }
+      const {items,skipped} = convertExcelReviewRows(rows,{
+        subject:activeSubject,grade,chapter:newChapter.trim(),lesson:newLesson.trim()
+      },questions || []);
+      if (!items.length) { alert('Không có câu hợp lệ. Cần cột: Mức độ, Câu hỏi, Đáp án.'); return; }
+      if (!window.confirm(`Nhập ${items.length} câu vào lớp ${activeClassName || 'đang chọn'}, bài ${newLesson}? Bỏ qua ${skipped} hàng không hợp lệ/trùng.`)) return;
+      onUpdateQuestions?.([...(questions || []),...items]);
+      setActiveTab('MANAGE');
+    } catch { alert('Không đọc được Excel này. Vui lòng kiểm tra mẫu và thử lại.'); }
+    finally { event.target.value = ''; }
+  };
 
   const handlePickRandom = () => {
     if (currentList.length === 0) return;
@@ -196,6 +211,28 @@ export function QuestionBankModal({
     }
   };
 
+  // Teacher-authorized import from AI Studio's exported single-lesson JSON.
+  const handleGoogleAiJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const { importReviewBankJson } = await import('../utils/reviewBankImport');
+      if (file.size > 800_000) { alert('Tệp quá lớn để lưu an toàn trên ClassGo.'); return; }
+      const { items, skipped, error, label } = importReviewBankJson(JSON.parse(await file.text()), questions || [],
+        { className: activeClassName || '', subject: activeSubject });
+      if (error) { alert(error); return; }
+      if (!items.length) {
+        alert('Không có câu hỏi hợp lệ mới để nhập. Hãy kiểm tra tệp JSON Kho bài cũ.');
+        return;
+      }
+      if (!window.confirm(`Nhập ${items.length} câu [${label}] vào lớp ${activeClassName || 'đang chọn'}? Bỏ qua ${skipped} câu trùng/không hợp lệ. Dữ liệu cũ được giữ nguyên.`)) return;
+      onUpdateQuestions?.([...(questions || []), ...items]);
+      setActiveTab('MANAGE');
+    } catch {
+      alert('Tệp JSON không đúng định dạng Kho kiểm tra bài cũ.');
+    } finally { event.target.value = ''; }
+  };
+
   // Process text batch import (splits by "Câu 1:", "Câu 2:", etc. or double line break)
   const handleProcessBatchImport = () => {
     if (!importText.trim()) return;
@@ -237,30 +274,54 @@ export function QuestionBankModal({
     }
   };
 
+  const handleEditQuestion = (q: QuestionItem) => {
+    setEditingId(q.id);
+    setNewContent(q.content);
+    setNewAnswer(q.suggestedAnswer || '');
+    setNewHint(q.hint || '');
+    setNewChapter(q.chapter || '');
+    setNewLesson(q.lesson || '');
+    setNewLevel(q.level || 'Trung bình');
+    setNewImageUrl(q.imageUrl || null);
+    setActiveTab('MANAGE');
+  };
+
   const handleAddQuestion = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newContent.trim() && !newImageUrl) return;
 
     const newQ: QuestionItem = {
-      id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: editingId || `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       content: newContent.trim() || 'Xem hình vẽ đính kèm bên dưới:',
+      subject: activeSubject,
+      grade,
       level: newLevel,
+      chapter: newChapter.trim() || undefined,
+      lesson: newLesson.trim() || undefined,
+      reviewLevel: newLevel === 'Khó' ? 'advanced' : 'basic',
       suggestedAnswer: newAnswer.trim() || undefined,
       hint: newHint.trim() || undefined,
       imageUrl: newImageUrl || undefined,
     };
 
-    const updated = [newQ, ...(questions || [])];
+    const updated = editingId
+      ? (questions || []).map(q => q.id === editingId ? { ...q, ...newQ } : q)
+      : [newQ, ...(questions || [])];
     if (onUpdateQuestions) {
       onUpdateQuestions(updated);
     }
     setNewContent('');
     setNewAnswer('');
     setNewHint('');
+    setNewChapter('');
+    setNewLesson('');
     setNewImageUrl(null);
+    setEditingId(null);
   };
 
   const handleDeleteQuestion = (id: string) => {
+    if (!window.confirm('Xóa câu hỏi này khỏi lớp? Không thể hoàn tác sau khi đã đồng bộ.')) return;
+    if (editingId === id) setEditingId(null);
     const updated = (questions || []).filter((q) => q.id !== id);
     if (onUpdateQuestions) {
       onUpdateQuestions(updated);
@@ -558,6 +619,16 @@ export function QuestionBankModal({
                   </div>
                 )}
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-xs text-slate-300">Chương
+                    <input value={newChapter} onChange={e => setNewChapter(e.target.value)}
+                      placeholder="Ví dụ: Chương I" className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2" />
+                  </label>
+                  <label className="text-xs text-slate-300">Bài học
+                    <input value={newLesson} onChange={e => setNewLesson(e.target.value)}
+                      placeholder="Ví dụ: Bài 2" className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2" />
+                  </label>
+                </div>
                 {/* Difficulty & Hint */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                   <div>
@@ -599,7 +670,7 @@ export function QuestionBankModal({
                     type="submit"
                     className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
                   >
-                    <Plus className="w-4 h-4" /> Thêm Vào Kho Câu Hỏi
+                    <Plus className="w-4 h-4" /> {editingId ? 'Lưu thay đổi câu hỏi' : 'Thêm Vào Kho Câu Hỏi'}
                   </button>
                 </div>
               </form>
@@ -667,6 +738,10 @@ export function QuestionBankModal({
                           Chọn
                         </button>
                       )}
+                      <button type="button" onClick={() => handleEditQuestion(q)}
+                        className="px-2.5 py-1 rounded-lg text-xs bg-sky-900/60 text-sky-200 hover:bg-sky-800">
+                        Sửa
+                      </button>
                       <button
                         onClick={() => handleDeleteQuestion(q.id)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
@@ -683,6 +758,35 @@ export function QuestionBankModal({
 
           {activeTab === 'IMPORT' && (
             <div className="space-y-4">
+              <div className="border border-amber-500/40 bg-amber-950/20 rounded-xl p-4 space-y-2">
+                <strong className="text-amber-300 text-sm block">Nhập JSON từ Google AI Studio</strong>
+                <p className="text-slate-300 text-xs">Xuất kho bài cũ của từng bài trên AI Studio, chọn đúng lớp trong ClassGo rồi nhập JSON. Không xóa câu hỏi cũ, có lọc trùng.</p>
+                <input type="file" accept=".json,application/json" onChange={handleGoogleAiJson}
+                  className="text-xs text-slate-200 file:bg-amber-500 file:text-slate-950 file:px-3 file:py-2 file:rounded-lg file:border-0" />
+              </div>
+              <div className="rounded-xl border border-sky-500/40 p-4 bg-sky-950/20 space-y-3">
+                <h3 className="font-bold text-sm text-sky-200">Xuất kho câu hỏi JSON theo bài học</h3>
+                <select value={exportGroup} onChange={e => setExportGroup(e.target.value)}
+                  className="w-full rounded-lg bg-slate-800 border border-slate-700 p-2 text-sm text-slate-100">
+                  <option value="">-- Chọn bài học để xuất --</option>
+                  {groupOptions.map(([value,group]) =>
+                    <option key={value} value={value}>{group.chapter ? group.chapter + ' / ' : ''}{group.lesson}</option>)}
+                </select>
+                <button type="button" onClick={exportSelectedLesson} disabled={!exportGroup}
+                  className="rounded-lg bg-sky-600 px-3 py-2 text-white font-bold text-xs disabled:opacity-40">
+                  Xuất JSON (có thể nhập lại Google AI Studio)
+                </button>
+              </div>
+              <div className="border border-emerald-500/40 bg-emerald-950/20 rounded-xl p-4 space-y-2">
+                <h3 className="font-bold text-emerald-300 text-sm">Nhập Excel Kho bài cũ</h3>
+                <p className="text-xs text-slate-200">Excel có cột Mức độ (Cơ bản/Nâng cao), Câu hỏi, Đáp án. Điền chương và bài học trước khi chọn Excel.</p>
+                <input value={newChapter} onChange={e=>setNewChapter(e.target.value)}
+                  placeholder="Chương" className="bg-slate-800 rounded-lg border border-slate-700 p-2 text-sm w-full" />
+                <input value={newLesson} onChange={e=>setNewLesson(e.target.value)}
+                  placeholder="Bài học (bắt buộc)" className="bg-slate-800 rounded-lg border border-slate-700 p-2 text-sm w-full" />
+                <input type="file" accept=".xlsx,.xls" onChange={importReviewExcel}
+                  className="text-xs text-slate-200 file:bg-emerald-600 file:px-3 file:py-2 file:rounded-lg file:border-0" />
+              </div>
               <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-xl p-4 text-xs text-indigo-200 space-y-2">
                 <div className="font-bold text-sm text-indigo-300 flex items-center gap-1.5">
                   <FileText className="w-4 h-4" /> Hướng dẫn nhập câu hỏi từ Word (.docx) hoặc Văn bản:
@@ -691,7 +795,7 @@ export function QuestionBankModal({
                   Thầy cô có thể tải trực tiếp file <strong>.docx</strong> từ máy tính, hoặc copy và dán danh sách câu hỏi theo định dạng:
                 </p>
                 <div className="bg-slate-950/60 p-2.5 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800">
-                  Câu 1: Tính đạo hàm $y = 3x^2 - 5x + 1$<br />
+                  Câu 1: Tính $2x-5$ tại $x=3$<br />
                   Câu 2: Cho tam giác $ABC$ vuông tại $A$...<br />
                   Câu 3: Giải phương trình $\sin(2x) = 1$...
                 </div>

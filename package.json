@@ -9,7 +9,13 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "check:spin-consistency": "tsx scripts/check-spin-consistency.ts"
+    "check:spin-consistency": "node --import tsx scripts/check-spin-consistency.ts",
+    "dev:server": "node --import tsx server.ts",
+    "test:mystery": "node --import tsx scripts/check-mystery-door.ts",
+    "test:ppct": "node --import tsx scripts/testPpctAndTimetable.ts",
+    "test:aruco": "node --import tsx scripts/testArucoDetection.ts",
+    "test:integration": "node scripts/verify-integration.mjs",
+    "test:browser": "node scripts/check-browser-integration.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -19,6 +25,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^12.18.0",
+    "jspdf": "^4.2.1",
     "katex": "^0.18.5",
     "lucide-react": "^0.546.0",
     "mammoth": "^1.12.2",
@@ -35,6 +42,7 @@
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "playwright": "^1.64.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
