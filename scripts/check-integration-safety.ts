@@ -113,4 +113,5 @@ assert.equal(loadQuestionBanks('new-signed-user').some(b => b.id === 'anonymous-
 assert.equal(fetches, 0);
 const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
 assert.equal(vercel.rewrites[0].destination, '/index.html');
+assert.equal(new RegExp('^' + vercel.rewrites[0].source + '$').test('/api/generate-questions'), false, 'SPA rewrite must not swallow the AI API');
 console.log('PASS: review history/TX/star deduplication, class bank adapter, stable card mappings, account isolation, quiz transfers, real PDF/Excel generation, makeup collision and backup safety. No external requests.');

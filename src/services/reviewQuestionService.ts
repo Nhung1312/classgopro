@@ -1,3 +1,4 @@
+import { requestAiQuestions } from './aiQuestionClient';
 import * as XLSX from 'xlsx';
 import {
   ReviewQuestion,
@@ -965,34 +966,10 @@ export interface GeneratedAiQuestionDraft {
 export async function generateQuestionsViaAi(
   params: GenerateAiQuestionsParams
 ): Promise<Array<{ level: ReviewQuestionLevel; question: string; answer: string }>> {
-  // Require a real teacher session; the Vercel API validates the Firebase ID token and allowlist.
-  const { auth } = await import('../lib/firebase');
-  const teacher = auth.currentUser;
-  if (!teacher) {
-    throw new Error('Vui lòng đăng nhập tài khoản giáo viên để sử dụng chức năng tạo câu hỏi AI.');
-  }
-  const idToken = await teacher.getIdToken();
-  const response = await fetch('/api/generate-questions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify(params),
+  const data = await requestAiQuestions({ ...params,
+    // Match the bounded context the existing server prompt used; preserve the full bank on the device.
+    existingQuestions: params.existingQuestions?.slice(0, 25).map(q => q.slice(0, 500)),
   });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || `Lỗi từ máy chủ AI (${response.status})`);
-  }
-
-  if (!response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error('Máy chủ tạo câu hỏi chưa sẵn sàng trên địa chỉ này. Thầy cô vẫn có thể nhập hoặc tự tạo câu hỏi.');
-  }
-  const data = await response.json();
-  if (!data || !Array.isArray(data.questions)) {
-    throw new Error('Định dạng phản hồi từ AI không đúng cấu trúc danh sách câu hỏi.');
-  }
 
   // Strict validation: Reject any item that does not match the requested level
   return data.questions

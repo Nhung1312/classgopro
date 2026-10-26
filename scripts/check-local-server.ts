@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 const server = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
-  env: { ...process.env, PORT: '4379', GEMINI_API_KEY: '', NODE_ENV: 'production' }, stdio: 'pipe'
+  env: { ...process.env, PORT: '4379', CLASSGO_AI_ENABLED: 'true', GEMINI_API_KEY: '', NODE_ENV: 'production' }, stdio: 'pipe'
 });
 let output = '';
 server.stdout.on('data', chunk => output += chunk);
@@ -18,6 +18,6 @@ try {
   for (const path of ['/api/response-cards/session/123456', '/api/response-cards/session/123456/stream'])
     assert.equal((await fetch('http://127.0.0.1:4379' + path)).status, 503);
   assert.equal((await fetch('http://127.0.0.1:4379/api/response-cards/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 503);
-  assert.equal((await fetch('http://127.0.0.1:4379/api/generate-questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 503);
-  console.log('PASS: local server boots without keys; unsafe PIN relay disabled; no Gemini request without configuration.');
+  assert.equal((await fetch('http://127.0.0.1:4379/api/generate-questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
+  console.log('PASS: local server boots without keys; unsafe PIN relay disabled; AI requires authentication before any provider call.');
 } finally { server.kill('SIGTERM'); }
