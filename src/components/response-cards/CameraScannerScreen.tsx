@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Camera,
   RotateCcw,
@@ -34,15 +34,24 @@ import {
 } from '../../services/arucoService';
 import {
   saveActiveQuizSession,
+  saveActiveQuizSessionLocally,
+  batchRecordStudentAnswersToCloud,
+  recordStudentAnswerToCloud,
+  updateSessionControlToCloud,
   getOrInitClassCardConfig,
   subscribeToSessionSync,
+  loadOfflineAnswerQueue,
+  saveOfflineAnswerQueue,
+  enqueueOfflineAnswer,
+  removeConfirmedOfflineAnswers,
+  QueuedOfflineAnswer,
 } from '../../services/responseCardStorage';
 import { soundEngine } from '../../utils/audio';
 
 interface CameraScannerScreenProps {
   session: QuizSession;
   currentClass: ClassRoom;
-  onUpdateSession: (updated: QuizSession) => void;
+  onUpdateSession: (updated: QuizSession, options?: { fromSync?: boolean }) => void;
   onOpenProjector: () => void;
   onFinishSession: () => void;
 }
@@ -65,6 +74,17 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [isCloudOnline, setIsCloudOnline] = useState<boolean>(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  // Persistent Offline Queue & Rejected Answers state
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(() => {
+    return loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length;
+  });
+  const [rejectedAnswers, setRejectedAnswers] = useState<QueuedOfflineAnswer[]>(() => {
+    return loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'rejected_locked');
+  });
+  const [showRejectedModal, setShowRejectedModal] = useState<boolean>(false);
+  const isFlushingRef = useRef<boolean>(false);
 
   // Manual input drawer
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -101,23 +121,109 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   const currentQuestion = session.questions[currentQIndex];
   const currentResult = session.results[currentQIndex];
 
-  // Listen for live updates from computer projector
-  useEffect(() => {
-    const unsubscribe = subscribeToSessionSync((synced) => {
-      if (synced.id === session.id) {
-        if (
-          synced.currentQuestionIndex !== session.currentQuestionIndex ||
-          synced.results[synced.currentQuestionIndex]?.status !== currentResult?.status
-        ) {
-          onUpdateSession(synced);
+  // Flush persistent offline queue safely - NEVER delete before Firestore confirms success!
+  const flushOfflineQueue = useCallback(async () => {
+    if (!session.teacherId || isFlushingRef.current) return;
+    const currentQueue = loadOfflineAnswerQueue(session.id);
+    const pendingItems = currentQueue.filter((q) => q.status === 'pending');
+    if (pendingItems.length === 0) {
+      setOfflineQueueCount(0);
+      return;
+    }
+
+    isFlushingRef.current = true;
+    try {
+      const byQuestion: Record<string, Record<string, StudentAnswerRecord>> = {};
+      for (const item of pendingItems) {
+        if (!byQuestion[item.questionId]) byQuestion[item.questionId] = {};
+        byQuestion[item.questionId][item.studentId] = item.record;
+      }
+
+      for (const [qId, answers] of Object.entries(byQuestion)) {
+        const itemsForQ = pendingItems.filter((it) => it.questionId === qId);
+        try {
+          const result = await batchRecordStudentAnswersToCloud(
+            session.teacherId,
+            session.id,
+            qId,
+            answers
+          );
+
+          if (result.success) {
+            // ONLY remove from queue after confirmed success from Firestore!
+            removeConfirmedOfflineAnswers(
+              session.id,
+              itemsForQ.map((it) => ({ questionId: it.questionId, studentId: it.studentId }))
+            );
+          } else if (result.rejectedLocked) {
+            // Question was locked or session completed on computer!
+            const rejectedItems: QueuedOfflineAnswer[] = itemsForQ.map((it) => ({
+              ...it,
+              status: 'rejected_locked',
+              errorMessage: result.errorMessage,
+            }));
+            const remaining = removeConfirmedOfflineAnswers(
+              session.id,
+              itemsForQ.map((it) => ({ questionId: it.questionId, studentId: it.studentId }))
+            );
+            saveOfflineAnswerQueue(session.id, [...remaining, ...rejectedItems]);
+            setRejectedAnswers((prev) => [...prev, ...rejectedItems]);
+          } else {
+            // Write error occurred -> DO NOT DELETE! Keep in localStorage queue.
+            console.warn('[ResponseCards] Offline batch write deferred:', result.errorMessage);
+          }
+        } catch (err: any) {
+          console.warn('[ResponseCards] Network failure during batch write, answers retained in queue:', err?.message || err);
         }
       }
-    }, session.sessionPin);
+    } finally {
+      isFlushingRef.current = false;
+      const refreshedPending = loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending');
+      setOfflineQueueCount(refreshedPending.length);
+    }
+  }, [session.id, session.teacherId]);
+
+  // Network status listeners
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsCloudOnline(true);
+      flushOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsCloudOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [flushOfflineQueue]);
+
+  // Listen for live updates from computer projector via BroadcastChannel & Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToSessionSync(
+      (synced) => {
+        if (synced.id === session.id) {
+          if (synced.currentQuestionIndex !== session.currentQuestionIndex) {
+            trackerRef.current.reset();
+          }
+          onUpdateSession(synced, { fromSync: true });
+        }
+      },
+      session.sessionPin,
+      session.id,
+      session.teacherId,
+      (online) => {
+        setIsCloudOnline(online);
+        if (online) flushOfflineQueue();
+      }
+    );
 
     return () => {
       unsubscribe();
     };
-  }, [session.id, session.sessionPin, session.currentQuestionIndex, currentResult?.status, onUpdateSession]);
+  }, [session.id, session.sessionPin, session.teacherId, session.currentQuestionIndex, onUpdateSession, flushOfflineQueue]);
 
   // Answer tallies for current question
   const answersMap: Record<string, StudentAnswerRecord> = currentResult?.answers || {};
@@ -332,6 +438,8 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
             let hasNewAnswer = false;
             const updatedAnswers = { ...(currentResult.answers || {}) };
 
+            const newScannedMap: Record<string, StudentAnswerRecord> = {};
+
             for (const marker of confirmedMarkers) {
               const student = cardIdToStudentMap.get(marker.cardId);
               if (student) {
@@ -339,7 +447,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                 // Record if not yet recorded OR if student turned card to a different option before locking
                 if (!existing || existing.selectedOption !== marker.option) {
                   const isCorrect = marker.option === currentQuestion.correctAnswer;
-                  updatedAnswers[student.studentId] = {
+                  const rec: StudentAnswerRecord = {
                     studentId: student.studentId,
                     studentName: student.name,
                     studentCode: student.code,
@@ -348,6 +456,8 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                     isCorrect,
                     timestamp: Date.now(),
                   };
+                  updatedAnswers[student.studentId] = rec;
+                  newScannedMap[student.studentId] = rec;
                   hasNewAnswer = true;
                 }
               }
@@ -370,8 +480,21 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                 updatedAt: new Date().toISOString(),
               };
 
-              saveActiveQuizSession(updatedSession);
-              onUpdateSession(updatedSession);
+              saveActiveQuizSessionLocally(updatedSession);
+              onUpdateSession(updatedSession, { fromSync: true });
+
+              for (const [sId, rec] of Object.entries(newScannedMap)) {
+                enqueueOfflineAnswer(session.id, {
+                  questionId: currentQuestion.id,
+                  studentId: sId,
+                  record: rec,
+                });
+              }
+              setOfflineQueueCount(loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length);
+
+              if (session.teacherId && isCloudOnline && (typeof navigator === 'undefined' || navigator.onLine)) {
+                flushOfflineQueue();
+              }
             }
           }
         }
@@ -395,15 +518,17 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     session,
     soundEnabled,
     onUpdateSession,
+    isCloudOnline,
   ]);
 
   // Lock answers and reveal
   const handleLockAndReveal = () => {
+    const endedTime = Date.now();
     const updatedResults = [...session.results];
     updatedResults[currentQIndex] = {
       ...currentResult,
       status: 'revealed',
-      endedAt: Date.now(),
+      endedAt: endedTime,
     };
 
     const updatedSession: QuizSession = {
@@ -416,8 +541,18 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       soundEngine.playSuccess();
     }
 
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    if (session.teacherId) {
+      updateSessionControlToCloud(session.teacherId, session.id, {
+        questionStatus: {
+          questionId: currentQuestion.id,
+          status: 'revealed',
+          endedAt: endedTime,
+        },
+      });
+    }
   };
 
   // Re-open collection for this question
@@ -434,8 +569,17 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    if (session.teacherId) {
+      updateSessionControlToCloud(session.teacherId, session.id, {
+        questionStatus: {
+          questionId: currentQuestion.id,
+          status: 'collecting',
+        },
+      });
+    }
   };
 
   // Switch to next or previous question
@@ -449,8 +593,14 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    if (session.teacherId) {
+      updateSessionControlToCloud(session.teacherId, session.id, {
+        currentQuestionIndex: newIdx,
+      });
+    }
   };
 
   // Manual Answer Submission
@@ -460,19 +610,20 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
 
     const mapping = cardConfig.mappings.find((m) => m.studentId === studentId);
     const isCorrect = option === currentQuestion.correctAnswer;
+    const rec: StudentAnswerRecord = {
+      studentId,
+      studentName: student.name,
+      studentCode: student.studentCode,
+      cardId: mapping?.cardId || 0,
+      selectedOption: option,
+      isCorrect,
+      timestamp: Date.now(),
+      manual: true,
+    };
 
     const updatedAnswers = {
       ...(currentResult.answers || {}),
-      [studentId]: {
-        studentId,
-        studentName: student.name,
-        studentCode: student.studentCode,
-        cardId: mapping?.cardId || 0,
-        selectedOption: option,
-        isCorrect,
-        timestamp: Date.now(),
-        manual: true,
-      },
+      [studentId]: rec,
     };
 
     const updatedResults = [...session.results];
@@ -487,8 +638,20 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    enqueueOfflineAnswer(session.id, {
+      questionId: currentQuestion.id,
+      studentId,
+      record: rec,
+    });
+    setOfflineQueueCount(loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length);
+
+    if (session.teacherId && isCloudOnline && (typeof navigator === 'undefined' || navigator.onLine)) {
+      flushOfflineQueue();
+    }
+
     setIsManualModalOpen(false);
     setSelectedStudentForManual(null);
   };
@@ -510,14 +673,46 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
   };
 
   return (
     <div className="space-y-4">
       {/* Hidden processing canvas */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Cảnh báo đáp án bị từ chối do câu đã khóa trên máy tính */}
+      {rejectedAnswers.length > 0 && (
+        <div className="bg-rose-950/80 border border-rose-500/50 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-200 shadow-lg animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <strong className="font-black text-rose-300">Phát hiện {rejectedAnswers.length} đáp án chưa gửi:</strong>{' '}
+              Máy tính đã khóa câu hỏi hoặc kết thúc bài kiểm tra trước khi dữ liệu kịp đồng bộ.
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              onClick={() => setShowRejectedModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold border border-rose-500/40 text-xs transition-colors cursor-pointer"
+            >
+              Xem chi tiết ({rejectedAnswers.length})
+            </button>
+            <button
+              onClick={() => {
+                const pendingOnly = loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending');
+                saveOfflineAnswerQueue(session.id, pendingOnly);
+                setRejectedAnswers([]);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer"
+              title="Bỏ qua và ẩn thông báo này"
+            >
+              Bỏ qua
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TOP HEADER: Question tracker & live reception count */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -535,8 +730,30 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
           </div>
         </div>
 
-        {/* Live Reception Statistics */}
+          {/* Live Reception Statistics */}
         <div className="flex items-center gap-2 text-xs flex-wrap">
+          {isCloudOnline ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/70 border border-emerald-600/40 text-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-semibold">Đã đồng bộ máy tính</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-600/50 text-amber-300">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-[11px] font-bold">
+                {offlineQueueCount > 0 ? `Ngoại tuyến: Lưu tạm ${offlineQueueCount} câu` : 'Ngoại tuyến (Chờ mạng)'}
+              </span>
+              {offlineQueueCount > 0 && (
+                <button
+                  onClick={flushOfflineQueue}
+                  className="ml-1 text-[10px] bg-amber-500/20 hover:bg-amber-500/30 px-2 py-0.5 rounded-md font-bold text-amber-200 border border-amber-500/30"
+                >
+                  Gửi lại
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700">
             <Users className="w-3.5 h-3.5 text-indigo-400" />
             <span className="text-slate-400">Đã thu:</span>
@@ -897,6 +1114,84 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
               >
                 Đóng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XỬ LÝ ĐÁP ÁN BỊ TỪ CHỐI DO KHÓA CÂU */}
+      {showRejectedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-rose-500/50 rounded-3xl p-5 w-full max-w-lg shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-rose-400" />
+                <h3 className="text-base font-bold text-white">Đáp Án Không Thể Gửi (Đã Khóa)</h3>
+              </div>
+              <button
+                onClick={() => setShowRejectedModal(false)}
+                className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Các đáp án sau được ghi nhận nhưng Giáo viên đã bấm <strong>Khóa câu / Công bố đáp án</strong> trên máy tính trước khi dữ liệu được gửi. Hệ thống máy chủ từ chối ghi đè để bảo toàn tính minh bạch:
+            </p>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-72">
+              {rejectedAnswers.map((it, idx) => {
+                const student = currentClass.students.find((s) => s.id === it.studentId);
+                const qItem = session.questions.find((q) => q.id === it.questionId);
+                return (
+                  <div
+                    key={`${it.questionId}_${it.studentId}_${idx}`}
+                    className="p-3 bg-slate-950 border border-rose-900/40 rounded-xl flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div>
+                      <div className="font-bold text-white">
+                        {it.record.studentName || student?.name || it.studentId}
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        {qItem ? `Câu hỏi: ${qItem.question.slice(0, 35)}...` : `Câu: ${it.questionId}`}
+                      </div>
+                      <div className="text-[10px] text-rose-400 mt-0.5">
+                        Lý do: {it.errorMessage || 'Câu hỏi đã bị khóa trên máy chủ'}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black flex items-center justify-center">
+                        {it.record.selectedOption}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
+              <span className="text-[11px] text-slate-400">Thầy/Cô có thể nhập tay lại nếu cần.</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const pendingOnly = loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending');
+                    saveOfflineAnswerQueue(session.id, pendingOnly);
+                    setRejectedAnswers([]);
+                    setShowRejectedModal(false);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs cursor-pointer"
+                >
+                  Xóa cảnh báo
+                </button>
+                <button
+                  onClick={() => setShowRejectedModal(false)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs cursor-pointer"
+                >
+                  Đã hiểu
+                </button>
+              </div>
             </div>
           </div>
         </div>

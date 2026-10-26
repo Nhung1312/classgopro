@@ -251,7 +251,7 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
       return;
     }
     try {
-      const session = createNewQuizSession(currentClass, sessionTitle, readyQuestions, selectedSubject);
+      const session = createNewQuizSession(currentClass, sessionTitle, readyQuestions, selectedSubject, currentUser?.uid);
       onSessionCreated(session);
       onClose();
     } catch (error) { alert(error instanceof Error ? error.message : 'Không lưu được phiên kiểm tra.'); }

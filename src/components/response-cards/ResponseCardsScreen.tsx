@@ -29,9 +29,11 @@ import {
   RESPONSE_REMOTE_SYNC_NOTICE,
   loadAllQuizSessions,
   saveActiveQuizSession,
+  saveActiveQuizSessionLocally,
   loadActiveQuizSession,
   deleteQuizSession,
   fetchSessionByPin,
+  fetchSessionFromCloud,
 } from '../../services/responseCardStorage';
 import { CardPrintSheet } from './CardPrintSheet';
 import { CreateQuizModal } from './CreateQuizModal';
@@ -47,6 +49,7 @@ interface ResponseCardsScreenProps {
   onSelectClass: (id: string) => void;
   onUpdateClasses: (classes: ClassRoom[]) => void;
   currentUser?: any;
+  onOpenAuthModal?: () => void;
   onUpdateHistory?: (history: HistoryRecord[]) => void;
   history?: HistoryRecord[];
 }
@@ -57,10 +60,19 @@ export const ResponseCardsScreen: React.FC<ResponseCardsScreenProps> = ({
   onSelectClass,
   onUpdateClasses,
   currentUser,
+  onOpenAuthModal,
   onUpdateHistory,
   history,
 }) => {
-  const [subTab, setSubTab] = useState<ResponseCardSubTab>('CARDS');
+  const [subTab, setSubTab] = useState<ResponseCardSubTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'SCAN' || params.get('session') || params.get('pin')) {
+        return 'SCAN';
+      }
+    }
+    return 'CARDS';
+  });
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isProjectorOpen, setIsProjectorOpen] = useState(false);
 
@@ -77,10 +89,13 @@ export const ResponseCardsScreen: React.FC<ResponseCardsScreenProps> = ({
   }, [classes, activeClassId]);
 
   useEffect(() => {
-    if (activeSession && activeSession.classId !== currentClass?.id) {
-      setActiveSession(null); setSubTab('CARDS'); setIsProjectorOpen(false);
+    if (activeSession && currentClass && activeSession.classId !== currentClass.id) {
+      const match = classes.find((c) => c.id === activeSession.classId);
+      if (match) {
+        onSelectClass(match.id);
+      }
     }
-  }, [currentClass?.id, activeSession]);
+  }, [currentClass, activeSession, classes, onSelectClass]);
 
   // Filter sessions for current class and subject
   const [subjectFilter, setSubjectFilter] = useState<string>('ALL');
@@ -121,25 +136,77 @@ export const ResponseCardsScreen: React.FC<ResponseCardsScreenProps> = ({
   const [pinError, setPinError] = useState<string | null>(null);
   const [isConnectingPin, setIsConnectingPin] = useState(false);
 
-  // Auto-connect if URL has ?pin=XXXXXX
+  // Auto-connect if URL has QR scan parameters (?session=...&teacher=...) or ?pin=XXXXXX
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      const urlSession = params.get('session');
+      const urlTeacher = params.get('teacher');
+      const urlToken = params.get('token');
       const urlPin = params.get('pin');
-      if (urlPin && urlPin.trim().length >= 6) {
-        fetchSessionByPin(urlPin.trim()).then((sess) => {
+
+      if (urlSession && urlTeacher) {
+        setIsConnectingPin(true);
+        fetchSessionFromCloud(urlTeacher, urlSession, urlToken || undefined, urlPin || undefined)
+          .then((sess) => {
+            if (sess) {
+              saveActiveQuizSessionLocally(sess);
+              setActiveSession(sess);
+              setSubTab('SCAN');
+              if (sess.classId && sess.classId !== activeClassId) {
+                onSelectClass(sess.classId);
+              }
+            }
+          })
+          .catch((err) => console.error('[ResponseCards] Failed auto-connect from QR:', err?.message || 'Error'))
+          .finally(() => setIsConnectingPin(false));
+      } else if (urlPin && urlPin.trim().length >= 6) {
+        fetchSessionByPin(urlPin.trim(), currentUser?.uid).then((sess) => {
           if (sess) {
+            saveActiveQuizSessionLocally(sess);
             setActiveSession(sess);
             setSubTab('SCAN');
+            if (sess.classId && sess.classId !== activeClassId) {
+              onSelectClass(sess.classId);
+            }
           }
         });
       }
     }
-  }, []);
+  }, [currentUser?.uid, activeClassId, onSelectClass]);
 
   const handleConnectPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPinError(RESPONSE_REMOTE_SYNC_NOTICE);
+    const pin = pinInput.trim();
+    if (pin.length < 6) return;
+
+    if (!currentUser) {
+      setPinError('Thầy/Cô vui lòng đăng nhập tài khoản Google Giáo viên để bảo mật dữ liệu học sinh.');
+      onOpenAuthModal?.();
+      return;
+    }
+
+    setIsConnectingPin(true);
+    setPinError(null);
+    try {
+      const sess = await fetchSessionByPin(pin, currentUser.uid);
+      if (sess) {
+        saveActiveQuizSessionLocally(sess);
+        setActiveSession(sess);
+        setSubTab('SCAN');
+        if (sess.classId && sess.classId !== activeClassId) {
+          onSelectClass(sess.classId);
+        }
+        setIsPinModalOpen(false);
+        setPinInput('');
+      } else {
+        setPinError('Không tìm thấy phiên kiểm tra đang chạy với mã PIN này trên tài khoản của Thầy/Cô. Vui lòng kiểm tra lại mã PIN hoặc quét mã QR trên máy tính.');
+      }
+    } catch (err: any) {
+      setPinError('Lỗi kết nối phiên kiểm tra: ' + (err?.message || 'Vui lòng thử lại.'));
+    } finally {
+      setIsConnectingPin(false);
+    }
   };
 
   const handleSessionCreated = (newSession: QuizSession) => {
@@ -151,13 +218,13 @@ export const ResponseCardsScreen: React.FC<ResponseCardsScreenProps> = ({
   };
 
   const handleSelectSessionToScan = (session: QuizSession) => {
-    saveActiveQuizSession(session);
+    saveActiveQuizSessionLocally(session);
     setActiveSession(session);
     setSubTab('SCAN');
   };
 
   const handleSelectSessionToViewResults = (session: QuizSession) => {
-    saveActiveQuizSession(session);
+    saveActiveQuizSessionLocally(session);
     setActiveSession(session);
     setSubTab('RESULTS');
   };
@@ -173,12 +240,20 @@ export const ResponseCardsScreen: React.FC<ResponseCardsScreenProps> = ({
     }
   };
 
-  const handleUpdateActiveSession = (updated: QuizSession) => {
+  const handleUpdateActiveSession = (updated: QuizSession, options?: { fromSync?: boolean }) => {
     try {
+      if (options?.fromSync) {
+        saveActiveQuizSessionLocally(updated);
+        setActiveSession(updated);
+        refreshSessions();
+        return;
+      }
       saveActiveQuizSession(updated);
       setActiveSession(updated);
       refreshSessions();
-    } catch (error) { alert(error instanceof Error ? error.message : 'Không lưu được phiên kiểm tra.'); }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Không lưu được phiên kiểm tra.');
+    }
   };
 
   return (
