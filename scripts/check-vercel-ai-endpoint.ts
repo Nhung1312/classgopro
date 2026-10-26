@@ -1,19 +1,20 @@
 import assert from 'node:assert/strict';
 import handler from '../api/generate-questions';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 type Reply = { status: number; data: any; headers: Record<string, string> };
 async function invoke(method: string, headers: Record<string, string> = {}): Promise<Reply> {
   const result: Reply = { status: 200, data: null, headers: {} };
   const res = {
-    status(code: number) { result.status = code; return this; },
+    statusCode: 200,
     setHeader(key: string, value: string) { result.headers[key] = value; return this; },
-    json(data: unknown) { result.data = data; },
+    end(text: string) { result.status = this.statusCode; result.data = JSON.parse(text); },
   };
   await handler({
     method,
     headers,
     body: { subject: 'Toán', grade: '7', lessonName: 'Số hữu tỉ', count: 2, level: 'basic' },
-  }, res);
+  } as unknown as IncomingMessage, res as unknown as ServerResponse);
   return result;
 }
 const savedEnabled = process.env.CLASSGO_AI_ENABLED;
