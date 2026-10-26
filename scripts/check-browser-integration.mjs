@@ -51,7 +51,7 @@ try {
   await notice.waitFor({ state: 'visible', timeout: 3000 }).then(() => notice.click()).catch(() => {});
   await expect(page.getByRole('button', { name: 'Thẻ Trả Lời', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Thẻ Trả Lời', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'đang chờ hoàn thiện' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Đồng bộ hai thiết bị' })).toBeVisible();
   console.log('Browser: cards opened');
   const pdfDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Xuất File PDF' }).click();

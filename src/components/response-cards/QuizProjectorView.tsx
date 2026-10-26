@@ -21,15 +21,18 @@ import { ClassRoom } from '../../types';
 import {
   RESPONSE_REMOTE_SYNC_NOTICE,
   saveActiveQuizSession,
+  saveActiveQuizSessionLocally,
+  updateSessionControlToCloud,
   subscribeToSessionSync,
 } from '../../services/responseCardStorage';
 import { soundEngine } from '../../utils/audio';
+import QRCode from 'qrcode';
 
 interface QuizProjectorViewProps {
   session: QuizSession;
   currentClass: ClassRoom;
   onClose: () => void;
-  onUpdateSession: (updated: QuizSession) => void;
+  onUpdateSession: (updated: QuizSession, options?: { fromSync?: boolean }) => void;
 }
 
 export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
@@ -41,24 +44,47 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [activeSession, setActiveSession] = useState<QuizSession>(session);
+  const [isCloudOnline, setIsCloudOnline] = useState(true);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
   // Sync state with parent session
   useEffect(() => {
     setActiveSession(session);
   }, [session]);
 
-  // Listen to cross-tab / phone updates in real-time
+  // Generate dynamic QR Code for phone scanning
   useEffect(() => {
-    const unsubscribe = subscribeToSessionSync((syncedSession) => {
-      if (syncedSession.id === activeSession.id) {
-        setActiveSession(syncedSession);
-        onUpdateSession(syncedSession);
-      }
-    }, activeSession.sessionPin);
+    if (typeof window !== 'undefined' && activeSession.id) {
+      const origin = window.location.origin;
+      const url = `${origin}/?tab=RESPONSE_CARDS&mode=SCAN&session=${encodeURIComponent(activeSession.id)}&teacher=${encodeURIComponent(activeSession.teacherId || '')}&token=${encodeURIComponent(activeSession.sessionToken || '')}&pin=${encodeURIComponent(activeSession.sessionPin || '')}`;
+      QRCode.toDataURL(url, {
+        margin: 1,
+        width: 220,
+        color: { dark: '#020617', light: '#ffffff' },
+      })
+        .then((dataUrl) => setQrCodeDataUrl(dataUrl))
+        .catch(() => console.error('[ResponseCards] Failed to render QR code'));
+    }
+  }, [activeSession.id, activeSession.teacherId, activeSession.sessionToken, activeSession.sessionPin]);
+
+  // Listen to cross-tab / phone updates in real-time via BroadcastChannel & Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToSessionSync(
+      (syncedSession) => {
+        if (syncedSession.id === activeSession.id) {
+          setActiveSession(syncedSession);
+          onUpdateSession(syncedSession, { fromSync: true });
+        }
+      },
+      activeSession.sessionPin,
+      activeSession.id,
+      activeSession.teacherId,
+      (online) => setIsCloudOnline(online)
+    );
     return () => {
       unsubscribe();
     };
-  }, [activeSession.id, activeSession.sessionPin, onUpdateSession]);
+  }, [activeSession.id, activeSession.sessionPin, activeSession.teacherId, onUpdateSession]);
 
   const currentQIndex = activeSession.currentQuestionIndex;
   const currentQuestion = activeSession.questions[currentQIndex];
@@ -103,10 +129,11 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
   // Lock & Reveal answer
   const handleLockAndReveal = () => {
     const updatedResults = [...activeSession.results];
+    const endedTime = Date.now();
     updatedResults[currentQIndex] = {
       ...currentResult,
       status: 'revealed',
-      endedAt: Date.now(),
+      endedAt: endedTime,
     };
 
     const updatedSession: QuizSession = {
@@ -117,8 +144,18 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
 
     soundEngine.playSuccess();
     setActiveSession(updatedSession);
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    if (activeSession.teacherId) {
+      updateSessionControlToCloud(activeSession.teacherId, activeSession.id, {
+        questionStatus: {
+          questionId: currentQuestion.id,
+          status: 'revealed',
+          endedAt: endedTime,
+        },
+      });
+    }
   };
 
   // Reopen collection
@@ -136,8 +173,17 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
     };
 
     setActiveSession(updatedSession);
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    if (activeSession.teacherId) {
+      updateSessionControlToCloud(activeSession.teacherId, activeSession.id, {
+        questionStatus: {
+          questionId: currentQuestion.id,
+          status: 'collecting',
+        },
+      });
+    }
   };
 
   // Navigate question
@@ -149,8 +195,14 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
     setActiveSession(updatedSession);
-    saveActiveQuizSession(updatedSession);
-    onUpdateSession(updatedSession);
+    saveActiveQuizSessionLocally(updatedSession);
+    onUpdateSession(updatedSession, { fromSync: true });
+
+    if (activeSession.teacherId) {
+      updateSessionControlToCloud(activeSession.teacherId, activeSession.id, {
+        currentQuestionIndex: idx,
+      });
+    }
   };
 
   const optionColors = {
@@ -199,13 +251,16 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
 
           {activeSession.sessionPin && (
             <button
-              onClick={() => alert(RESPONSE_REMOTE_SYNC_NOTICE)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs text-amber-300 font-bold transition-all shadow cursor-pointer "
-              title="Kết nối điện thoại đang chờ hoàn thiện"
+              onClick={() => setShowPinModal(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-500/50 text-xs text-amber-300 font-bold transition-all shadow-md cursor-pointer"
+              title="Quét QR hoặc nhập PIN để kết nối điện thoại quét thẻ"
             >
-              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-              <span>📱 Kết nối điện thoại: chưa bật</span>
-
+              <QrCode className="w-4 h-4 text-amber-400" />
+              <span>📱 Quét QR Kết nối ĐT</span>
+              <span
+                className={`w-2 h-2 rounded-full ${isCloudOnline ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                title={isCloudOnline ? 'Đám mây trực tuyến' : 'Ngoại tuyến'}
+              />
             </button>
           )}
 
@@ -371,35 +426,68 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
         </div>
       </footer>
 
-      {/* Modal Hiển thị mã PIN cho Điện Thoại kết nối */}
+      {/* Modal Hiển thị mã QR và PIN cho Điện Thoại kết nối */}
       {showPinModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in">
-          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-8 max-w-lg w-full text-center space-y-6 shadow-2xl">
-            <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center text-3xl font-bold shadow-lg shadow-amber-500/20">
-              📱
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in">
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center space-y-5 shadow-2xl overflow-y-auto max-h-[95vh]">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📱</span>
+                <h3 className="text-lg font-black text-white">KẾT NỐI ĐIỆN THOẠI QUÉT THẺ</h3>
+              </div>
+              <button
+                onClick={() => setShowPinModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-xl font-black text-white">KẾT NỐI ĐIỆN THOẠI QUÉT THẺ</h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Dùng camera điện thoại của Thầy/Cô để quét thẻ học sinh và tự động cập nhật kết quả lên màn chiếu này.
-              </p>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Dùng camera điện thoại của Thầy/Cô để quét thẻ học sinh. Kết quả sẽ tự động đồng bộ theo thời gian thực lên màn chiếu này.
+            </p>
+
+            {/* QR Code Container */}
+            <div className="bg-white p-4 rounded-2xl mx-auto w-fit shadow-xl border border-slate-700 flex flex-col items-center">
+              {qrCodeDataUrl ? (
+                <img
+                  src={qrCodeDataUrl}
+                  alt="Mã QR kết nối điện thoại"
+                  className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
+                />
+              ) : (
+                <div className="w-48 h-48 flex items-center justify-center text-slate-400 text-xs">
+                  Đang tạo mã QR...
+                </div>
+              )}
+              <span className="text-[11px] font-bold text-slate-700 mt-1">Quét bằng camera điện thoại</span>
             </div>
 
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 space-y-2 shadow-inner">
-              <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">
-                Mã PIN Đồng Bộ:
+            {/* PIN Code Box */}
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3.5 space-y-1 shadow-inner">
+              <span className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">
+                Hoặc nhập mã PIN phiên kiểm tra:
               </span>
-              <div className="text-5xl sm:text-6xl font-mono font-black text-amber-300 tracking-widest select-all">
+              <div className="text-4xl sm:text-5xl font-mono font-black text-amber-300 tracking-widest select-all">
                 {activeSession.sessionPin}
               </div>
             </div>
 
-            <div className="text-left bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-2 text-xs text-slate-300">
+            {/* Cloud Status Indicator */}
+            <div className="flex items-center justify-center gap-2 text-xs py-1.5 px-3 rounded-xl bg-slate-800/80 border border-slate-700/80">
+              <span className={`w-2.5 h-2.5 rounded-full ${isCloudOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className={isCloudOnline ? 'text-emerald-300 font-semibold' : 'text-amber-300 font-semibold'}>
+                {isCloudOnline
+                  ? 'Đồng bộ đám mây Firebase đang hoạt động'
+                  : 'Đang kết nối ngoại tuyến / Sẵn sàng đồng bộ lại'}
+              </span>
+            </div>
+
+            <div className="text-left bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60 space-y-1.5 text-xs text-slate-300">
               <div className="font-bold text-amber-400">Hướng dẫn nhanh 2 bước:</div>
-              <ol className="list-decimal list-inside space-y-1.5 leading-relaxed">
-                <li>Mở ClassGo trên điện thoại, vào mục <strong>Thẻ Trả Lời</strong>.</li>
-                <li>Bấm <strong>&quot;📱 Nhập PIN Quét ĐT&quot;</strong> và nhập mã số trên.</li>
+              <ol className="list-decimal list-inside space-y-1 leading-relaxed">
+                <li>Dùng điện thoại quét mã QR ở trên để mở ngay phòng quét thẻ.</li>
+                <li>Cầm điện thoại lia qua các thẻ học sinh đang giơ để nhận diện đáp án A, B, C, D.</li>
               </ol>
             </div>
 

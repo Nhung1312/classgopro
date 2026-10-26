@@ -70,6 +70,8 @@ export interface QuizSession {
   results: QuestionSessionResult[];
   status: 'draft' | 'running' | 'completed';
   sessionPin?: string; // 6-digit sync pin for phone-to-computer live sync
+  sessionToken?: string; // Secure token for authorized scanner connection
+  teacherId?: string; // Owner UID of the teacher creating this session
   cardMappings?: ResponseCardMapping[]; // Bảng gán thẻ của lớp đính kèm để quét mượt mà trên mọi thiết bị
 }
 

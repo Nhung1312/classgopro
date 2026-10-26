@@ -99,7 +99,16 @@ export default function App() {
   const [history, setHistory] = useState<HistoryRecord[]>(() => loadHistory());
   const [settings, setSettings] = useState<SpinSettings>(() => loadSettings());
   const [selectionMode, setSelectionMode] = useState<SelectionMode>(() => loadSelectionMode());
-  const [currentTab, setCurrentTab] = useState<AppTab>('SPIN');
+  const [currentTab, setCurrentTab] = useState<AppTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'RESPONSE_CARDS' || params.get('session') || params.get('pin')) {
+        return 'RESPONSE_CARDS';
+      }
+    }
+    return 'SPIN';
+  });
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [lastHistoryRecord, setLastHistoryRecord] = useState<HistoryRecord | null>(null);
 
@@ -168,6 +177,7 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      setResponseCardOwner(user?.uid);
 
       if (unsubFirestoreUser) {
         unsubFirestoreUser();
@@ -406,6 +416,7 @@ export default function App() {
   const handleSignOut = useCallback(async () => {
     try {
       await signOut(auth);
+      setResponseCardOwner(undefined);
       soundEngine.playTick(1.2);
     } catch (err) {
       console.error('Sign out error:', err);
@@ -1170,6 +1181,7 @@ export default function App() {
         {currentTab === 'RESPONSE_CARDS' && <ResponseCardsBoundary key={(currentUser?.uid || 'local_teacher') + activeClassId}><ResponseCardsScreen classes={classes}
           activeClassId={activeClassId} onSelectClass={handleSelectClass}
           onUpdateClasses={handleUpdateClasses} currentUser={currentUser}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
           history={history} onUpdateHistory={handleUpdateHistory} /></ResponseCardsBoundary>}
 
         {currentTab === 'TIMETABLE' && (
