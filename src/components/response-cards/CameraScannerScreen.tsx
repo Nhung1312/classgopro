@@ -85,6 +85,10 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   });
   const [showRejectedModal, setShowRejectedModal] = useState<boolean>(false);
   const isFlushingRef = useRef<boolean>(false);
+  // Firestore may report a cached snapshot even while the device has internet.
+  // Do not use this snapshot flag as a gate for attempting queued writes.
+  const lastAutoFlushAtRef = useRef<number>(0);
+  const [cloudSaveError, setCloudSaveError] = useState<string | null>(null);
 
   // Manual input drawer
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -128,6 +132,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     const pendingItems = currentQueue.filter((q) => q.status === 'pending');
     if (pendingItems.length === 0) {
       setOfflineQueueCount(0);
+      setCloudSaveError(null);
       return;
     }
 
@@ -150,12 +155,15 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
           );
 
           if (result.success) {
+            setCloudSaveError(null);
+            setIsCloudOnline(true);
             // ONLY remove from queue after confirmed success from Firestore!
             removeConfirmedOfflineAnswers(
               session.id,
               itemsForQ.map((it) => ({ questionId: it.questionId, studentId: it.studentId }))
             );
           } else if (result.rejectedLocked) {
+            setCloudSaveError(result.errorMessage || 'Câu hỏi đã khóa, chưa thể lưu đáp án.');
             // Question was locked or session completed on computer!
             const rejectedItems: QueuedOfflineAnswer[] = itemsForQ.map((it) => ({
               ...it,
@@ -170,9 +178,11 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
             setRejectedAnswers((prev) => [...prev, ...rejectedItems]);
           } else {
             // Write error occurred -> DO NOT DELETE! Keep in localStorage queue.
+            setCloudSaveError(result.errorMessage || 'Firebase chưa xác nhận lưu đáp án.');
             console.warn('[ResponseCards] Offline batch write deferred:', result.errorMessage);
           }
         } catch (err: any) {
+          setCloudSaveError(err?.message || 'Lỗi kết nối Firebase, đáp án vẫn được lưu tạm.');
           console.warn('[ResponseCards] Network failure during batch write, answers retained in queue:', err?.message || err);
         }
       }
@@ -183,11 +193,28 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     }
   }, [session.id, session.teacherId]);
 
+  // Try an authenticated Firestore write when the browser has internet, even
+  // if onSnapshot is currently serving cached data. Throttle automatic retries
+  // to avoid a write on every camera frame.
+  const requestAutoFlush = useCallback(() => {
+    if (!session.teacherId || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    const now = Date.now();
+    if (now - lastAutoFlushAtRef.current < 4000) return;
+    lastAutoFlushAtRef.current = now;
+    void flushOfflineQueue();
+  }, [session.teacherId, flushOfflineQueue]);
+
+  // If an offline queue already exists when the screen mounts, attempt one
+  // non-destructive server write instead of waiting for a connectivity event.
+  useEffect(() => {
+    if (offlineQueueCount > 0) requestAutoFlush();
+  }, [offlineQueueCount, requestAutoFlush]);
+
   // Network status listeners
   useEffect(() => {
     const handleOnline = () => {
       setIsCloudOnline(true);
-      flushOfflineQueue();
+      requestAutoFlush();
     };
     const handleOffline = () => {
       setIsCloudOnline(false);
@@ -198,7 +225,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [flushOfflineQueue]);
+  }, [requestAutoFlush]);
 
   // Listen for live updates from computer projector via BroadcastChannel & Firestore
   useEffect(() => {
@@ -216,14 +243,14 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       session.teacherId,
       (online) => {
         setIsCloudOnline(online);
-        if (online) flushOfflineQueue();
+        if (online) requestAutoFlush();
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [session.id, session.sessionPin, session.teacherId, session.currentQuestionIndex, onUpdateSession, flushOfflineQueue]);
+  }, [session.id, session.sessionPin, session.teacherId, session.currentQuestionIndex, onUpdateSession, requestAutoFlush]);
 
   // Answer tallies for current question
   const answersMap: Record<string, StudentAnswerRecord> = currentResult?.answers || {};
@@ -492,9 +519,8 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
               }
               setOfflineQueueCount(loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length);
 
-              if (session.teacherId && isCloudOnline && (typeof navigator === 'undefined' || navigator.onLine)) {
-                flushOfflineQueue();
-              }
+              // Cached Firestore snapshots must not prevent a fresh write attempt.
+              requestAutoFlush();
             }
           }
         }
@@ -519,6 +545,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     soundEnabled,
     onUpdateSession,
     isCloudOnline,
+    requestAutoFlush,
   ]);
 
   // Lock answers and reveal
@@ -648,9 +675,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     });
     setOfflineQueueCount(loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length);
 
-    if (session.teacherId && isCloudOnline && (typeof navigator === 'undefined' || navigator.onLine)) {
-      flushOfflineQueue();
-    }
+    requestAutoFlush();
 
     setIsManualModalOpen(false);
     setSelectedStudentForManual(null);
@@ -787,6 +812,13 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
           </button>
         </div>
       </div>
+
+      {cloudSaveError && offlineQueueCount > 0 && (
+        <div role="alert" className="rounded-xl border border-rose-600/50 bg-rose-950/60 p-3 text-xs font-semibold text-rose-200">
+          <strong>Chưa gửi được đáp án lên Firebase:</strong> {cloudSaveError.slice(0, 200)}
+          <div className="mt-1 text-amber-200">Đáp án vẫn được giữ tạm trên điện thoại. Không khóa câu hoặc xóa dữ liệu trình duyệt trước khi đồng bộ xong.</div>
+        </div>
+      )}
 
       {/* CAMERA VIEWFINDER & LIVE SCANNING OVERLAY */}
       <div className="relative w-full bg-black rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col items-center justify-center min-h-[360px] sm:min-h-[480px]">
