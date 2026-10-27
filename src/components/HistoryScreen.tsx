@@ -266,7 +266,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                             <span className="text-slate-400">{item.note || '—'}</span>
                           </div>
                           {item.questionContent && (
-                            <div className="text-[11px] text-amber-300/90 max-w-xs flex items-center gap-1" title=<MathRenderer text={item.questionContent} />>
+                            <div className="text-[11px] text-amber-300/90 max-w-xs flex items-center gap-1" title={item.questionContent}>
                               <span className="shrink-0">🚪</span>
                               <span className="min-w-0"><MathRenderer text={item.questionContent} /></span>
                             </div>
