@@ -1,3 +1,4 @@
+import { MathRenderer } from './MathRenderer';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
 import {
@@ -2260,7 +2261,7 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                         Câu hỏi:
                       </div>
                       <p className="text-sm text-slate-100 font-medium whitespace-pre-wrap leading-relaxed">
-                        {q.question}
+                        <MathRenderer className="text-base" text={q.question} />
                       </p>
                     </div>
 
@@ -2272,7 +2273,7 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                           <span>Đáp án / Gợi ý trả lời:</span>
                         </div>
                         <p className="text-xs text-emerald-300/90 font-mono whitespace-pre-wrap leading-relaxed">
-                          {q.answer}
+                          <MathRenderer className="text-base" text={q.answer} />
                         </p>
                       </div>
                     )}
@@ -2717,7 +2718,7 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                               {vq.level === 'basic' ? 'Cơ bản' : 'Nâng cao'}
                             </span>
                           </div>
-                          <div className="text-slate-200">{vq.question}</div>
+                          <div className="text-slate-200"><MathRenderer className="text-base" text={vq.question} /></div>
                         </div>
                       ))}
                     </div>
@@ -2850,8 +2851,8 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                         {row.level === 'basic' ? 'Cơ bản' : 'Nâng cao'}
                       </span>
                     </div>
-                    <div className="text-slate-200 font-medium">{row.question}</div>
-                    <div className="text-emerald-400 text-[11px] font-mono">Đáp án: {row.answer}</div>
+                    <div className="text-slate-200 font-medium"><MathRenderer className="text-base" text={row.question} /></div>
+                    <div className="text-emerald-400 text-[11px] font-mono">Đáp án: <MathRenderer className="text-base" text={row.answer} /></div>
                   </div>
                 ))}
               </div>
@@ -3254,7 +3255,7 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                                     Câu hỏi:
                                   </div>
                                   <p className="text-slate-100 font-medium whitespace-pre-wrap leading-relaxed text-xs sm:text-sm">
-                                    {draft.question}
+                                    <MathRenderer className="text-base" text={draft.question} />
                                   </p>
                                 </div>
 
@@ -3264,7 +3265,7 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                                     <span>Đáp án / Gợi ý đối chiếu:</span>
                                   </div>
                                   <p className="text-xs text-emerald-300/95 font-mono whitespace-pre-wrap leading-relaxed">
-                                    {draft.answer}
+                                    <MathRenderer className="text-base" text={draft.answer} />
                                   </p>
                                 </div>
                               </div>
@@ -4195,14 +4196,14 @@ export const ReviewQuestionBankScreen: React.FC<ReviewQuestionBankScreenProps> =
                                     {!isEditing ? (
                                       <div className="space-y-1.5">
                                         <p className="text-slate-100 font-medium whitespace-pre-wrap leading-relaxed text-xs">
-                                          {draft.question}
+                                          <MathRenderer className="text-base" text={draft.question} />
                                         </p>
                                         <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-2 space-y-0.5">
                                           <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
                                             Đáp án đối chiếu:
                                           </div>
                                           <p className="text-xs text-emerald-300/95 font-mono whitespace-pre-wrap">
-                                            {draft.answer}
+                                            <MathRenderer className="text-base" text={draft.answer} />
                                           </p>
                                         </div>
                                       </div>
