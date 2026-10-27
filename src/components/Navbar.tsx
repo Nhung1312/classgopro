@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   History as HistoryIcon,
   ScanLine,
+  Trophy,
 } from 'lucide-react';
 import { AppTab, ClassRoom, SelectionMode, UserSubscription } from '../types';
 import { soundEngine } from '../utils/audio';
@@ -103,6 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const tabs: { id: AppTab; label: string; icon: React.ReactNode }[] = [
     { id: 'SPIN', label: 'Quay Tên', icon: <Sparkles className="w-4 h-4" /> },
+    { id: 'ARENA', label: 'Đấu Trường 2 Đội', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
     { id: 'REVIEW_BANK', label: 'Kho KT Bài Cũ', icon: <BookOpen className="w-4 h-4 text-amber-400" /> },
     { id: 'RESPONSE_CARDS', label: 'Thẻ Trả Lời', icon: <ScanLine className="w-4 h-4 text-emerald-400" /> },
     { id: 'TIMETABLE', label: 'TKB & Báo Giảng', icon: <Calendar className="w-4 h-4 text-sky-400" /> },

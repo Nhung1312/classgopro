@@ -1,4 +1,3 @@
-import { MathRenderer } from '../MathRenderer';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
@@ -442,21 +441,6 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
                 ))}
               </div>
 
-              {/* Read-only preview; input values and saved LaTeX stay unchanged. */}
-              {(currentForm.question || currentForm.A || currentForm.B || currentForm.C || currentForm.D) && (
-                <details open className="rounded-xl border border-slate-700 bg-slate-900 p-3" data-testid="manual-math-preview">
-                  <summary className="font-semibold text-slate-300 cursor-pointer">Xem trước câu hỏi & công thức</summary>
-                  <div className="mt-2 space-y-2 text-base text-slate-100">
-                    <MathRenderer text={currentForm.question} />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {(['A', 'B', 'C', 'D'] as const).map(opt => (
-                        <div key={opt} className="min-w-0"><strong>{opt}.</strong> <MathRenderer text={currentForm[opt]} /></div>
-                      ))}
-                    </div>
-                  </div>
-                </details>
-              )}
-
               {/* Select Correct Answer */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-slate-800/80">
                 <div className="flex items-center gap-2">
@@ -569,13 +553,13 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
                           onChange={() => {}} // handled by parent onClick
                           className="w-4 h-4 rounded text-amber-500 focus:ring-0 bg-slate-800 border-slate-700 mt-0.5"
                         />
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="font-semibold text-base text-slate-200">
-                            #{idx + 1}. <MathRenderer text={q.question} />
+                        <div className="flex-1 space-y-1">
+                          <div className="font-semibold text-xs text-slate-200">
+                            #{idx + 1}. {q.question}
                           </div>
                           {q.answer && (
-                            <div className="text-sm text-emerald-400/90">
-                              Đáp án: <MathRenderer text={q.answer} />
+                            <div className="text-[11px] text-emerald-400/90 italic">
+                              Đáp án: {q.answer}
                             </div>
                           )}
                         </div>
@@ -617,35 +601,30 @@ export const CreateQuizModal: React.FC<CreateQuizModalProps> = ({
                     key={q.id}
                     className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl flex items-start justify-between gap-3 shadow-sm hover:border-slate-700 transition-all"
                   >
-                    <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex-1 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20 text-[11px]">
                           Câu {idx + 1}
                         </span>
-                        <span className="min-w-0 flex-1 font-semibold text-slate-200 text-base">
-                          <MathRenderer text={q.question} />
+                        <span className="font-semibold text-slate-200 text-xs">
+                          {q.question}
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px]">
                         {(['A', 'B', 'C', 'D'] as const).map((opt) => (
                           <div
                             key={opt}
-                            className={`min-w-0 px-2 py-1 rounded-lg border ${
+                            className={`px-2 py-1 rounded-lg border truncate ${
                               q.correctAnswer === opt
                                 ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 font-bold'
                                 : 'bg-slate-900 border-slate-800 text-slate-400'
                             }`}
                           >
-                            <strong>{opt}:</strong> <MathRenderer text={q.options[opt]} />
+                            <strong>{opt}:</strong> {q.options[opt]}
                           </div>
                         ))}
                       </div>
-                      {q.explanation && (
-                        <div className="text-sm text-slate-300">
-                          <strong>Giải thích:</strong> <MathRenderer text={q.explanation} />
-                        </div>
-                      )}
                       {q.correctAnswer === null && (
                         <p role="alert" className="text-xs font-semibold text-amber-300">
                           Chưa xác định được đáp án đúng. Thầy cô chọn A, B, C hoặc D trước khi sử dụng câu này.

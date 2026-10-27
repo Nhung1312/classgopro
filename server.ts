@@ -189,8 +189,8 @@ Yêu cầu quy chuẩn sư phạm:
     app.use(vite.middlewares);
   }
 
-  app.listen(port, '127.0.0.1', () => {
-    console.log(`ClassGo full-stack server running on http://127.0.0.1:${port}`);
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`ClassGo full-stack server running on http://0.0.0.0:${port}`);
   });
 }
 

@@ -1,4 +1,3 @@
-import { MathRenderer } from './MathRenderer';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles,
@@ -1558,14 +1557,14 @@ export const BulkAiQuestionModal: React.FC<BulkAiQuestionModalProps> = ({
                           {!isEditing ? (
                             <div className="space-y-1.5 text-xs">
                               <p className="text-slate-100 font-medium whitespace-pre-wrap leading-relaxed">
-                                <MathRenderer className="text-base" text={draft.question} />
+                                {draft.question}
                               </p>
                               <div className="bg-slate-950 p-2 rounded-xl border border-slate-800">
                                 <span className="text-[10px] font-bold text-emerald-400 block mb-0.5">
                                   Đáp án:
                                 </span>
                                 <p className="text-emerald-300/90 font-mono text-[11px] whitespace-pre-wrap">
-                                  <MathRenderer className="text-base" text={draft.answer} />
+                                  {draft.answer}
                                 </p>
                               </div>
                             </div>

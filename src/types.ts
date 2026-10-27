@@ -124,7 +124,7 @@ export interface HistoryRecord {
   assignedTxSlot?: 'tx1' | 'tx2' | 'tx3' | 'tx4' | null;
 }
 
-export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'DISCIPLINE' | 'CLASSES' | 'IMPORT' | 'STATS' | 'HISTORY' | 'SETTINGS' | 'REVIEW_BANK' | 'RESPONSE_CARDS';
+export type AppTab = 'SPIN' | 'TIMETABLE' | 'GRADEBOOK' | 'DISCIPLINE' | 'CLASSES' | 'IMPORT' | 'STATS' | 'HISTORY' | 'SETTINGS' | 'REVIEW_BANK' | 'RESPONSE_CARDS' | 'ARENA';
 
 export type ReviewQuestionLevel = 'basic' | 'advanced';
 

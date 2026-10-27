@@ -91,6 +91,7 @@ import { UpgradeProModal } from './components/UpgradeProModal';
 import { PaymentHistoryModal } from './components/PaymentHistoryModal';
 import { SubscriptionExpiredModal } from './components/SubscriptionExpiredModal';
 import { UpdateNotice } from './components/UpdateNotice';
+import { ClassGoArenaScreen } from './components/arena/ClassGoArenaScreen';
 
 export default function App() {
   // 1. Core State
@@ -1174,6 +1175,15 @@ export default function App() {
             currentUser={currentUser}
             onMysteryAssessment={handleMysteryAssessment}
             onNavigateToReviewBank={() => setCurrentTab('REVIEW_BANK')}
+          />
+        )}
+
+        {currentTab === 'ARENA' && (
+          <ClassGoArenaScreen
+            classes={classes}
+            activeClassId={activeClassId}
+            ownerId={currentUser?.uid}
+            onClose={() => setCurrentTab('SPIN')}
           />
         )}
 

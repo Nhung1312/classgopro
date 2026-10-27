@@ -1,4 +1,3 @@
-import { MathRenderer } from '../MathRenderer';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
@@ -221,7 +220,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col justify-between overflow-hidden select-none">
       {/* TOP BAR */}
-      <header className="shrink-0 px-3 sm:px-6 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <header className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-black text-sm tracking-wide shadow-md">
             CÂU {currentQIndex + 1} / {activeSession.questions.length}
@@ -235,7 +234,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
         </div>
 
         {/* Live Reception Progress Bar */}
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-2xl border border-slate-700">
             <Users className="w-4 h-4 text-indigo-400" />
             <span className="text-xs text-slate-300">Đã giơ thẻ:</span>
@@ -284,7 +283,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
       </header>
 
       {/* MAIN QUESTION DISPLAY AREA */}
-      <main className="flex-1 min-h-0 max-w-6xl w-full mx-auto overflow-y-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-6 py-6 sm:py-8 flex flex-col justify-center space-y-8">
         {/* Large Question Text */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-3">
           <div className="flex items-center justify-between text-xs font-bold text-amber-400 uppercase tracking-widest">
@@ -293,7 +292,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-50 leading-snug">
-            <MathRenderer text={currentQuestion.question} />
+            {currentQuestion.question}
           </h2>
         </div>
 
@@ -308,7 +307,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
             return (
               <div
                 key={opt}
-                className={`relative min-w-0 flex-wrap sm:flex-nowrap rounded-3xl border-2 p-5 sm:p-6 transition-all duration-300 flex items-center justify-between gap-4 ${
+                className={`relative rounded-3xl border-2 p-5 sm:p-6 transition-all duration-300 flex items-center justify-between gap-4 ${
                   isRevealed
                     ? isCorrect
                       ? 'bg-gradient-to-r from-emerald-600/40 via-emerald-950/60 to-emerald-900/40 border-emerald-400 shadow-2xl shadow-emerald-500/20 scale-102 ring-2 ring-emerald-400/50'
@@ -316,7 +315,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
                     : `bg-gradient-to-br ${style.bg} ${style.border} hover:border-slate-500 shadow-lg`
                 }`}
               >
-                <div className="flex min-w-0 items-center gap-4 flex-1">
+                <div className="flex items-center gap-4 flex-1">
                   <span
                     className={`w-12 h-12 rounded-2xl font-black text-xl flex items-center justify-center shadow-md flex-shrink-0 ${
                       isRevealed && isCorrect
@@ -327,8 +326,8 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
                     {opt}
                   </span>
 
-                  <span className="min-w-0 flex-1 text-lg sm:text-2xl font-bold text-slate-100 leading-relaxed">
-                    <MathRenderer text={currentQuestion.options[opt]} />
+                  <span className="text-lg sm:text-2xl font-bold text-slate-100 leading-tight">
+                    {currentQuestion.options[opt]}
                   </span>
                 </div>
 
@@ -371,8 +370,8 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
             </div>
 
             {currentQuestion.explanation && (
-              <div className="min-w-0 text-base sm:text-lg text-slate-300 sm:max-w-md bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
-                <strong>Giải thích:</strong> <MathRenderer text={currentQuestion.explanation} />
+              <div className="text-xs text-slate-300 max-w-md bg-slate-950/80 p-3 rounded-2xl border border-slate-800">
+                <strong>Giải thích:</strong> {currentQuestion.explanation}
               </div>
             )}
           </div>
@@ -380,7 +379,7 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
       </main>
 
       {/* BOTTOM CONTROLLER BAR */}
-      <footer className="shrink-0 px-3 sm:px-6 py-3 bg-slate-900/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <footer className="px-6 py-4 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleNavigate(currentQIndex - 1)}

@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { expect } from 'playwright/test';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as XLSX from 'xlsx';
@@ -138,7 +138,3 @@ try {
   await browser?.close();
   server.kill('SIGTERM');
 }
-
-// Exercise actual question screens with synthetic math, at desktop and phone widths.
-const math = spawnSync(process.execPath, ['scripts/check-math-browser.mjs'], { stdio: 'inherit' });
-if (math.status !== 0) process.exit(math.status || 1);

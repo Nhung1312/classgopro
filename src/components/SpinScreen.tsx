@@ -848,7 +848,9 @@ export const SpinScreen: React.FC<SpinScreenProps> = ({
             </button>
 
             <button type="button" onClick={handleOpenMysteryDoor} disabled={isSpinning}
-              className="px-3 py-1.5 rounded-xl bg-amber-800/50 text-amber-200 text-xs font-bold">🚪 Ô cửa bí mật</button>
+              className="px-3 py-1.5 rounded-xl bg-amber-800/50 hover:bg-amber-700/60 text-amber-200 text-xs font-bold transition-all shadow-sm">
+              🚪 Ô cửa bí mật
+            </button>
             {/* Algorithm Mode Tag */}
             <div className="flex items-center gap-1.5">
               {selectionMode === 'FAIR' ? (
