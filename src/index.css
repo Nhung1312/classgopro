@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* Shared question typography. Scroll only a long formula, never shrink the page. */
+.math-rendered-container {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.math-text { white-space: pre-wrap; }
+.math-fragment {
+  max-width: 100%;
+  padding-block: .3em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  white-space: normal;
+}
+.math-inline { display: inline-block; }
+.math-display { display: block; margin-block: .35em; }
+.math-rendered-container .katex { white-space: nowrap; }
+.math-rendered-container .katex-display { margin: 0; }
+.math-source-error { overflow-wrap: anywhere; }
+.math-error-notice { margin-inline-start: .3em; color: #d97706; font-size: .8em; }
+
 @layer utilities {
   /* Hide scrollbar for Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {

@@ -1,3 +1,4 @@
+import { MathRenderer } from '../MathRenderer';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Camera,
@@ -741,13 +742,13 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
 
       {/* TOP HEADER: Question tracker & live reception count */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs sm:text-sm whitespace-nowrap">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs sm:text-sm whitespace-nowrap shrink-0">
             CÂU {currentQIndex + 1} / {session.questions.length}
           </div>
-          <div className="truncate">
-            <h3 className="text-sm sm:text-base font-extrabold text-white truncate max-w-lg">
-              {currentQuestion?.question}
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base sm:text-lg font-extrabold text-white max-w-lg">
+              <MathRenderer text={currentQuestion?.question || ''} />
             </h3>
             <span className="text-[11px] text-slate-400">
               Lớp {session.className} • {session.title}
@@ -981,7 +982,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                       : 'bg-slate-950/60 border-slate-800 text-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span
                       className={`w-6 h-6 rounded-lg font-black flex items-center justify-center text-xs ${
                         isRevealed && isCorrect
@@ -991,10 +992,10 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                     >
                       {opt}
                     </span>
-                    <span className="text-xs">{currentQuestion.options[opt]}</span>
+                    <span className="min-w-0 text-base"><MathRenderer text={currentQuestion.options[opt]} /></span>
                   </div>
 
-                  <span className="font-mono text-[11px] font-bold text-slate-400">
+                  <span className="shrink-0 font-mono text-[11px] font-bold text-slate-400">
                     {optionCounts[opt]} HS ({answeredCount > 0 ? Math.round((optionCounts[opt] / answeredCount) * 100) : 0}%)
                   </span>
                 </div>
@@ -1181,12 +1182,12 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                     key={`${it.questionId}_${it.studentId}_${idx}`}
                     className="p-3 bg-slate-950 border border-rose-900/40 rounded-xl flex items-center justify-between gap-3 text-xs"
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="font-bold text-white">
                         {it.record.studentName || student?.name || it.studentId}
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        {qItem ? `Câu hỏi: ${qItem.question.slice(0, 35)}...` : `Câu: ${it.questionId}`}
+                        {qItem ? <>Câu hỏi: <MathRenderer text={qItem.question} /></> : 'Câu: ' + it.questionId}
                       </div>
                       <div className="text-[10px] text-rose-400 mt-0.5">
                         Lý do: {it.errorMessage || 'Câu hỏi đã bị khóa trên máy chủ'}
