@@ -672,14 +672,14 @@ export const ClassGoArenaGame: React.FC<ClassGoArenaGameProps> = ({
                   )}
                   <span>
                     {team1.selectedOption
-                      ? `Đã chọn ${team1.selectedOption}: ${team1.isCorrect ? 'CHÍNH XÁC (+10đ)' : 'CHƯA ĐÚNG (0đ)'}`
+                      ? `Đã chọn ${team1.selectedOption}: ${team1.isCorrect ? `CHÍNH XÁC (+${team1.history[team1.history.length - 1]?.pointsAwarded ?? currentBasePoints}đ)` : 'CHƯA ĐÚNG (0đ)'}`
                       : 'Hết giờ (Không trả lời)'}
                   </span>
                 </div>
                 {team1.speedBonusEarned && (
                   <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[10px] flex items-center gap-1 shadow-sm">
                     <Zap className="w-3 h-3" />
-                    <span>+5đ TỐC ĐỘ</span>
+                    <span>GỒM +{settings.speedBonusPoints}đ TỐC ĐỘ</span>
                   </span>
                 )}
               </div>
@@ -785,14 +785,14 @@ export const ClassGoArenaGame: React.FC<ClassGoArenaGameProps> = ({
                   )}
                   <span>
                     {team2.selectedOption
-                      ? `Đã chọn ${team2.selectedOption}: ${team2.isCorrect ? 'CHÍNH XÁC (+10đ)' : 'CHƯA ĐÚNG (0đ)'}`
+                      ? `Đã chọn ${team2.selectedOption}: ${team2.isCorrect ? `CHÍNH XÁC (+${team2.history[team2.history.length - 1]?.pointsAwarded ?? currentBasePoints}đ)` : 'CHƯA ĐÚNG (0đ)'}`
                       : 'Hết giờ (Không trả lời)'}
                   </span>
                 </div>
                 {team2.speedBonusEarned && (
                   <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[10px] flex items-center gap-1 shadow-sm">
                     <Zap className="w-3 h-3" />
-                    <span>+5đ TỐC ĐỘ</span>
+                    <span>GỒM +{settings.speedBonusPoints}đ TỐC ĐỘ</span>
                   </span>
                 )}
               </div>

@@ -55,6 +55,18 @@ interface ArenaSetupModalProps {
   ) => void;
 }
 
+// Validate a repaired bank question without guessing its correct answer.
+function isCompleteRepairedQuestion(
+  stem: string,
+  options: { A: string; B: string; C: string; D: string },
+  key: unknown
+): key is ArenaQuestion['correctKey'] {
+  return typeof stem === 'string' && !!stem.trim()
+    && (['A', 'B', 'C', 'D'] as const).every((option) =>
+      typeof options[option] === 'string' && !!options[option].trim())
+    && (['A', 'B', 'C', 'D'] as const).some((option) => option === key);
+}
+
 export const ArenaSetupModal: React.FC<ArenaSetupModalProps> = ({
   isOpen,
   onClose,
@@ -204,6 +216,10 @@ export const ArenaSetupModal: React.FC<ArenaSetupModalProps> = ({
     fixedKey: 'A' | 'B' | 'C' | 'D'
   ) => {
     if (!showQuestionFixModal) return;
+    if (!isCompleteRepairedQuestion(fixedStem, fixedOptions, fixedKey)) {
+      alert('Vui lòng nhập nội dung câu hỏi, đủ 4 phương án A–D và chọn đáp án đúng hợp lệ.');
+      return;
+    }
     const fixedQ: ArenaQuestion = {
       ...showQuestionFixModal.question,
       stem: fixedStem.trim(),
@@ -956,18 +972,21 @@ interface FixQuestionSubmodalProps {
 
 const FixQuestionSubmodal: React.FC<FixQuestionSubmodalProps> = ({ item, onClose, onSave }) => {
   const [stem, setStem] = useState(item.question.stem || item.rawQuestion?.question || '');
-  const [optA, setOptA] = useState(item.question.options[0]?.text || item.rawQuestion?.answer || '');
-  const [optB, setOptB] = useState(item.question.options[1]?.text || '');
-  const [optC, setOptC] = useState(item.question.options[2]?.text || '');
-  const [optD, setOptD] = useState(item.question.options[3]?.text || '');
-  const [key, setKey] = useState<'A' | 'B' | 'C' | 'D'>('A');
+  const [optA, setOptA] = useState(item.question.options.find((option) => option.key === 'A')?.text || '');
+  const [optB, setOptB] = useState(item.question.options.find((option) => option.key === 'B')?.text || '');
+  const [optC, setOptC] = useState(item.question.options.find((option) => option.key === 'C')?.text || '');
+  const [optD, setOptD] = useState(item.question.options.find((option) => option.key === 'D')?.text || '');
+  // An invalid bank question may contain a placeholder 'A'; require a deliberate choice.
+  const [key, setKey] = useState<ArenaQuestion['correctKey'] | null>(null);
 
+  const repairedOptions = { A: optA, B: optB, C: optC, D: optD };
+  const canConfirm = isCompleteRepairedQuestion(stem, repairedOptions, key);
   const handleConfirm = () => {
-    if (!stem.trim() || !optA.trim() || !optB.trim() || !optC.trim() || !optD.trim()) {
-      alert('Vui lòng nhập đủ 4 phương án A, B, C, D.');
+    if (!isCompleteRepairedQuestion(stem, repairedOptions, key)) {
+      alert('Vui lòng nhập nội dung câu hỏi, đủ 4 phương án A–D và chọn đáp án đúng.');
       return;
     }
-    onSave(stem, { A: optA, B: optB, C: optC, D: optD }, key);
+    onSave(stem, repairedOptions, key);
   };
 
   return (
@@ -1065,7 +1084,8 @@ const FixQuestionSubmodal: React.FC<FixQuestionSubmodalProps> = ({ item, onClose
           <button
             type="button"
             onClick={handleConfirm}
-            className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md"
+            disabled={!canConfirm}
+            className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md disabled:cursor-not-allowed disabled:opacity-50"
           >
             Xác nhận & Sử dụng
           </button>
