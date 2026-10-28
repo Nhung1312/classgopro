@@ -1,3 +1,4 @@
+import { MathRenderer } from '../MathRenderer';
 import { transferResponseCardScores } from '../../utils/responseCardTransfer';
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
@@ -305,12 +306,12 @@ export const QuizSessionResultsScreen: React.FC<QuizSessionResultsScreenProps> =
                 className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3.5 shadow-md"
               >
                 <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-2.5">
-                  <div className="space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <span className="font-mono text-xs font-black text-amber-400">
                       CÂU {idx + 1}
                     </span>
-                    <h4 className="text-sm font-bold text-slate-100 leading-snug">
-                      {q.question}
+                    <h4 className="text-base font-bold text-slate-100 leading-relaxed">
+                      <MathRenderer text={q.question} />
                     </h4>
                   </div>
 
@@ -333,11 +334,11 @@ export const QuizSessionResultsScreen: React.FC<QuizSessionResultsScreenProps> =
 
                     return (
                       <div key={opt} className="space-y-1">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className={`font-bold ${isCorrect ? 'text-emerald-400' : 'text-slate-300'}`}>
-                            {opt}. {q.options[opt]} {isCorrect ? '✅' : ''}
+                        <div className="flex items-start justify-between gap-3 text-sm">
+                          <span className={`min-w-0 flex-1 font-bold ${isCorrect ? 'text-emerald-400' : 'text-slate-300'}`}>
+                            {opt}. <MathRenderer text={q.options[opt]} /> {isCorrect ? '✅' : ''}
                           </span>
-                          <span className="font-mono font-bold text-slate-400">
+                          <span className="shrink-0 font-mono font-bold text-slate-400">
                             {c} HS ({pct}%)
                           </span>
                         </div>
