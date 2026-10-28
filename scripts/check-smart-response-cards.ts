@@ -8,6 +8,7 @@ import {
   calculateSessionScorePreview,
   setResponseCardOwner,
   subscribeToSessionSync,
+  assessCloudQuestionLock,
 } from '../src/services/responseCardStorage';
 import { MarkerTemporalTracker } from '../src/services/arucoService';
 import { transferResponseCardScores } from '../src/utils/responseCardTransfer';
@@ -450,8 +451,48 @@ assert.equal(afterComplete, null, 'Phiên đã kết thúc (completed) không ch
 
 console.log('✔ TEST 10 ĐẠT: Tìm phiên qua PIN kiểm tra chặt chẽ trạng thái running và tài khoản giáo viên.');
 
+
+// --- TEST 11: Never reveal based only on local counters while Firebase is stale ---
+console.log('--- TEST 11: Xác nhận khóa chỉ khi đáp án máy và Firebase trùng khớp ---');
+const firstAnswer = {
+  studentId: 's-7a1-01', studentName: 'Học sinh 1', cardId: 1,
+  selectedOption: 'B' as const, isCorrect: true, timestamp: 1234,
+};
+const cloudDoc = {
+  status: 'running',
+  currentQuestionIndex: 0,
+  questions: [{ id: 'q1' }, { id: 'q2' }],
+  results: [{ questionId: 'q1', status: 'collecting', answers: {} }],
+  questionStatuses: { q1: { status: 'collecting' } },
+  answersByQuestion: { q1: { 's-7a1-01': firstAnswer } },
+};
+assert.deepEqual(
+  assessCloudQuestionLock(cloudDoc, 'q1', { 's-7a1-01': firstAnswer }),
+  { success: true, serverCount: 1 },
+  'Đúng phiên, đúng câu và đáp án đã xác nhận thì có thể khóa.'
+);
+const missingCloudAnswer = {
+  ...cloudDoc, answersByQuestion: { q1: {} },
+};
+assert.equal(assessCloudQuestionLock(missingCloudAnswer, 'q1', { 's-7a1-01': firstAnswer }).success,
+  false, 'Không khóa khi điện thoại mới lưu tạm mà máy chủ chưa có.');
+const changedCloudOption = {
+  ...cloudDoc,
+  answersByQuestion: { q1: { 's-7a1-01': { ...firstAnswer, selectedOption: 'D' } } },
+};
+assert.equal(assessCloudQuestionLock(changedCloudOption, 'q1', { 's-7a1-01': firstAnswer }).success,
+  false, 'Không khóa khi số lượng khớp nhưng đáp án chưa khớp.');
+assert.equal(assessCloudQuestionLock({ ...cloudDoc, currentQuestionIndex: 1 }, 'q1', { 's-7a1-01': firstAnswer }).success,
+  false, 'Không khóa nếu máy chủ đã chuyển câu.');
+assert.equal(assessCloudQuestionLock({
+  ...cloudDoc, questionStatuses: { q1: { status: 'revealed' } },
+}, 'q1', { 's-7a1-01': firstAnswer }).success, false, 'Không khóa lại câu đã công bố.');
+assert.equal(assessCloudQuestionLock({ ...cloudDoc, status: 'completed' }, 'q1', {}).success,
+  false, 'Không khóa khi phiên kết thúc.');
+console.log('✔ TEST 11 ĐẠT: Khóa an toàn kiểm tra đúng trạng thái, câu hỏi và từng đáp án.');
+
 console.log('===============================================================');
-console.log('🎉 TẤT CẢ 10 BÀI KIỂM THỬ THẺ TRẢ LỜI ĐÃ HOÀN TOÀN ĐẠT CHUẨN 100%!');
+console.log('🎉 TẤT CẢ 11 BÀI KIỂM THỬ THẺ TRẢ LỜI ĐÃ HOÀN TOÀN ĐẠT CHUẨN 100%!');
 console.log('===============================================================');
 
 
