@@ -37,6 +37,7 @@ import {
   saveActiveQuizSession,
   saveActiveQuizSessionLocally,
   batchRecordStudentAnswersToCloud,
+  confirmQuestionLockOnCloud,
   recordStudentAnswerToCloud,
   updateSessionControlToCloud,
   getOrInitClassCardConfig,
@@ -48,6 +49,7 @@ import {
   QueuedOfflineAnswer,
 } from '../../services/responseCardStorage';
 import { soundEngine } from '../../utils/audio';
+import { ResponseCardLockConfirm } from './ResponseCardLockConfirm';
 
 interface CameraScannerScreenProps {
   session: QuizSession;
@@ -93,6 +95,9 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   // Do not use this snapshot flag as a gate for attempting queued writes.
   const lastAutoFlushAtRef = useRef<number>(0);
   const [cloudSaveError, setCloudSaveError] = useState<string | null>(null);
+  const [showLockConfirmation, setShowLockConfirmation] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
 
   // Manual input drawer
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -400,7 +405,8 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
         video.readyState >= 2 &&
         !video.paused &&
         !isProcessing &&
-        currentResult?.status === 'collecting'
+        currentResult?.status === 'collecting' &&
+        !showLockConfirmation
       ) {
         isProcessing = true;
 
@@ -565,39 +571,50 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     onUpdateSession,
     isCloudOnline,
     requestAutoFlush,
+    showLockConfirmation,
   ]);
 
-  // Lock answers and reveal
+  // Do not lock a question while this phone still has unconfirmed answers.
   const handleLockAndReveal = () => {
-    const endedTime = Date.now();
-    const updatedResults = [...session.results];
-    updatedResults[currentQIndex] = {
-      ...currentResult,
-      status: 'revealed',
-      endedAt: endedTime,
-    };
+    setLockError(offlineQueueCount > 0
+      ? `Thiết bị này còn ${offlineQueueCount} đáp án lưu tạm. Hãy kết nối mạng để gửi hết trước khi khóa.`
+      : rejectedAnswers.length > 0
+        ? 'Có đáp án bị từ chối ở phiên này; hãy đối chiếu trước khi công bố.'
+        : null);
+    setShowLockConfirmation(true);
+  };
 
-    const updatedSession: QuizSession = {
-      ...session,
-      results: updatedResults,
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (soundEnabled) {
-      soundEngine.playSuccess();
+  const confirmLockAndReveal = async () => {
+    if (lockBusy) return;
+    const pendingNow = loadOfflineAnswerQueue(session.id).filter(item => item.status === 'pending');
+    if (pendingNow.length > 0) {
+      setLockError(`Còn ${pendingNow.length} đáp án lưu tạm chưa gửi. Không thể khóa an toàn.`);
+      return;
     }
-
-    saveActiveQuizSessionLocally(updatedSession);
-    onUpdateSession(updatedSession, { fromSync: true });
-
-    if (session.teacherId) {
-      updateSessionControlToCloud(session.teacherId, session.id, {
-        questionStatus: {
-          questionId: currentQuestion.id,
-          status: 'revealed',
-          endedAt: endedTime,
-        },
-      });
+    setLockBusy(true);
+    try {
+      if (session.teacherId && session.teacherId !== 'local_teacher') {
+        const result = await confirmQuestionLockOnCloud(
+          session.teacherId, session.id, currentQuestion.id, currentResult.answers || {}
+        );
+        if (!result.success) {
+          setLockError(result.errorMessage || 'Firebase chưa xác nhận khóa câu hỏi.');
+          return;
+        }
+      }
+      const endedTime = Date.now();
+      const updatedResults = [...session.results];
+      updatedResults[currentQIndex] = { ...currentResult, status: 'revealed', endedAt: endedTime };
+      const updatedSession: QuizSession = {
+        ...session, results: updatedResults, updatedAt: new Date(endedTime).toISOString(),
+      };
+      if (soundEnabled) soundEngine.playSuccess();
+      saveActiveQuizSessionLocally(updatedSession);
+      onUpdateSession(updatedSession, { fromSync: true });
+      setShowLockConfirmation(false);
+      setLockError(null);
+    } finally {
+      setLockBusy(false);
     }
   };
 
@@ -1169,6 +1186,17 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
           </div>
         </div>
       )}
+
+      <ResponseCardLockConfirm
+        open={showLockConfirmation}
+        questionNumber={currentQIndex + 1}
+        capturedCount={answeredCount}
+        isCloudSession={!!session.teacherId && session.teacherId !== 'local_teacher'}
+        busy={lockBusy}
+        error={lockError}
+        onCancel={() => { setShowLockConfirmation(false); setLockError(null); }}
+        onConfirm={() => { void confirmLockAndReveal(); }}
+      />
 
       {/* MODAL XỬ LÝ ĐÁP ÁN BỊ TỪ CHỐI DO KHÓA CÂU */}
       {showRejectedModal && (

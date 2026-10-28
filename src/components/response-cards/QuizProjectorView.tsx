@@ -23,10 +23,12 @@ import {
   saveActiveQuizSession,
   saveActiveQuizSessionLocally,
   updateSessionControlToCloud,
+  confirmQuestionLockOnCloud,
   subscribeToSessionSync,
 } from '../../services/responseCardStorage';
 import { soundEngine } from '../../utils/audio';
 import QRCode from 'qrcode';
+import { ResponseCardLockConfirm } from './ResponseCardLockConfirm';
 
 interface QuizProjectorViewProps {
   session: QuizSession;
@@ -46,6 +48,9 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
   const [activeSession, setActiveSession] = useState<QuizSession>(session);
   const [isCloudOnline, setIsCloudOnline] = useState(true);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [showLockConfirmation, setShowLockConfirmation] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
 
   // Sync state with parent session
   useEffect(() => {
@@ -126,35 +131,42 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
     }
   };
 
-  // Lock & Reveal answer
+  // Ask before locking: only the phone can confirm its own pending queue is empty.
   const handleLockAndReveal = () => {
-    const updatedResults = [...activeSession.results];
-    const endedTime = Date.now();
-    updatedResults[currentQIndex] = {
-      ...currentResult,
-      status: 'revealed',
-      endedAt: endedTime,
-    };
+    setLockError(null);
+    setShowLockConfirmation(true);
+  };
 
-    const updatedSession: QuizSession = {
-      ...activeSession,
-      results: updatedResults,
-      updatedAt: new Date().toISOString(),
-    };
+  const confirmLockAndReveal = async () => {
+    if (lockBusy) return;
+    setLockBusy(true);
+    try {
+      if (activeSession.teacherId && activeSession.teacherId !== 'local_teacher') {
+        const result = await confirmQuestionLockOnCloud(
+          activeSession.teacherId, activeSession.id, currentQuestion.id, currentResult.answers || {}
+        );
+        if (!result.success) {
+          setLockError(result.errorMessage || 'Firebase chưa xác nhận khóa câu hỏi.');
+          return;
+        }
+      }
 
-    soundEngine.playSuccess();
-    setActiveSession(updatedSession);
-    saveActiveQuizSessionLocally(updatedSession);
-    onUpdateSession(updatedSession, { fromSync: true });
-
-    if (activeSession.teacherId) {
-      updateSessionControlToCloud(activeSession.teacherId, activeSession.id, {
-        questionStatus: {
-          questionId: currentQuestion.id,
-          status: 'revealed',
-          endedAt: endedTime,
-        },
-      });
+      const endedTime = Date.now();
+      const updatedResults = [...activeSession.results];
+      updatedResults[currentQIndex] = { ...currentResult, status: 'revealed', endedAt: endedTime };
+      const updatedSession: QuizSession = {
+        ...activeSession,
+        results: updatedResults,
+        updatedAt: new Date(endedTime).toISOString(),
+      };
+      soundEngine.playSuccess();
+      setActiveSession(updatedSession);
+      saveActiveQuizSessionLocally(updatedSession);
+      onUpdateSession(updatedSession, { fromSync: true });
+      setShowLockConfirmation(false);
+      setLockError(null);
+    } finally {
+      setLockBusy(false);
     }
   };
 
@@ -425,6 +437,17 @@ export const QuizProjectorView: React.FC<QuizProjectorViewProps> = ({
           Nhấn <kbd className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono text-slate-300">Esc</kbd> để thoát
         </div>
       </footer>
+
+      <ResponseCardLockConfirm
+        open={showLockConfirmation}
+        questionNumber={currentQIndex + 1}
+        capturedCount={answeredCount}
+        isCloudSession={!!activeSession.teacherId && activeSession.teacherId !== 'local_teacher'}
+        busy={lockBusy}
+        error={lockError}
+        onCancel={() => { setShowLockConfirmation(false); setLockError(null); }}
+        onConfirm={() => { void confirmLockAndReveal(); }}
+      />
 
       {/* Modal Hiển thị mã QR và PIN cho Điện Thoại kết nối */}
       {showPinModal && (
