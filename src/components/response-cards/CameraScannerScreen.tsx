@@ -1,3 +1,4 @@
+import { MathRenderer } from '../MathRenderer';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Camera,
@@ -68,6 +69,9 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  // Own the live track across rerenders, camera flips and pending permission requests.
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraRequestRef = useRef(0);
   const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
   const [hasTorch, setHasTorch] = useState<boolean>(false);
   const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
@@ -85,6 +89,10 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   });
   const [showRejectedModal, setShowRejectedModal] = useState<boolean>(false);
   const isFlushingRef = useRef<boolean>(false);
+  // Firestore may report a cached snapshot even while the device has internet.
+  // Do not use this snapshot flag as a gate for attempting queued writes.
+  const lastAutoFlushAtRef = useRef<number>(0);
+  const [cloudSaveError, setCloudSaveError] = useState<string | null>(null);
 
   // Manual input drawer
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -128,6 +136,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     const pendingItems = currentQueue.filter((q) => q.status === 'pending');
     if (pendingItems.length === 0) {
       setOfflineQueueCount(0);
+      setCloudSaveError(null);
       return;
     }
 
@@ -150,12 +159,15 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
           );
 
           if (result.success) {
+            setCloudSaveError(null);
+            setIsCloudOnline(true);
             // ONLY remove from queue after confirmed success from Firestore!
             removeConfirmedOfflineAnswers(
               session.id,
               itemsForQ.map((it) => ({ questionId: it.questionId, studentId: it.studentId }))
             );
           } else if (result.rejectedLocked) {
+            setCloudSaveError(result.errorMessage || 'Câu hỏi đã khóa, chưa thể lưu đáp án.');
             // Question was locked or session completed on computer!
             const rejectedItems: QueuedOfflineAnswer[] = itemsForQ.map((it) => ({
               ...it,
@@ -170,9 +182,11 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
             setRejectedAnswers((prev) => [...prev, ...rejectedItems]);
           } else {
             // Write error occurred -> DO NOT DELETE! Keep in localStorage queue.
+            setCloudSaveError(result.errorMessage || 'Firebase chưa xác nhận lưu đáp án.');
             console.warn('[ResponseCards] Offline batch write deferred:', result.errorMessage);
           }
         } catch (err: any) {
+          setCloudSaveError(err?.message || 'Lỗi kết nối Firebase, đáp án vẫn được lưu tạm.');
           console.warn('[ResponseCards] Network failure during batch write, answers retained in queue:', err?.message || err);
         }
       }
@@ -183,11 +197,31 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     }
   }, [session.id, session.teacherId]);
 
+  // Try an authenticated Firestore write when the browser has internet, even
+  // if onSnapshot is currently serving cached data. Throttle automatic retries
+  // to avoid a write on every camera frame.
+  const requestAutoFlush = useCallback(() => {
+    if (!session.teacherId || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+    const now = Date.now();
+    if (now - lastAutoFlushAtRef.current < 4000) return;
+    lastAutoFlushAtRef.current = now;
+    void flushOfflineQueue();
+  }, [session.teacherId, flushOfflineQueue]);
+
+  // Continue retrying while pending answers exist. A second card scanned within
+  // the 4-second throttle window must not remain queued indefinitely.
+  useEffect(() => {
+    if (offlineQueueCount <= 0) return;
+    requestAutoFlush();
+    const retry = window.setInterval(requestAutoFlush, 7000);
+    return () => window.clearInterval(retry);
+  }, [offlineQueueCount, requestAutoFlush]);
+
   // Network status listeners
   useEffect(() => {
     const handleOnline = () => {
       setIsCloudOnline(true);
-      flushOfflineQueue();
+      requestAutoFlush();
     };
     const handleOffline = () => {
       setIsCloudOnline(false);
@@ -198,7 +232,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [flushOfflineQueue]);
+  }, [requestAutoFlush]);
 
   // Listen for live updates from computer projector via BroadcastChannel & Firestore
   useEffect(() => {
@@ -216,14 +250,14 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
       session.teacherId,
       (online) => {
         setIsCloudOnline(online);
-        if (online) flushOfflineQueue();
+        if (online) requestAutoFlush();
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [session.id, session.sessionPin, session.teacherId, session.currentQuestionIndex, onUpdateSession, flushOfflineQueue]);
+  }, [session.id, session.sessionPin, session.teacherId, session.currentQuestionIndex, onUpdateSession, requestAutoFlush]);
 
   // Answer tallies for current question
   const answersMap: Record<string, StudentAnswerRecord> = currentResult?.answers || {};
@@ -267,12 +301,11 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
 
   // Start Camera
   const startCamera = async () => {
+    const requestId = ++cameraRequestRef.current;
     setCameraError(null);
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
     try {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((t) => t.stop());
-      }
-
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: cameraFacing },
@@ -281,22 +314,28 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
         },
         audio: false,
       };
-
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (requestId !== cameraRequestRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      cameraStreamRef.current = stream;
       setCameraStream(stream);
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
-
+      if (requestId !== cameraRequestRef.current) return;
+      trackerRef.current.reset();
       setIsCameraActive(true);
-
-      // Check torch capability
+      setIsTorchOn(false);
       const track = stream.getVideoTracks()[0];
-      const capabilities: any = track.getCapabilities ? track.getCapabilities() : {};
+      const capabilities: any = track?.getCapabilities ? track.getCapabilities() : {};
       setHasTorch(Boolean(capabilities?.torch));
     } catch (err: any) {
+      if (requestId !== cameraRequestRef.current) return;
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
       console.error('Camera access error:', err);
       setCameraError(
         err?.name === 'NotAllowedError'
@@ -327,13 +366,13 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     setCameraFacing((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // Init camera on mount and when facingMode changes
+  // Cleanup must stop the current stream, not a stale state closure.
   useEffect(() => {
-    startCamera();
+    void startCamera();
     return () => {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((t) => t.stop());
-      }
+      cameraRequestRef.current++;
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
     };
   }, [cameraFacing]);
 
@@ -341,8 +380,15 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
   useEffect(() => {
     let animId: number;
     let isProcessing = false;
+    let lastProcessedAt = 0;
 
-    const processFrame = () => {
+    // Limit CPU load on mobile while leaving enough frames for temporal confirmation.
+    const processFrame = (timestamp: number) => {
+      if (timestamp - lastProcessedAt < 90) {
+        animId = requestAnimationFrame(processFrame);
+        return;
+      }
+      lastProcessedAt = timestamp;
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const overlay = overlayCanvasRef.current;
@@ -361,9 +407,9 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
         const vw = video.videoWidth || 640;
         const vh = video.videoHeight || 480;
 
-        // Downscale processing size for fast 30-60 FPS mobile performance
-        const targetW = 640;
-        const targetH = Math.round((vh / vw) * targetW);
+        // Preserve marker detail while capping pixel workload on portrait phones.
+        const targetW = Math.max(320, Math.round(Math.min(800, vw, Math.sqrt(720000 * vw / vh))));
+        const targetH = Math.max(1, Math.round((vh / vw) * targetW));
 
         if (canvas.width !== targetW || canvas.height !== targetH) {
           canvas.width = targetW;
@@ -492,9 +538,8 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
               }
               setOfflineQueueCount(loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length);
 
-              if (session.teacherId && isCloudOnline && (typeof navigator === 'undefined' || navigator.onLine)) {
-                flushOfflineQueue();
-              }
+              // Cached Firestore snapshots must not prevent a fresh write attempt.
+              requestAutoFlush();
             }
           }
         }
@@ -519,6 +564,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     soundEnabled,
     onUpdateSession,
     isCloudOnline,
+    requestAutoFlush,
   ]);
 
   // Lock answers and reveal
@@ -648,9 +694,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
     });
     setOfflineQueueCount(loadOfflineAnswerQueue(session.id).filter((q) => q.status === 'pending').length);
 
-    if (session.teacherId && isCloudOnline && (typeof navigator === 'undefined' || navigator.onLine)) {
-      flushOfflineQueue();
-    }
+    requestAutoFlush();
 
     setIsManualModalOpen(false);
     setSelectedStudentForManual(null);
@@ -716,13 +760,13 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
 
       {/* TOP HEADER: Question tracker & live reception count */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs sm:text-sm whitespace-nowrap">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-black text-xs sm:text-sm whitespace-nowrap shrink-0">
             CÂU {currentQIndex + 1} / {session.questions.length}
           </div>
-          <div className="truncate">
-            <h3 className="text-sm sm:text-base font-extrabold text-white truncate max-w-lg">
-              {currentQuestion?.question}
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base sm:text-lg font-extrabold text-white max-w-lg">
+              <MathRenderer text={currentQuestion?.question || ''} />
             </h3>
             <span className="text-[11px] text-slate-400">
               Lớp {session.className} • {session.title}
@@ -787,6 +831,13 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
           </button>
         </div>
       </div>
+
+      {cloudSaveError && offlineQueueCount > 0 && (
+        <div role="alert" className="rounded-xl border border-rose-600/50 bg-rose-950/60 p-3 text-xs font-semibold text-rose-200">
+          <strong>Chưa gửi được đáp án lên Firebase:</strong> {cloudSaveError.slice(0, 200)}
+          <div className="mt-1 text-amber-200">Đáp án vẫn được giữ tạm trên điện thoại. Không khóa câu hoặc xóa dữ liệu trình duyệt trước khi đồng bộ xong.</div>
+        </div>
+      )}
 
       {/* CAMERA VIEWFINDER & LIVE SCANNING OVERLAY */}
       <div className="relative w-full bg-black rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col items-center justify-center min-h-[360px] sm:min-h-[480px]">
@@ -949,7 +1000,7 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                       : 'bg-slate-950/60 border-slate-800 text-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span
                       className={`w-6 h-6 rounded-lg font-black flex items-center justify-center text-xs ${
                         isRevealed && isCorrect
@@ -959,10 +1010,10 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                     >
                       {opt}
                     </span>
-                    <span className="text-xs">{currentQuestion.options[opt]}</span>
+                    <span className="min-w-0 text-base"><MathRenderer text={currentQuestion.options[opt]} /></span>
                   </div>
 
-                  <span className="font-mono text-[11px] font-bold text-slate-400">
+                  <span className="shrink-0 font-mono text-[11px] font-bold text-slate-400">
                     {optionCounts[opt]} HS ({answeredCount > 0 ? Math.round((optionCounts[opt] / answeredCount) * 100) : 0}%)
                   </span>
                 </div>
@@ -1149,12 +1200,12 @@ export const CameraScannerScreen: React.FC<CameraScannerScreenProps> = ({
                     key={`${it.questionId}_${it.studentId}_${idx}`}
                     className="p-3 bg-slate-950 border border-rose-900/40 rounded-xl flex items-center justify-between gap-3 text-xs"
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="font-bold text-white">
                         {it.record.studentName || student?.name || it.studentId}
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        {qItem ? `Câu hỏi: ${qItem.question.slice(0, 35)}...` : `Câu: ${it.questionId}`}
+                        {qItem ? <>Câu hỏi: <MathRenderer text={qItem.question} /></> : 'Câu: ' + it.questionId}
                       </div>
                       <div className="text-[10px] text-rose-400 mt-0.5">
                         Lý do: {it.errorMessage || 'Câu hỏi đã bị khóa trên máy chủ'}
