@@ -131,6 +131,68 @@ try {
   assert.deepEqual(importedQuiz.questions.map(q => q.correctAnswer), ['A', 'B', 'C', 'D', 'D', 'B']);
   assert.equal(importedQuiz.questions[1].options.B, 'Hai');
   console.log('PASS: browser bank import preserves A/B/C/D; unknown/ambiguous keys stay unselected and block the quiz until each teacher choice is saved.');
+  // Arena regressions: invalid repairs must be complete; real score banners
+  // must reflect base, final-question multiplier and speed bonus per team.
+  const arenaPage = await context.newPage();
+  arenaPage.on('pageerror', (error) => errors.push(error.message));
+  await arenaPage.goto(`http://127.0.0.1:${port}`);
+  const arenaNotice = arenaPage.getByRole('button', { name: 'Đóng thông báo', exact: true });
+  await arenaNotice.waitFor({ state: 'visible', timeout: 1500 }).then(() => arenaNotice.click()).catch(() => {});
+  await arenaPage.getByRole('button', { name: 'Đấu Trường 2 Đội', exact: true }).click();
+
+  const arenaBankPicker = arenaPage.locator('select:has(option[value="qa-answer-bank"])');
+  await arenaBankPicker.selectOption('qa-answer-bank');
+  await expect(arenaPage.getByRole('button', { name: 'Bổ sung đáp án' }).first()).toBeVisible();
+  await arenaPage.getByRole('button', { name: 'Bổ sung đáp án' }).first().click();
+  const fixDialog = arenaPage.locator('div.fixed.inset-0.z-60').last();
+  const saveRepair = fixDialog.getByRole('button', { name: 'Xác nhận & Sử dụng' });
+  await expect(saveRepair).toBeDisabled(); // Missing teacher-confirmed answer key, never assume A.
+  await fixDialog.getByRole('button', { name: 'B', exact: true }).click();
+  await expect(saveRepair).toBeEnabled();
+  const stemInput = fixDialog.locator('textarea');
+  const originalStem = await stemInput.inputValue();
+  await stemInput.fill('  ');
+  await expect(saveRepair).toBeDisabled();
+  await stemInput.fill(originalStem);
+  const optionA = fixDialog.locator('input[type="text"]').first();
+  const originalA = await optionA.inputValue();
+  await optionA.fill('  ');
+  await expect(saveRepair).toBeDisabled();
+  await optionA.fill(originalA);
+  await expect(saveRepair).toBeEnabled();
+  await saveRepair.click();
+  await expect(arenaPage.getByText('1 câu cần bổ sung đáp án')).toBeVisible();
+
+  await arenaBankPicker.selectOption('SAMPLE');
+  await arenaPage.locator('select:has(option[value="3"])').selectOption('3');
+  await arenaPage.locator('select:has(option[value="0"])').selectOption('0');
+  await arenaPage.getByText('Thưởng tốc độ (+5đ):', { exact: true }).locator('..').getByRole('button').click();
+  await arenaPage.getByRole('button', { name: /BẮT ĐẦU ĐẤU TRƯỜNG/ }).click();
+  await expect(arenaPage.getByText('CÂU 1 / 3')).toBeVisible();
+
+  let arenaChoices = arenaPage.locator('button[style*="manipulation"]');
+  await expect(arenaChoices).toHaveCount(8);
+  await arenaChoices.nth(0).click(); // Team 1 locks A
+  await expect(arenaChoices.nth(4)).toBeEnabled(); // Team 2 still answers independently
+  await arenaPage.waitForTimeout(180);
+  await arenaChoices.nth(4).click(); // Team 2 locks A; team 1 earns speed bonus
+  await expect(arenaPage.getByText(/CHÍNH XÁC \(\+15đ\)/)).toBeVisible();
+  await expect(arenaPage.getByText(/CHÍNH XÁC \(\+10đ\)/)).toBeVisible();
+  await arenaPage.getByRole('button', { name: /CÂU TIẾP THEO/ }).click();
+  await arenaPage.getByTitle('Công bố đáp án ngay lập tức').click(); // Skip question 2
+  await arenaPage.getByRole('button', { name: /CÂU TIẾP THEO/ }).click();
+  await expect(arenaPage.getByText('CÂU 3 / 3')).toBeVisible();
+  await expect(arenaPage.getByText('x2 ĐIỂM')).toBeVisible();
+  arenaChoices = arenaPage.locator('button[style*="manipulation"]');
+  await arenaChoices.nth(2).click(); // C is correct for sample question 3
+  await expect(arenaChoices.nth(6)).toBeEnabled();
+  await arenaPage.waitForTimeout(180);
+  await arenaChoices.nth(6).click();
+  await expect(arenaPage.getByText(/CHÍNH XÁC \(\+25đ\)/)).toBeVisible();
+  await expect(arenaPage.getByText(/CHÍNH XÁC \(\+20đ\)/)).toBeVisible();
+  await arenaPage.close();
+  console.log('PASS: Arena repaired question blocks blank fields/implicit A; two independent pods score +10/+15 and double-final +20/+25.');
+
   assert.deepEqual(errors, []);
   console.log('PASS: browser navigation, actual PDF/Excel/template downloads, spin counter, legacy-bank mystery assessment, history-only/TX confirmation, zero protection and star deduplication.');
   console.log(`External requests blocked: ${externalRequests.length}. No Firebase/Gemini request allowed.`);
