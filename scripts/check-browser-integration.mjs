@@ -143,6 +143,7 @@ try {
   const arenaBankPicker = arenaPage.locator('select:has(option[value="qa-answer-bank"])');
   await arenaBankPicker.selectOption('qa-answer-bank');
   await expect(arenaPage.getByRole('button', { name: 'Bổ sung đáp án' }).first()).toBeVisible();
+  const initiallyInvalid = await arenaPage.getByRole('button', { name: 'Bổ sung đáp án' }).count();
   await arenaPage.getByRole('button', { name: 'Bổ sung đáp án' }).first().click();
   const fixDialog = arenaPage.locator('div.fixed.inset-0.z-60').last();
   const saveRepair = fixDialog.getByRole('button', { name: 'Xác nhận & Sử dụng' });
@@ -161,7 +162,7 @@ try {
   await optionA.fill(originalA);
   await expect(saveRepair).toBeEnabled();
   await saveRepair.click();
-  await expect(arenaPage.getByText('1 câu cần bổ sung đáp án')).toBeVisible();
+  await expect(arenaPage.getByRole('button', { name: 'Bổ sung đáp án' })).toHaveCount(initiallyInvalid - 1);
 
   await arenaBankPicker.selectOption('SAMPLE');
   await arenaPage.locator('select:has(option[value="3"])').selectOption('3');
