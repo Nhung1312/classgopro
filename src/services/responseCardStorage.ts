@@ -536,6 +536,92 @@ export async function batchRecordStudentAnswersToCloud(
   }
 }
 
+/** A lock must never be acknowledged locally before Firestore confirms it. */
+export interface QuestionLockConfirmation {
+  success: boolean;
+  serverCount: number | null;
+  errorMessage?: string;
+}
+
+/** Pure validation used both in the Firestore transaction and in regression tests. */
+export function assessCloudQuestionLock(
+  serverDoc: any,
+  questionId: string,
+  expectedAnswers: Record<string, StudentAnswerRecord>
+): QuestionLockConfirmation {
+  if (!serverDoc || serverDoc.status !== 'running') {
+    return { success: false, serverCount: null, errorMessage: 'Phiên trên Firebase không còn mở thu bài.' };
+  }
+  const index = Array.isArray(serverDoc.questions)
+    ? serverDoc.questions.findIndex((q: { id?: string }) => q.id === questionId)
+    : -1;
+  if (index < 0 || serverDoc.currentQuestionIndex !== index) {
+    return { success: false, serverCount: null, errorMessage: 'Máy tính và Firebase đang ở câu hỏi khác nhau.' };
+  }
+  const questionResult = serverDoc.results?.find((r: { questionId?: string }) => r.questionId === questionId);
+  const status = serverDoc.questionStatuses?.[questionId]?.status || questionResult?.status;
+  if (status !== 'collecting') {
+    return { success: false, serverCount: null, errorMessage: 'Câu hỏi đã khóa hoặc được công bố trên Firebase.' };
+  }
+  const cloudAnswers: Record<string, StudentAnswerRecord> = {
+    ...(questionResult?.answers || {}),
+    ...(serverDoc.answersByQuestion?.[questionId] || {}),
+  };
+  const localIds = Object.keys(expectedAnswers);
+  const cloudIds = Object.keys(cloudAnswers);
+  const matching = localIds.length === cloudIds.length && localIds.every(studentId =>
+    cloudAnswers[studentId]?.selectedOption === expectedAnswers[studentId]?.selectedOption
+  );
+  if (!matching) {
+    return {
+      success: false,
+      serverCount: cloudIds.length,
+      errorMessage: 'Số lượng hoặc đáp án giữa thiết bị này và Firebase chưa khớp. Hãy kiểm tra điện thoại, chờ đồng bộ rồi thử khóa lại.',
+    };
+  }
+  return { success: true, serverCount: cloudIds.length };
+}
+
+/**
+ * Atomically validate the current question and commit the reveal.
+ * An offline or stale client must keep collection open rather than pretending
+ * that the teacher's lock reached the server. This cannot detect pending
+ * records that exist only on an offline phone, so the UI requires confirmation.
+ */
+export async function confirmQuestionLockOnCloud(
+  teacherId: string,
+  sessionId: string,
+  questionId: string,
+  expectedAnswers: Record<string, StudentAnswerRecord>
+): Promise<QuestionLockConfirmation> {
+  if (!teacherId || teacherId === 'local_teacher' || !db || !isBrowser) {
+    return { success: false, serverCount: null, errorMessage: 'Chưa có phiên Firebase đã xác thực để khóa câu hỏi.' };
+  }
+  const ref = doc(db, 'users', teacherId, 'quiz_sessions', sessionId);
+  try {
+    return await runTransaction(db, async (transaction): Promise<QuestionLockConfirmation> => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists()) {
+        return { success: false, serverCount: null, errorMessage: 'Chưa tìm thấy phiên kiểm tra trên Firebase.' };
+      }
+      const check = assessCloudQuestionLock(snapshot.data(), questionId, expectedAnswers);
+      if (!check.success) return check;
+      const endedAt = Date.now();
+      transaction.set(ref, sanitizeForFirestore({
+        questionStatuses: { [questionId]: { status: 'revealed', endedAt } },
+        updatedAt: new Date(endedAt).toISOString(),
+      }), { merge: true });
+      return check;
+    }, { maxAttempts: 5 });
+  } catch (error: any) {
+    return {
+      success: false,
+      serverCount: null,
+      errorMessage: 'Không xác nhận được khóa câu hỏi trên Firebase: ' + (error?.message || 'Kết nối thất bại.'),
+    };
+  }
+}
+
 /**
  * Computer projector updates question navigation, lock/reveal, or session completion without touching answers
  */
