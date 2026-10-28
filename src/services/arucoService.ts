@@ -221,20 +221,29 @@ function matchMarkerBits(bits: number[]): { cardId: number; rotation: number; co
 /**
  * Bilinear sampling from quadrilateral corners
  */
-function sampleBilinear(
-  corners: Point[],
-  u: number, // 0..1
-  v: number  // 0..1
-): Point {
-  const [c0, c1, c2, c3] = corners; // c0: top-left, c1: top-right, c2: bottom-right, c3: bottom-left
-  const topX = c0.x + (c1.x - c0.x) * u;
-  const topY = c0.y + (c1.y - c0.y) * u;
-  const botX = c3.x + (c2.x - c3.x) * u;
-  const botY = c3.y + (c2.y - c3.y) * u;
-
+/**
+ * Map a unit-square marker cell into an oblique camera quadrilateral.
+ * Perspective correction is essential when the card's far edge looks shorter.
+ */
+function samplePerspective(corners: Point[], u: number, v: number): Point {
+  const [p0, p1, p2, p3] = corners;
+  const dx1 = p1.x - p2.x;
+  const dx2 = p3.x - p2.x;
+  const dx3 = p0.x - p1.x + p2.x - p3.x;
+  const dy1 = p1.y - p2.y;
+  const dy2 = p3.y - p2.y;
+  const dy3 = p0.y - p1.y + p2.y - p3.y;
+  const determinant = dx1 * dy2 - dx2 * dy1;
+  let g = 0;
+  let h = 0;
+  if (Math.abs(determinant) > 1e-9) {
+    g = (dx3 * dy2 - dx2 * dy3) / determinant;
+    h = (dx1 * dy3 - dx3 * dy1) / determinant;
+  }
+  const denominator = g * u + h * v + 1;
   return {
-    x: topX + (botX - topX) * v,
-    y: topY + (botY - topY) * v,
+    x: ((p1.x - p0.x + g * p1.x) * u + (p3.x - p0.x + h * p3.x) * v + p0.x) / denominator,
+    y: ((p1.y - p0.y + g * p1.y) * u + (p3.y - p0.y + h * p3.y) * v + p0.y) / denominator,
   };
 }
 
@@ -380,110 +389,82 @@ export function detectMarkersInCanvas(
     }
   }
 
-  // 2. Contour detection (Border Following)
-  // Scan for 0 -> 1 transitions
+  // 2. Trace actual black connected regions, not an arbitrary walk through
+  // black interior pixels. The solid marker border is one connected region.
   const visited = new Uint8Array(width * height);
   const candidateQuads: Point[][] = [];
+  const stack = new Int32Array(width * height);
+  const minSide = 13;
+  const minPixels = 30;
 
-  const dx = [1, 1, 0, -1, -1, -1, 0, 1];
-  const dy = [0, 1, 1, 1, 0, -1, -1, -1];
+  for (let y = 2; y < height - 2; y++) {
+    for (let x = 2; x <width - 2; x++) {
+      const root = y * width + x;
+      if (binary[root] !== 1 || visited[root] !== 0) continue;
 
-  const minPerimeter = Math.max(60, width * 0.08);
-  const maxPerimeter = (width + height) * 1.8;
+      let top = 0;
+      stack[top++] = root;
+      visited[root] = 1;
+      let count = 0;
+      let minX = x, maxX = x, minY = y, maxY = y;
+      let tl: Point = { x, y };
+      let tr: Point = { x, y };
+      let br: Point = { x, y };
+      let bl: Point = { x, y };
+      let minSum = x + y, maxSum = minSum;
+      let minDiff = x - y, maxDiff = minDiff;
+      let touchesBorder = false;
 
-  for (let y = 4; y < height - 4; y += 2) {
-    const yWidth = y * width;
-    for (let x = 4; x < width - 4; x += 2) {
-      const idx = yWidth + x;
-      // Start of a black region not yet visited
-      if (binary[idx] === 1 && binary[idx - 1] === 0 && visited[idx] === 0) {
-        // Trace contour
-        const contour: Point[] = [];
-        let cx = x;
-        let cy = y;
-        let dir = 0;
-        let steps = 0;
-        const maxSteps = 2000;
+      while (top > 0) {
+        const idx = stack[--top];
+        const px = idx % width;
+        const py = (idx / width) | 0;
+        count++;
+        if (px < 2 || py < 2 || px >= width - 2 || py >= height - 2) touchesBorder = true;
+        if (px < minX) minX = px;
+        if (px > maxX) maxX = px;
+        if (py < minY) minY = py;
+        if (py > maxY) maxY = py;
+        const sum = px + py;
+        const diff = px - py;
+        if (sum < minSum) { minSum = sum; tl = { x: px, y: py }; }
+        if (sum > maxSum) { maxSum = sum; br = { x: px, y: py }; }
+        if (diff > maxDiff) { maxDiff = diff; tr = { x: px, y: py }; }
+        if (diff < minDiff) { minDiff = diff; bl = { x: px, y: py }; }
 
-        contour.push({ x: cx, y: cy });
-        visited[cy * width + cx] = 1;
-
-        while (steps < maxSteps) {
-          let foundNext = false;
-          for (let i = 0; i < 8; i++) {
-            const nextDir = (dir + i) % 8;
-            const nx = cx + dx[nextDir];
-            const ny = cy + dy[nextDir];
-
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-              if (binary[ny * width + nx] === 1) {
-                cx = nx;
-                cy = ny;
-                dir = (nextDir + 5) % 8; // Turn back towards search direction
-                foundNext = true;
-                break;
-              }
-            }
-          }
-
-          if (!foundNext) break;
-          contour.push({ x: cx, y: cy });
-          visited[cy * width + cx] = 1;
-          steps++;
-
-          if (cx === x && cy === y) break; // Loop closed
-        }
-
-        if (contour.length >= 16) {
-          // Calculate perimeter
-          let perim = 0;
-          for (let i = 0; i < contour.length; i++) {
-            const next = contour[(i + 1) % contour.length];
-            perim += dist(contour[i], next);
-          }
-
-          if (perim >= minPerimeter && perim <= maxPerimeter) {
-            // Simplify polygon
-            const simplified = simplifyClosedContour(contour, perim * 0.035);
-
-            // Filter for 4 corners (or 5 if first/last coincide)
-            let corners = simplified;
-            if (corners.length === 5 && dist(corners[0], corners[4]) < 5) {
-              corners = corners.slice(0, 4);
-            }
-
-            if (corners.length === 4) {
-              // Check convexity
-              let isConvex = true;
-              let sign = 0;
-              for (let i = 0; i < 4; i++) {
-                const p0 = corners[i];
-                const p1 = corners[(i + 1) % 4];
-                const p2 = corners[(i + 2) % 4];
-                const cross = (p1.x - p0.x) * (p2.y - p1.y) - (p1.y - p0.y) * (p2.x - p1.x);
-                if (cross !== 0) {
-                  if (sign === 0) sign = cross > 0 ? 1 : -1;
-                  else if ((cross > 0 ? 1 : -1) !== sign) {
-                    isConvex = false;
-                    break;
-                  }
-                }
-              }
-
-              if (isConvex) {
-                // Check aspect ratio of diagonals and edges
-                const d1 = dist(corners[0], corners[2]);
-                const d2 = dist(corners[1], corners[3]);
-                const diagRatio = Math.max(d1, d2) / (Math.min(d1, d2) || 1);
-
-                if (diagRatio < 2.4) {
-                  candidateQuads.push(orderClockwise(corners));
-                }
-              }
+        for (let oy = -1; oy <= 1; oy++) {
+          const ny = py + oy;
+          if (ny < 0 || ny >= height) continue;
+          for (let ox = -1; ox <= 1; ox++) {
+            const nx = px + ox;
+            if ((ox === 0 && oy === 0) || nx < 0 || nx >= width) continue;
+            const neighbor = ny * width + nx;
+            if (binary[neighbor] === 1 && visited[neighbor] === 0) {
+              visited[neighbor] = 1;
+              stack[top++] = neighbor;
             }
           }
         }
       }
+
+      if (touchesBorder || count < minPixels) continue;
+      const w = maxX - minX + 1;
+      const h = maxY - minY + 1;
+      if (w < minSide || h < minSide || Math.max(w, h) / Math.min(w, h) > 2) continue;
+      // Skip dense full-screen patches and tiny line/noise components.
+      if (w > width * 0.8 || h > height * 0.8 || count < 0.7 * (w + h)) continue;
+
+      const corners = [tl, tr, br, bl];
+      const signedArea =
+        (tl.x * tr.y - tr.x * tl.y) +
+        (tr.x * br.y - br.x * tr.y) +
+        (br.x * bl.y - bl.x * br.y) +
+        (bl.x * tl.y - tl.x * bl.y);
+      if (Math.abs(signedArea) / 2 < w * h * 0.28) continue;
+      const d1 = dist(tl, br);
+      const d2 = dist(tr, bl);
+      if (Math.max(d1, d2) / (Math.min(d1, d2) || 1) > 2.4) continue;
+      candidateQuads.push(corners);
     }
   }
 
@@ -504,7 +485,7 @@ export function detectMarkersInCanvas(
       for (let c = 0; c < 6; c++) {
         const u = (c + 0.5) / 6;
         const v = (r + 0.5) / 6;
-        const pt = sampleBilinear(quad, u, v);
+        const pt = samplePerspective(quad, u, v);
         const px = Math.min(width - 1, Math.max(0, Math.round(pt.x)));
         const py = Math.min(height - 1, Math.max(0, Math.round(pt.y)));
         quadLumaSum += gray[py * width + px];
@@ -518,7 +499,7 @@ export function detectMarkersInCanvas(
       for (let c = 0; c < 6; c++) {
         const u = (c + 0.5) / 6;
         const v = (r + 0.5) / 6;
-        const pt = sampleBilinear(quad, u, v);
+        const pt = samplePerspective(quad, u, v);
         const px = Math.min(width - 1, Math.max(0, Math.round(pt.x)));
         const py = Math.min(height - 1, Math.max(0, Math.round(pt.y)));
 
